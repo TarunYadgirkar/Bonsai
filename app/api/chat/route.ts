@@ -55,6 +55,7 @@ export async function POST(request: Request) {
     brief: conversation.brief,
     contextTokens,
     pinnedTier,
+    mode: body.mode,
   });
 
   const result = await completeWithEscalation({
@@ -77,6 +78,8 @@ export async function POST(request: Request) {
       branchId: conversation.id,
       purpose: 'chat',
       tier: result.routing.tier,
+      model: result.routing.model,
+      effort: result.routing.effort,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
       baselineInputTokens: conversation.brief

@@ -10,6 +10,23 @@ export type Tier = 'quick' | 'thoughtful' | 'deep';
 
 export type Complexity = 1 | 2 | 3;
 
+/**
+ * Reasoning effort, picked independently of the model. Added after M0 — additive only, so every
+ * pre-existing consumer still compiles (Tarun, 2026-08-07; tell Justin before he rebuilds the chip).
+ */
+export type Effort = 'low' | 'medium' | 'high' | 'max';
+
+/**
+ * What the user asked for in the mode picker. Absent or `auto` means the router classifies and
+ * chooses; a manual pick names both halves and skips classification.
+ */
+export interface ModeSelection {
+  mode: 'auto' | 'manual';
+  /** ModelSpec.id from lib/models.ts. Ignored when mode is 'auto'. */
+  model?: string;
+  effort?: Effort;
+}
+
 /** Why an inference happened. Everything but 'chat' always runs on the quick tier. */
 export type InferencePurpose = 'chat' | 'compile' | 'classify' | 'merge';
 
@@ -52,6 +69,10 @@ export interface ContextBrief {
 export interface RoutingDecision {
   tier: Tier;
   model: string;
+  /** Effort actually used. Optional so pre-M5 consumers still compile; always set by the engine. */
+  effort?: Effort;
+  /** Display label for the chosen model, e.g. "Opus 5". Always set by the engine. */
+  modelLabel?: string;
   /** Human phrasing of reasoning effort, e.g. "low effort, single pass". */
   effortNote: string;
   contextTokens: number;
@@ -113,6 +134,8 @@ export interface InferenceLog {
   purpose: InferencePurpose;
   tier: Tier;
   model: string;
+  /** Effort the call ran at. Optional for pre-M5 rows; always set by the engine now. */
+  effort?: Effort;
   inputTokens: number;
   outputTokens: number;
   estCostUsd: number;
@@ -155,6 +178,8 @@ export interface ChatRequest {
   content: string;
   /** Set by the UI when the user pins a tier; skips classification. */
   pinnedTier?: Tier | null;
+  /** Mode picker. Overrides pinnedTier when mode is 'manual'. */
+  mode?: ModeSelection;
 }
 
 export interface ChatResponse {
@@ -171,6 +196,8 @@ export interface BranchRequest {
   /** Optional first question, so the branch can answer immediately on creation. */
   question?: string;
   title?: string;
+  /** Mode picker, same semantics as ChatRequest. */
+  mode?: ModeSelection;
 }
 
 export interface BranchResponse {

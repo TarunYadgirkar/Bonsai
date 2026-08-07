@@ -2,12 +2,20 @@
  * M0 stubs. Replaced by lib/compiler.ts (M1), lib/router.ts (M2) and lib/llm.ts (M1) —
  * the API routes keep the same shapes, so Person A's UI does not change when they land.
  */
-import { INTERNAL_TIER, MODEL_TIERS, TIER_EFFORT, estimateCostUsd } from './models';
+import {
+  INTERNAL_TIER,
+  MODEL_TIERS,
+  TIER_DEFAULTS,
+  TIER_EFFORT,
+  costForModel,
+  estimateCostUsd,
+} from './models';
 import { availableTokensFor, nextId } from './store';
 import { estimateTokens, prunedPct } from './tokens';
 import type {
   Complexity,
   ContextBrief,
+  Effort,
   InferenceLog,
   InferencePurpose,
   Message,
@@ -128,18 +136,23 @@ export function buildLog(params: {
   baselineInputTokens: number;
   escalated?: boolean;
   overridden?: boolean;
+  /** From the routing decision when there is one, so a manual pick is what the panel shows. */
+  model?: string;
+  effort?: Effort;
 }): InferenceLog {
   const { branchId, purpose, tier, inputTokens, outputTokens, baselineInputTokens } = params;
+  const model = params.model ?? MODEL_TIERS[tier];
   return {
     id: nextId('log'),
     ts: new Date().toISOString(),
     branchId,
     purpose,
     tier,
-    model: MODEL_TIERS[tier],
+    model,
+    effort: params.effort ?? TIER_DEFAULTS[tier].effort,
     inputTokens,
     outputTokens,
-    estCostUsd: estimateCostUsd(tier, inputTokens, outputTokens),
+    estCostUsd: costForModel(model, inputTokens, outputTokens),
     escalated: params.escalated ?? false,
     overridden: params.overridden ?? false,
     baselineInputTokens,

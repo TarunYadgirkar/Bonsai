@@ -28,8 +28,14 @@ const ABORT_MS = 12_000;
 const LOCAL_PATH = path.join(process.cwd(), 'data', 'inference-log.json');
 const IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_$]*$/;
 
+/**
+ * Off unless SNOWFLAKE_LOG_ENABLED=1, even with credentials present. Cortex is barred on this
+ * account, so Snowflake is not part of the shipped demo; the vars still sit in .env.local for the
+ * SQL API, and without this gate every inference would pay a doomed insert round trip on the demo
+ * path. Set the flag only once `scripts/setup-snowflake.ts` has created the table.
+ */
 export function snowflakeEnabled(): boolean {
-  return Boolean(ACCOUNT_URL && PAT);
+  return Boolean(ACCOUNT_URL && PAT && process.env.SNOWFLAKE_LOG_ENABLED === '1');
 }
 
 /** Fully qualified target. Identifiers come from env, so they are validated, never interpolated blind. */
