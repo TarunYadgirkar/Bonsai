@@ -1,20 +1,31 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Conversation } from '@/lib/types';
-import { TierBadge } from './TierBadge';
+import type { Conversation, Tier } from '@/lib/types';
+import { RoutingChip } from './RoutingChip';
 import { conversationTokens, formatTokens } from './tokens';
+
+type Selection = { text: string; x: number; y: number };
 
 export function ChatPane({
   conversation,
   onSend,
+  onBranch,
+  onPin,
+  pinnedTier,
   sending,
+  branching,
 }: {
   conversation: Conversation;
   onSend: (content: string) => void;
+  onBranch: (selection: string) => void;
+  onPin: (tier: Tier | null) => void;
+  pinnedTier: Tier | null;
   sending: boolean;
+  branching: boolean;
 }) {
   const [draft, setDraft] = useState('');
+  const [selection, setSelection] = useState<Selection | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Keep the newest message in view as the thread grows.
@@ -23,6 +34,18 @@ export function ChatPane({
   }, [conversation.messages.length, conversation.id]);
 
   const tokens = conversationTokens(conversation.messages);
+  const brief = conversation.brief;
+
+  const captureSelection = () => {
+    const sel = window.getSelection();
+    const text = sel?.toString().trim() ?? '';
+    if (!sel || sel.isCollapsed || !text) {
+      setSelection(null);
+      return;
+    }
+    const rect = sel.getRangeAt(0).getBoundingClientRect();
+    setSelection({ text, x: rect.left + rect.width / 2, y: rect.top });
+  };
 
   const submit = () => {
     const content = draft.trim();
@@ -32,16 +55,26 @@ export function ChatPane({
   };
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col bg-neutral-900">
+    <section className="relative flex min-w-0 flex-1 flex-col bg-neutral-900">
       <header className="flex items-center gap-3 border-b border-white/10 px-6 py-3">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-medium text-white">
             {conversation.title}
           </h2>
-          {conversation.brief && (
-            <p className="truncate text-[11px] text-neutral-500">
-              branched on “{conversation.brief.selection}” ·{' '}
-              {conversation.brief.prunedPct.toFixed(1)}% pruned
+          {brief ? (
+            // DEMO.md Beat 2 reads this line off the screen.
+            <p className="truncate text-[11px] tabular-nums text-neutral-500">
+              <span className="text-neutral-400">{brief.availableTokens.toLocaleString()}</span>{' '}
+              available →{' '}
+              <span className="text-neutral-400">{brief.briefTokens.toLocaleString()}</span>{' '}
+              relevant →{' '}
+              <span className="font-medium text-emerald-300">
+                {brief.prunedPct.toFixed(1)}% pruned
+              </span>
+            </p>
+          ) : (
+            <p className="text-[11px] text-neutral-500">
+              Root conversation · select any text to branch
             </p>
           )}
         </div>
@@ -57,8 +90,31 @@ export function ChatPane({
         </div>
       </header>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
+      <div
+        ref={scrollRef}
+        onMouseUp={captureSelection}
+        onScroll={() => setSelection(null)}
+        className="flex-1 overflow-y-auto px-6 py-4"
+      >
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
+          {brief && (
+            <details className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+              <summary className="cursor-pointer text-[11px] text-neutral-400">
+                Compiled context brief · {brief.facts.length} facts
+              </summary>
+              <ul className="mt-2 flex flex-col gap-1">
+                {brief.facts.map((fact) => (
+                  <li key={fact} className="text-[11px] leading-snug text-neutral-300">
+                    · {fact}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 border-t border-white/10 pt-2 text-[11px] leading-snug text-neutral-500">
+                {brief.excludedNote}
+              </p>
+            </details>
+          )}
+
           {conversation.insights.length > 0 && (
             <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-3 py-2">
               <div className="text-[10px] uppercase tracking-wide text-emerald-300/70">
@@ -88,23 +144,39 @@ export function ChatPane({
               >
                 {message.content}
                 {message.routing && (
-                  <div className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
-                    <TierBadge tier={message.routing.tier} size="sm" />
-                    <span className="text-[10px] tabular-nums text-neutral-500">
-                      {formatTokens(message.routing.contextTokens)} ctx · $
-                      {message.routing.estCostUsd.toFixed(4)}
-                    </span>
-                  </div>
+                  <span className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
+                    <RoutingChip
+                      routing={message.routing}
+                      pinnedTier={pinnedTier}
+                      onPin={onPin}
+                    />
+                  </span>
                 )}
               </div>
             </div>
           ))}
 
-          {sending && (
-            <div className="text-xs text-neutral-500">Thinking…</div>
+          {branching && (
+            <div className="text-xs text-emerald-300">Compiling branch context…</div>
           )}
+          {sending && <div className="text-xs text-neutral-500">Thinking…</div>}
         </div>
       </div>
+
+      {/* Floating Branch affordance — DEMO.md Beat 2: highlight, then click Branch. */}
+      {selection && (
+        <button
+          onClick={() => {
+            onBranch(selection.text);
+            setSelection(null);
+            window.getSelection()?.removeAllRanges();
+          }}
+          style={{ left: selection.x, top: selection.y - 10 }}
+          className="fixed z-40 -translate-x-1/2 -translate-y-full rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 shadow-lg hover:bg-emerald-400"
+        >
+          🌱 Branch
+        </button>
+      )}
 
       <footer className="border-t border-white/10 px-6 py-3">
         <div className="mx-auto flex max-w-3xl items-end gap-2">
@@ -129,6 +201,11 @@ export function ChatPane({
             Send
           </button>
         </div>
+        {pinnedTier && (
+          <p className="mx-auto mt-1.5 max-w-3xl text-[10px] text-neutral-500">
+            Branch pinned to {pinnedTier} — classification skipped on every message here.
+          </p>
+        )}
       </footer>
     </section>
   );

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { ChatResponse, StateResponse } from '@/lib/types';
+import type { BranchResponse, ChatResponse, StateResponse, Tier } from '@/lib/types';
 import { ChatPane } from './ChatPane';
 import { TreeSidebar } from './TreeSidebar';
 
@@ -24,6 +24,13 @@ export function Workspace() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [branching, setBranching] = useState(false);
+  /*
+   * Pins live here, keyed by branch, because /api/chat reads pinnedTier off the
+   * request and does not persist it onto the Conversation. Sending it on every
+   * message is what makes the override stick for the whole branch.
+   */
+  const [pins, setPins] = useState<Record<string, Tier | null>>({});
 
   const applyState = useCallback((data: StateResponse) => {
     setState(data);
@@ -58,7 +65,11 @@ export function Workspace() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branchId: activeId, content }),
+        body: JSON.stringify({
+          branchId: activeId,
+          content,
+          pinnedTier: pins[activeId] ?? null,
+        }),
       });
       if (!res.ok) throw new Error(`POST /api/chat → ${res.status}`);
       const data: ChatResponse = await res.json();
@@ -83,6 +94,31 @@ export function Workspace() {
     } finally {
       setSending(false);
     }
+  };
+
+  const branch = async (selection: string) => {
+    if (!activeId) return;
+    setBranching(true);
+    try {
+      const res = await fetch('/api/branch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parentId: activeId, selection }),
+      });
+      if (!res.ok) throw new Error(`POST /api/branch → ${res.status}`);
+      const data: BranchResponse = await res.json();
+      applyState(await fetchState());
+      setActiveId(data.node.id); // drop the user straight into the new branch
+    } catch (err) {
+      setError(describe(err));
+    } finally {
+      setBranching(false);
+    }
+  };
+
+  const pin = (tier: Tier | null) => {
+    if (!activeId) return;
+    setPins((prev) => ({ ...prev, [activeId]: tier }));
   };
 
   if (error && !state) {
@@ -126,7 +162,17 @@ export function Workspace() {
     <main className="flex min-h-0 flex-1">
       <TreeSidebar nodes={state.tree} activeId={active?.id ?? null} onSelect={setActiveId} />
       {active ? (
-        <ChatPane conversation={active} onSend={send} sending={sending} />
+        <ChatPane
+          // Remount per conversation so draft + text selection reset with the branch.
+          key={active.id}
+          conversation={active}
+          onSend={send}
+          onBranch={branch}
+          onPin={pin}
+          pinnedTier={pins[active.id] ?? active.pinnedTier ?? null}
+          sending={sending}
+          branching={branching}
+        />
       ) : (
         <section className="flex flex-1 items-center justify-center bg-neutral-900">
           <p className="text-sm text-neutral-500">No conversation selected.</p>
