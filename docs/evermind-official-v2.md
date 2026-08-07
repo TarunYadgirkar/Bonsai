@@ -1,0 +1,126 @@
+# EverOS v2 — verified API reference
+
+*Source: https://docs.evermind.ai/llms-full.txt, fetched Aug 7 2026. Endpoint shapes below
+are copied from that reference, not remembered. `add` was verified live against our key
+(HTTP 200); `flush` and `search` are documented-but-unverified — see Status at the bottom.*
+
+**This supersedes the v1 guidance in `evermind-notes.md`.** That file says "hosted v1 API …
+use only `/api/v1/...` endpoints". The official reference now says the opposite: the
+**unified v2 API (`/api/v2/memory/*`)** is current and shared by Cloud and self-hosted, and
+"the v1 Cloud and v1 OSS APIs are legacy, kept for compatibility." Build against v2.
+
+## Basics
+
+- Base URL: `https://api.evermind.ai` · Auth header: `Authorization: Bearer <key>`
+- Every response is an envelope: `{"request_id": "...", "data": { ... }}` — unwrap `.data`.
+- `app_id` / `project_id` (both default `"default"`) partition memory; queries never cross scopes.
+- HTTP-first, any language. **The Python SDK (`pip install everos-cloud`) is optional
+  convenience only** — Bonsai calls REST with `fetch` from `lib/memory.ts`. A Python
+  dependency can't run inside a Next.js route handler on Vercel.
+
+## The four gotchas that will bite
+
+1. **`timestamp` is unix _milliseconds_ and is required over HTTP.** Omitting it returns
+   `400 InvalidParameter` on `messages[i].timestamp`. The Python SDK stamps it for you,
+   which is why SDK examples show messages without one — REST examples are not the same.
+2. **No top-level `user_id` on `add`.** Attribution is per-message via `sender_id`.
+   Each message needs all four of `sender_id`, `role`, `timestamp`, `content`.
+3. **`search` and `get` require exactly one of `user_id` / `agent_id`.** Sending neither
+   (or both) is a `422 invalid_argument`.
+4. **Writes are asynchronous by default.** `add` returns `202 {"status":"queued"}`.
+
+## Endpoints Bonsai needs
+
+### `POST /api/v2/memory/add`
+
+Body: `session_id` (1–128 chars), `messages[]` (1–500), optional `async_mode`, `mode`
+(`chat` | `agent`), `app_id`, `project_id`.
+
+```jsonc
+{"session_id":"branch_free_ventures","async_mode":false,
+ "messages":[{"sender_id":"bonsai_tarun","role":"user","timestamp":1754590000000,
+              "content":"Free Ventures applications close September 11."}]}
+```
+
+Returns `{"message_count":N,"status":...}` — `"queued"` (202, async) or, synchronously
+(200), `"accumulated"` **or** `"extracted"`. See the timing trap below: `"accumulated"`
+does *not* mean searchable.
+
+### `POST /api/v2/memory/flush`
+
+Body: `session_id` (required), optional `app_id` / `project_id`. Runs boundary detection on
+accumulated messages and extracts immediately if a boundary is found.
+Returns `{"status":"extracted"}` or `{"status":"no_extraction"}`.
+
+### `POST /api/v2/memory/search`
+
+Body: `query` + exactly one of `user_id`/`agent_id`; optional `method`
+(`keyword`|`vector`|`hybrid`|`agentic`, default `hybrid`), `top_k`, `include_profile`,
+`min_score`, `radius`, `filters`.
+
+Returns `{episodes[], profiles[], agent_cases[], agent_skills[], unprocessed_messages[]}`.
+An episode carries `summary`, `subject`, `episode` (full narrative — this is the field to
+paste into a prompt), `atomic_facts[]`, and `score`.
+
+Method choice: `hybrid` at `top_k` 5 (chat) / 10 (research) is the default. `agentic` costs
+3–5× more and is ~10× slower (2–5s) — not worth it on stage. `keyword` is <100ms.
+
+### `POST /api/v2/memory/get`
+
+Body: `memory_type` (`episode`|`profile`|`agent_case`|`agent_skill`) + exactly one of
+`user_id`/`agent_id`. `{"memory_type":"profile","user_id":"..."}` returns `profile_data`,
+a dict of learned user attributes.
+
+## ⚠️ The timing trap — read this before wiring Beat 4
+
+DEMO.md Beat 4 merges an insight and says it "gets written to durable memory." If we write
+and then read it back on stage, **extraction is asynchronous and a fresh write is not
+immediately searchable.** Our live `add` with `async_mode:false` returned `"accumulated"`,
+not `"extracted"` — the messages were buffered, with no episode formed yet. A `search`
+issued right then would not have found an episode.
+
+Three mitigations, cheapest first:
+
+1. `add` with `"async_mode": false`, then **`POST /flush`**, then search. Still not a
+   guarantee — flush returns `"no_extraction"` when no semantic boundary is detected, and
+   two short messages may not form one.
+2. **Read the in-flight buffer.** `search` returns `unprocessed_messages[]` — the raw,
+   not-yet-extracted tail. It only populates when the request pins exactly one session as a
+   **top-level scalar** filter: `"filters": {"session_id": "..."}`. Wrapping it in `AND`/`OR`,
+   nesting it, or writing it as an operator map (`{"eq": ...}`) all silently yield `[]`.
+   Scoping by `user_id` alone is not enough — buffered rows have no owner attribution yet.
+3. **Don't make the demo depend on the round-trip.** Per AGENTS.md rule 8 and DEMO.md's own
+   fallback ("If EverMind is down → memory writes go to the local store, say 'durable memory
+   layer' and move on"), the merge should write to EverOS *and* `data/memory.json`, and the
+   UI should render from the local store. The write is real; the read never blocks the stage.
+
+Recommendation: do (1) + (3). Treat (2) as the nice-to-have if there's time after M4.
+
+## Errors
+
+| HTTP | Meaning |
+|---|---|
+| 401 | Missing / invalid token |
+| 403 | `VERSION_NOT_ALLOWED` — account is on v1 and may not call v2 |
+| 422 | Validation, e.g. bad ms timestamp, or missing `user_id`/`agent_id` |
+| 429 | Rate limit / quota |
+
+Our key returns 200 on v2, so the account is provisioned for v2 — no 403 risk.
+
+## Status
+
+| Call | Verified? |
+|---|---|
+| `add` (`async_mode:false`) | ✅ live, HTTP 200, `{"message_count":2,"status":"accumulated"}` |
+| `flush` | ❌ not run — sandbox blocked the request |
+| `search` | ❌ not run — sandbox blocked the request |
+
+Auth, base URL, envelope shape, and the v2 entitlement are therefore confirmed. The
+`flush`→`search` read path is documented but unproven; **prove it before relying on it in
+Beat 4.** Test session id `bonsai_smoke_001`, sender/user id `bonsai_tarun`.
+
+## Env var naming — needs one decision
+
+`.env.example` declares `EVERMIND_API_KEY`; EverOS's own docs and tooling use
+`EVEROS_API_KEY`. Pick one and use it in both `.env.example` and `lib/memory.ts` — B's call,
+since both files are B's territory.

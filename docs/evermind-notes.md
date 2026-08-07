@@ -2,6 +2,12 @@
 
 *Written from public docs as of Aug 6, 2026. Treat `docs/evermind-official-*.md` (saved tonight) as authoritative; do not invent endpoints beyond what's documented there.*
 
+> **⚠️ Corrected Aug 7: the "v1" guidance below is wrong.** The official reference now
+> describes a unified **v2** API (`/api/v2/memory/*`) and calls v1 "legacy, kept for
+> compatibility." Build against v2 — see **`evermind-official-v2.md`**, which has the
+> verified endpoint contracts, the four gotchas, and a timing trap that affects DEMO.md
+> Beat 4. The rest of this file (how Bonsai uses memory, pitch framing) still stands.
+
 ## What it is, in Bonsai terms
 
 EverOS is EverMind's memory layer: it ingests conversations/messages and turns them into structured, retrievable long-term memory. Memory comes in types (episodes, profile facts, atomic facts, plus knowledge documents) and in scopes (user memory, group memory, agent memory). Two ways to run it:
