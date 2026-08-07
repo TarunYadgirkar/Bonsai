@@ -76,12 +76,12 @@ const SCENARIOS: Scenario[] = [
     followUps: [{ content: 'what changes if I only have 8 hours a week?' }],
   },
   {
-    note: 'manual override — Opus 5 at max effort on a question Auto would route cheap',
+    note: 'manual override — the ceiling model at max effort on a question Auto would route cheap',
     parent: 'root',
     selection: 'Blueprint',
     question: 'is Blueprint worth it if I already have a technical peer group?',
     title: 'Blueprint club inquiry',
-    mode: { mode: 'manual', model: 'claude-opus-5', effort: 'max' },
+    mode: { mode: 'manual', model: 'claude-fable-5', effort: 'max' },
   },
   {
     note: 'guardrail — off-brief question the compiled brief refuses rather than inventing',

@@ -13,9 +13,12 @@ import type { Effort, Tier } from './types';
 export interface ModelSpec {
   id: string;
   label: string;
-  /** Tier this model is the default for, and the one the router maps complexity onto. */
+  /**
+   * Tier used for classification and baselines. Opus 5 and Fable 5 share `deep` because `Tier` is
+   * frozen at three values (lib/types.ts) — the ladder above deep is expressed by model, not tier.
+   */
   tier: Tier;
-  /** USD per 1M tokens, modeled at published rates. */
+  /** USD per 1M tokens. Modeled — Fable's rate is a placeholder, not a published figure. */
   input: number;
   output: number;
   /** One line for the picker's hover card. */
@@ -45,9 +48,20 @@ export const MODELS: ModelSpec[] = [
     tier: 'deep',
     input: 15,
     output: 75,
-    blurb: 'Strongest. Multi-constraint reasoning, ranking, weighing trade-offs.',
+    blurb: 'Deep reasoning. Multi-constraint ranking and weighing trade-offs.',
+  },
+  {
+    id: 'claude-fable-5',
+    label: 'Fable 5',
+    tier: 'deep',
+    input: 25,
+    output: 125,
+    blurb: 'The ceiling. Where a deep answer goes when it still is not good enough.',
   },
 ];
+
+/** Top of the ladder: what a failed deep answer escalates onto, and the highest manual pick. */
+export const CEILING_MODEL = 'claude-fable-5';
 
 export interface EffortSpec {
   level: Effort;
