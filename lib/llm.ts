@@ -37,8 +37,13 @@ export interface CompleteResult {
   mock: boolean;
 }
 
+/**
+ * Cortex inference is barred on this account, so credentials alone must NOT switch it on: with the
+ * SNOWFLAKE_ vars present for SQL logging, every inference otherwise paid a doomed 403 round trip
+ * (branch 1.51s → 0.33s once they were unset). Opt in explicitly if a live backend ever lands.
+ */
 export function isCortexEnabled(): boolean {
-  return Boolean(ACCOUNT_URL && PAT);
+  return Boolean(ACCOUNT_URL && PAT && process.env.SNOWFLAKE_CORTEX_ENABLED === '1');
 }
 
 const MAX_TOKENS_BY_TIER: Record<Tier, number> = {

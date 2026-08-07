@@ -3,6 +3,7 @@ import { completeWithEscalation, route } from '@/lib/router';
 import {
   appendMessage,
   availableTokensFor,
+  flushLogs,
   getConversation,
   loadStore,
   logInference,
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
   );
 
   await saveStore();
+  await flushLogs();
 
   const response: ChatResponse = {
     branchId: conversation.id,

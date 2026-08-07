@@ -3,6 +3,7 @@ import { MEMORY_USER_ID, writeInsight } from '@/lib/memory';
 import { INTERNAL_TIER, buildLog, mockInsight } from '@/lib/mock';
 import {
   appendInsight,
+  flushLogs,
   getConversation,
   loadStore,
   logInference,
@@ -75,6 +76,7 @@ export async function POST(request: Request) {
   );
 
   await saveStore();
+  await flushLogs();
 
   const response: MergeResponse = {
     insight,
