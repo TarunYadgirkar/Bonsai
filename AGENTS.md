@@ -206,6 +206,39 @@ surface, and DEMO.md Beat 5 still says it — that line needs to go or the table
 
 **Person A owns nothing outstanding.** Next A work is the DEMO.md walkthrough audit and rehearsal. Vercel is B's.
 
+### Design-doc import — node-graph sidebar (`50a1543`, 2026-08-07 ~13:00)
+
+A separate session imported `Bonsai Mockups.dc.html` from claude.ai/design and implemented its two
+new frames. Beats 1a–1e in that doc were a faithful recreation of the shipped UI, so nothing there
+changed. What landed:
+
+- **`components/TreeSidebar.tsx` is now a 400px node graph**, not the indented list. Cards are
+  absolutely positioned; SVG edges connect them, tinted by the branch's last tier and dashed when
+  archived. Cards carry the pruning kicker, message count, and per-branch spend.
+- **`components/treeLayout.ts` (new)** computes card positions and edge paths in one pure pass.
+  Geometry is calculated, not measured from the DOM, because the edges need the same coordinates
+  as the cards — measuring would cost a second render on every state change. **Card heights are
+  fixed per variant and the layout module and the cards must agree**; change one, change both.
+- **`components/MergeFlight.tsx`** gained the dotted arc and the landing ring on the target node.
+  The ring runs on its own `TRAVEL_MS` timer — `landed` fires on the first frame and only *starts*
+  the pill's transition, so keying the ring off it pops it immediately. Tarun asked that the
+  Branch/Merge reactions survive the rebuild; this is that animation, extended, not replaced.
+- **`components/Workspace.tsx`** reads `/api/economics` for per-branch cost and the session total
+  on the Economics button. Decoration only — a failed fetch resolves to `null` and the cards omit
+  the cost rather than blanking the tree.
+
+**Known conflict with M5, handed to the UI session — do not treat this as settled.** The graph
+still speaks in tiers: node badges render `TierBadge` (⚡/🧠/🔬) and edge tints key off
+`BranchNode.lastTier`. M5 says tier names are gone from the surface in favour of
+`RoutingDecision.label` ("Opus 5 · High effort"). The import compiles and runs against the M5
+engine because the `lib/types.ts` additions were additive, but the labelling is on the wrong side
+of that decision. When the chip is rebuilt, the sidebar needs the same two edits: render `label`
+on the cards instead of `TierBadge`, and key the `ACCENT` map in `TreeSidebar.tsx` off `effort`
+rather than `tier`. The layout module is label-agnostic and needs no change.
+
+Build clean, lint clean, verified in-browser against the pre-M5 store: branch → depth-2 nesting,
+merge → arc → archived card → insight landing on the parent.
+
 **Do not cut** (DEMO.md): branch + compiled brief with pruned-%, the ⚡/🔬 contrast on the two demo questions, merge-insight, the counters. Note the mock classifier is deliberately heuristic so that contrast survives with zero keys — do not "simplify" it to a constant.
 
 <!-- BEGIN:nextjs-agent-rules -->
