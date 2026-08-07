@@ -1,7 +1,8 @@
 'use client';
 
-import type { BranchNode, Tier } from '@/lib/types';
-import { TierBadge } from './TierBadge';
+import { useState } from 'react';
+import type { BranchNode, Effort } from '@/lib/types';
+import { ModeBadge, accentOf } from './ModeBadge';
 import { formatTokens, formatUsd } from './tokens';
 import { CANVAS_WIDTH, layoutTree, type PlacedNode } from './treeLayout';
 
@@ -13,48 +14,16 @@ export interface NodeStats {
   costUsd: number | null;
   /** Insights this branch merged up into its parent. */
   mergedInsights: number;
+  /** Model of the last answer, e.g. "Opus 5". Null until the branch has been answered. */
+  modelLabel: string | null;
+  /** Effort of the last answer — also what tints the card and its edge. */
+  effort: Effort | null;
 }
 
 export interface SessionTotals {
   costUsd: number;
   inputTokens: number;
 }
-
-/**
- * Tier accent for the graph. The badge palette (TierBadge) stays as-is — this is the
- * quieter card/edge tint that the legend calls out, running cheap → costly as
- * emerald → sky → violet so the tree reads as a spend gradient at a glance.
- */
-const ACCENT: Record<Tier, { border: string; bg: string; kicker: string; stroke: string }> = {
-  quick: {
-    border: 'border-emerald-400/30',
-    bg: 'bg-emerald-400/[0.07]',
-    kicker: 'text-emerald-300',
-    stroke: 'rgba(110,231,183,.5)',
-  },
-  thoughtful: {
-    border: 'border-sky-400/30',
-    bg: 'bg-sky-400/[0.07]',
-    kicker: 'text-sky-300',
-    stroke: 'rgba(125,211,252,.5)',
-  },
-  deep: {
-    border: 'border-violet-400/30',
-    bg: 'bg-violet-400/[0.07]',
-    kicker: 'text-violet-300',
-    stroke: 'rgba(167,139,250,.5)',
-  },
-};
-
-/** A branch that hasn't been answered yet has no tier to tint with. */
-const NEUTRAL = {
-  border: 'border-white/10',
-  bg: 'bg-white/[0.03]',
-  kicker: 'text-emerald-300',
-  stroke: 'rgba(255,255,255,.18)',
-};
-
-const accentOf = (tier: Tier | null) => (tier ? ACCENT[tier] : NEUTRAL);
 
 function NodeCard({
   placed,
@@ -70,7 +39,7 @@ function NodeCard({
   onSelect: (id: string) => void;
 }) {
   const { node, variant, x, y, width, height } = placed;
-  const accent = accentOf(node.lastTier);
+  const accent = accentOf(stats?.effort);
 
   const shell =
     variant === 'root'
@@ -118,9 +87,13 @@ function NodeCard({
         >
           {node.title}
         </span>
-        {variant === 'branch' && node.lastTier && (
+        {variant === 'branch' && stats?.modelLabel && (
           <span className="ml-auto shrink-0">
-            <TierBadge tier={node.lastTier} size="sm" />
+            <ModeBadge
+              modelLabel={stats.modelLabel}
+              effort={stats.effort ?? undefined}
+              size="sm"
+            />
           </span>
         )}
       </div>
@@ -158,6 +131,7 @@ export function TreeSidebar({
   activeId,
   onSelect,
   onOpenEconomics,
+  onReset,
   flashId,
   stats,
   session,
@@ -166,6 +140,8 @@ export function TreeSidebar({
   activeId: string | null;
   onSelect: (id: string) => void;
   onOpenEconomics: () => void;
+  /** Throws away the current run and re-seeds the demo tree. */
+  onReset: () => Promise<void>;
   /** Node a merged insight just landed on — pulses for a beat. */
   flashId: string | null;
   stats: Record<string, NodeStats>;
@@ -173,6 +149,18 @@ export function TreeSidebar({
   session: SessionTotals | null;
 }) {
   const layout = layoutTree(nodes);
+  const [confirming, setConfirming] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  const runReset = async () => {
+    setResetting(true);
+    try {
+      await onReset();
+    } finally {
+      setResetting(false);
+      setConfirming(false);
+    }
+  };
 
   return (
     <aside
@@ -205,7 +193,11 @@ export function TreeSidebar({
               <path
                 key={`stub-${stub.id}`}
                 d={stub.d}
-                stroke={stub.dashed ? 'rgba(255,255,255,.12)' : accentOf(stub.tier).stroke}
+                stroke={
+                  stub.dashed
+                    ? 'rgba(255,255,255,.12)'
+                    : accentOf(stats[stub.id]?.effort).stroke
+                }
                 strokeWidth={stub.dashed ? 1 : 1.5}
                 strokeDasharray={stub.dashed ? '3 5' : undefined}
                 fill="none"
@@ -227,7 +219,7 @@ export function TreeSidebar({
       </div>
 
       <div className="flex shrink-0 justify-between border-t border-white/[0.08] px-5 py-2 text-[10px] text-neutral-500">
-        <span>Edge tint = tier of last answer</span>
+        <span>Edge tint = effort of last answer</span>
         <span>Kicker = available → inherited</span>
       </div>
 
@@ -243,6 +235,28 @@ export function TreeSidebar({
             {session
               ? `${formatUsd(session.costUsd)} · ${formatTokens(session.inputTokens)} in`
               : 'tokens · spend'}
+          </span>
+        </button>
+
+        {/*
+         * Rehearse a merge, then put the tree back. Two-step rather than a confirm() dialog:
+         * a browser modal blocks the page, and this throws away everything the room just
+         * watched you build, so a stray click must not be enough.
+         */}
+        <button
+          onClick={() => (confirming ? runReset() : setConfirming(true))}
+          onBlur={() => setConfirming(false)}
+          disabled={resetting}
+          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors disabled:opacity-40 ${
+            confirming
+              ? 'bg-amber-400/10 text-amber-200 hover:bg-amber-400/15'
+              : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-300'
+          }`}
+        >
+          <span aria-hidden>↺</span>
+          {resetting ? 'Resetting…' : confirming ? 'Discard this run?' : 'Reset demo'}
+          <span className="ml-auto text-[10px] text-neutral-600">
+            {confirming ? 'click again' : 'back to start'}
           </span>
         </button>
       </div>

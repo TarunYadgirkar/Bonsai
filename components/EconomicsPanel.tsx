@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { EconomicsResponse, InferenceLog } from '@/lib/types';
-import { TierBadge } from './TierBadge';
+import { EFFORT_LABEL } from './ModeBadge';
 import { formatUsd } from './tokens';
 
 const PURPOSE_LABEL: Record<InferenceLog['purpose'], string> = {
@@ -182,7 +182,7 @@ export function EconomicsPanel({
                         <th className="px-3 py-2 font-medium">Time</th>
                         <th className="px-3 py-2 font-medium">Branch</th>
                         <th className="px-3 py-2 font-medium">Purpose</th>
-                        <th className="px-3 py-2 font-medium">Tier</th>
+                        <th className="px-3 py-2 font-medium">Effort</th>
                         <th className="px-3 py-2 font-medium">Model</th>
                         <th className="px-3 py-2 text-right font-medium">Context in</th>
                         <th className="px-3 py-2 text-right font-medium">Out</th>
@@ -210,8 +210,8 @@ export function EconomicsPanel({
                               <span className="ml-1.5 text-[10px] text-neutral-500">pinned</span>
                             )}
                           </td>
-                          <td className="px-3 py-2">
-                            <TierBadge tier={log.tier} size="sm" />
+                          <td className="px-3 py-2 text-neutral-300">
+                            {log.effort ? EFFORT_LABEL[log.effort] : '—'}
                           </td>
                           <td className="max-w-[180px] truncate px-3 py-2 font-mono text-neutral-400">
                             {log.model}
@@ -237,7 +237,8 @@ export function EconomicsPanel({
 
               <p className="mt-3 text-[11px] leading-snug text-neutral-500">
                 Baseline = the same requests carrying the full parent history, answered on the
-                deep-tier model every time. That is what a flat chat log costs.
+                strongest model every time. That is what a flat chat log costs. Cost is modeled
+                at published per-token rates.
               </p>
             </>
           )}

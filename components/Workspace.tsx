@@ -6,8 +6,8 @@ import type {
   ChatResponse,
   EconomicsResponse,
   MergeResponse,
+  ModeSelection,
   StateResponse,
-  Tier,
 } from '@/lib/types';
 import { ChatPane } from './ChatPane';
 import { EconomicsPanel } from './EconomicsPanel';
@@ -52,6 +52,28 @@ function nodeCenter(id: string): { x: number; y: number } | null {
 const FLASH_MS = 2600;
 
 /**
+ * The open branch lives in the URL, so reload lands where you were, Back and Forward walk the
+ * branches you visited, and a link to a branch opens that branch. Plain history API rather than
+ * useSearchParams: this page is prerendered, and reading search params would opt it out of that
+ * for a value only the client ever sets.
+ */
+const BRANCH_PARAM = 'branch';
+
+function branchFromUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  return new URLSearchParams(window.location.search).get(BRANCH_PARAM);
+}
+
+function writeBranchToUrl(id: string, mode: 'push' | 'replace'): void {
+  const url = new URL(window.location.href);
+  if (url.searchParams.get(BRANCH_PARAM) === id) return;
+  url.searchParams.set(BRANCH_PARAM, id);
+  const next = `${url.pathname}${url.search}`;
+  if (mode === 'push') window.history.pushState({ [BRANCH_PARAM]: id }, '', next);
+  else window.history.replaceState({ [BRANCH_PARAM]: id }, '', next);
+}
+
+/**
  * The raw selection is chat markdown, so a highlight that clips a bold marker names the tree
  * node `*Reassess once, in week six.** Not`. The node label is on screen for the rest of the
  * demo — send a cleaned title (the contract already has the field) and keep `selection` raw,
@@ -75,11 +97,11 @@ export function Workspace() {
   const [sending, setSending] = useState(false);
   const [branching, setBranching] = useState(false);
   /*
-   * Pins live here, keyed by branch, because /api/chat reads pinnedTier off the
-   * request and does not persist it onto the Conversation. Sending it on every
-   * message is what makes the override stick for the whole branch.
+   * Mode picks live here, keyed by branch, because /api/chat reads the selection off the
+   * request and does not persist it onto the Conversation. Sending it on every message is
+   * what makes the override stick for the whole branch. Absent means Auto.
    */
-  const [pins, setPins] = useState<Record<string, Tier | null>>({});
+  const [modes, setModes] = useState<Record<string, ModeSelection | null>>({});
   const [merging, setMerging] = useState(false);
   const [flight, setFlight] = useState<Flight | null>(null);
   /** The insight that just landed, so the parent node and the line itself can glow. */
@@ -94,10 +116,33 @@ export function Workspace() {
 
   const applyState = useCallback((data: StateResponse) => {
     setState(data);
-    // Only seed the selection; don't yank the user back to the root on refetch.
-    setActiveId((current) => current ?? data.rootId);
+    setActiveId((current) => {
+      if (current) return current; // don't yank the user back to the root on refetch
+      // First load: honour ?branch=… if it still exists, else open the root.
+      const fromUrl = branchFromUrl();
+      const exists = fromUrl && data.conversations.some((c) => c.id === fromUrl);
+      return exists ? fromUrl : data.rootId;
+    });
     setError(null);
   }, []);
+
+  /** Every selection goes through here so the URL and the view can never disagree. */
+  const select = useCallback((id: string) => {
+    setActiveId(id);
+    writeBranchToUrl(id, 'push');
+  }, []);
+
+  // Back and Forward: adopt whatever branch the entry names, without pushing a new entry.
+  useEffect(() => {
+    const onPop = () => setActiveId(branchFromUrl());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  // Keep the address bar honest for programmatic moves (first load, merge landing, reset).
+  useEffect(() => {
+    if (activeId) writeBranchToUrl(activeId, 'replace');
+  }, [activeId]);
 
   const loadState = useCallback(async () => {
     try {
@@ -132,7 +177,7 @@ export function Workspace() {
         body: JSON.stringify({
           branchId: activeId,
           content,
-          pinnedTier: pins[activeId] ?? null,
+          mode: modes[activeId] ?? undefined,
         }),
       });
       if (!res.ok) throw new Error(`POST /api/chat → ${res.status}`);
@@ -171,12 +216,15 @@ export function Workspace() {
           parentId: activeId,
           selection,
           title: titleFromSelection(selection),
+          // A pinned parent hands its pick down: branching off a deliberate choice should
+          // not silently fall back to Auto for the branch's first answer.
+          mode: modes[activeId] ?? undefined,
         }),
       });
       if (!res.ok) throw new Error(`POST /api/branch → ${res.status}`);
       const data: BranchResponse = await res.json();
       applyState(await fetchState());
-      setActiveId(data.node.id); // drop the user straight into the new branch
+      select(data.node.id); // drop the user straight into the new branch
     } catch (err) {
       setError(describe(err));
     } finally {
@@ -213,9 +261,33 @@ export function Workspace() {
     }
   };
 
-  const pin = (tier: Tier | null) => {
+  const selectMode = (mode: ModeSelection | null) => {
     if (!activeId) return;
-    setPins((prev) => ({ ...prev, [activeId]: tier }));
+    setModes((prev) => ({ ...prev, [activeId]: mode }));
+  };
+
+  /**
+   * Beat 4 is destructive on purpose — the branch archives and the insight lands on the parent.
+   * This puts the tree back so the merge can be shown again, or so a rehearsal doesn't ship its
+   * leftovers into the real run. Local pins go too: they belong to the run being discarded.
+   */
+  const reset = async () => {
+    try {
+      const res = await fetch('/api/reset', { method: 'POST' });
+      if (!res.ok) throw new Error(`POST /api/reset → ${res.status}`);
+      const data: StateResponse = await res.json();
+      setState(data);
+      setModes({});
+      setFlight(null);
+      setMerged(null);
+      setEconomicsOpen(false);
+      setActiveId(data.rootId);
+      setError(null);
+      const logs = await fetchEconomics();
+      setEconomics(logs);
+    } catch (err) {
+      setError(describe(err));
+    }
   };
 
   if (error && !state) {
@@ -272,15 +344,22 @@ export function Workspace() {
   }
 
   const nodeStats: Record<string, NodeStats> = Object.fromEntries(
-    state.conversations.map((c) => [
-      c.id,
-      {
-        // Same formula as the chat header (ChatPane) so the card and the header agree.
-        contextTokens: conversationTokens(c.messages) + (c.brief?.briefTokens ?? 0),
-        costUsd: costByBranch.get(c.id) ?? null,
-        mergedInsights: mergedByBranch.get(c.id) ?? 0,
-      },
-    ]),
+    state.conversations.map((c) => {
+      // BranchNode carries only the engine-internal tier, so the card's model and effort come
+      // from the last answer's own routing decision.
+      const lastRouting = [...c.messages].reverse().find((m) => m.routing)?.routing ?? null;
+      return [
+        c.id,
+        {
+          // Same formula as the chat header (ChatPane) so the card and the header agree.
+          contextTokens: conversationTokens(c.messages) + (c.brief?.briefTokens ?? 0),
+          costUsd: costByBranch.get(c.id) ?? null,
+          mergedInsights: mergedByBranch.get(c.id) ?? 0,
+          modelLabel: lastRouting?.modelLabel ?? lastRouting?.model ?? null,
+          effort: lastRouting?.effort ?? null,
+        },
+      ];
+    }),
   );
 
   return (
@@ -288,8 +367,9 @@ export function Workspace() {
       <TreeSidebar
         nodes={state.tree}
         activeId={active?.id ?? null}
-        onSelect={setActiveId}
+        onSelect={select}
         onOpenEconomics={() => setEconomicsOpen(true)}
+        onReset={reset}
         flashId={merged?.parentId ?? null}
         stats={nodeStats}
         session={
@@ -309,9 +389,9 @@ export function Workspace() {
           conversation={active}
           onSend={send}
           onBranch={branch}
-          onPin={pin}
+          onSelectMode={selectMode}
           onMerge={merge}
-          pinnedTier={pins[active.id] ?? active.pinnedTier ?? null}
+          mode={modes[active.id] ?? null}
           sending={sending}
           branching={branching}
           merging={merging}
@@ -332,7 +412,7 @@ export function Workspace() {
           onDone={() => {
             setFlight(null);
             // Land on the parent so the merged line is on screen when the pill lands.
-            setActiveId(flight.parentId);
+            select(flight.parentId);
             setMerged({ parentId: flight.parentId, insightId: flight.id });
           }}
         />

@@ -8,9 +8,12 @@
  * routing decisions and costs in the fixture are computed, not hand-written. Timestamps are
  * normalized to a fixed date afterwards so re-running produces a clean diff.
  *
- * Scenarios covered, one branch each: auto-routed quick lookup, auto-routed synthesis, auto-routed
- * deep ranking, a nested branch off a branch, a manual Opus/max override, and an off-brief question
- * the compiled brief declines. One branch is merged back so the root boots with an insight.
+ * Scenarios covered, one branch each: an auto-routed lookup, an auto-routed synthesis, an
+ * auto-routed deep ranking, a nested branch off a branch, a manual Opus/max override, and an
+ * off-brief question the compiled brief declines.
+ *
+ * Nothing is pre-merged. Beat 4 merges on stage, and POST /api/reset has to return the tree to
+ * a state where that merge has not happened yet, so it can be shown again.
  */
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -35,19 +38,21 @@ interface Scenario {
 
 const SCENARIOS: Scenario[] = [
   {
-    note: 'auto → quick: single fact straight out of the brief, then merged back into the root',
+    // NOT pre-merged: Beat 4 merges this live on stage, and Reset has to put it back to
+    // unmerged so the merge can be shown again. A pre-merged fixture would also mean merging
+    // an already-merged branch during the demo.
+    note: 'auto → cheapest model: single fact straight out of the brief',
     parent: 'root',
     selection: 'Free Ventures',
     question: 'when do apps close?',
-    title: 'Free Ventures deadline',
-    merge: true,
+    title: 'Free Ventures club',
   },
   {
     note: 'auto → synthesis over a few facts',
     parent: 'root',
     selection: 'ML@B',
     question: 'how many hours a week is ML@B really, once the education track is counted?',
-    title: 'ML@B workload',
+    title: 'ML@B club — workload',
   },
   {
     note: 'auto → Opus 5 / high: multi-constraint ranking, the cheap-vs-strong contrast',
@@ -57,14 +62,14 @@ const SCENARIOS: Scenario[] = [
       "Given my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.",
     // No follow-up here on purpose: the node badge shows the LAST turn's tier, and a cheap
     // follow-up would flip this branch's Opus chip to Haiku — the contrast the demo is built on.
-    title: 'Rank my top 3',
+    title: 'Rank my top 3 clubs',
   },
   {
     note: 'nested branch — depth 2, inherits a brief compiled from a brief',
     parent: 2,
     selection: 'opportunity cost',
     question: 'why is Codebase dominated in every scenario?',
-    title: 'Why Codebase loses',
+    title: 'Codebase club — why it loses',
     // The multi-turn example lives here: this branch already routes to the cheapest model, so an
     // extra cheap turn costs no chip. On the Opus or Sonnet branch it would overwrite theirs —
     // the node chip shows the LAST turn's decision.
@@ -75,7 +80,7 @@ const SCENARIOS: Scenario[] = [
     parent: 'root',
     selection: 'Blueprint',
     question: 'is Blueprint worth it if I already have a technical peer group?',
-    title: 'Blueprint (manual: Opus 5 · max)',
+    title: 'Blueprint club — worth it?',
     mode: { mode: 'manual', model: 'claude-opus-5', effort: 'max' },
   },
   {
@@ -83,7 +88,7 @@ const SCENARIOS: Scenario[] = [
     parent: 'root',
     selection: 'Berkeley',
     question: 'what is the tuition of Berkeley law school?',
-    title: 'Off-brief question',
+    title: 'Berkeley law tuition (off-brief)',
     mode: { mode: 'manual', model: 'claude-haiku-4-5', effort: 'low' },
   },
 ];
