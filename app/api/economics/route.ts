@@ -1,7 +1,31 @@
+import { readInferenceLogs } from '@/lib/snowflake';
 import { listLogs, loadStore } from '@/lib/store';
-import type { EconomicsBaseline, EconomicsResponse, EconomicsTotals } from '@/lib/types';
+import type {
+  EconomicsBaseline,
+  EconomicsResponse,
+  EconomicsTotals,
+  InferenceLog,
+} from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * The panel's rows come back out of Snowflake, but only when the table holds every inference this
+ * session recorded. A partial read would quietly show a shorter table than the tree on stage, so
+ * anything less than full coverage falls back to memory (rule 8).
+ */
+async function logsForPanel(memory: InferenceLog[]): Promise<InferenceLog[]> {
+  if (!memory.length) return memory;
+  const remote = await readInferenceLogs(memory.map((l) => l.id));
+  if (!remote) return memory;
+  if (remote.length !== memory.length) {
+    console.warn(
+      `[economics] snowflake returned ${remote.length}/${memory.length} rows — serving in-memory logs`,
+    );
+    return memory;
+  }
+  return remote;
+}
 
 function pctSaved(baseline: number, actual: number): number {
   if (baseline <= 0) return 0;
@@ -10,7 +34,7 @@ function pctSaved(baseline: number, actual: number): number {
 
 export async function GET() {
   await loadStore();
-  const logs = listLogs();
+  const logs = await logsForPanel(listLogs());
 
   const totals: EconomicsTotals = logs.reduce<EconomicsTotals>(
     (acc, l) => ({

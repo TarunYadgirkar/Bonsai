@@ -6,6 +6,7 @@ import { completeWithEscalation, route } from '@/lib/router';
 import {
   availableTokensFor,
   buildTree,
+  flushLogs,
   getConversation,
   loadStore,
   logInference,
@@ -131,6 +132,7 @@ export async function POST(request: Request) {
   }
 
   await saveStore();
+  await flushLogs();
 
   const response: BranchResponse = { node, conversation, brief, message: answer, routing };
   return Response.json(response);
