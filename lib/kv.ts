@@ -1,35 +1,37 @@
 /**
- * Upstash Redis over REST — plain fetch, no SDK.
+ * Durable snapshot storage for lib/store.ts. Two interchangeable backends, picked by env:
  *
- * Only used to keep the tree alive across Vercel instances (see lib/store.ts). Absent env vars
- * mean the app runs exactly as before on globalThis, per the AGENTS.md mock-first rule.
+ * - Neon Postgres (`DATABASE_URL`) — the one we provision. HTTP driver, no pooling to babysit.
+ * - Upstash Redis REST (`UPSTASH_REDIS_REST_*` or `KV_REST_API_*`) — kept because the Vercel
+ *   marketplace integration injects those names, so adding it later needs no code change.
  *
- * Both env-var pairs are accepted: the Vercel marketplace Upstash integration injects
- * UPSTASH_REDIS_REST_*, while Vercel KV projects inject KV_REST_API_*.
+ * Neither present means the app runs on globalThis exactly as before, per the AGENTS.md
+ * mock-first rule. Every failure here is swallowed and logged: a dead store must degrade to
+ * in-memory, never take the demo down (rule 8).
  */
-const URL_ENV = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
-const TOKEN_ENV = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
+import { neon } from '@neondatabase/serverless';
+
+const DATABASE_URL = process.env.DATABASE_URL;
+const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
 const TIMEOUT_MS = 3_000;
 
 export function kvEnabled(): boolean {
-  return Boolean(URL_ENV && TOKEN_ENV);
+  return Boolean(DATABASE_URL || (REDIS_URL && REDIS_TOKEN));
 }
 
-/** Returns null on miss AND on any failure — a dead KV must never take the demo down. */
+export function kvBackend(): 'neon' | 'upstash' | 'memory' {
+  if (DATABASE_URL) return 'neon';
+  if (REDIS_URL && REDIS_TOKEN) return 'upstash';
+  return 'memory';
+}
+
+/** Returns null on miss AND on any failure — callers keep whatever is already in memory. */
 export async function kvGet(key: string): Promise<string | null> {
-  if (!kvEnabled()) return null;
   try {
-    const res = await fetch(`${URL_ENV}/get/${encodeURIComponent(key)}`, {
-      headers: { Authorization: `Bearer ${TOKEN_ENV}` },
-      cache: 'no-store',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!res.ok) {
-      console.warn(`[kv] get ${res.status} — continuing from memory`);
-      return null;
-    }
-    const body = (await res.json()) as { result?: string | null };
-    return body.result ?? null;
+    if (DATABASE_URL) return await neonGet(key);
+    if (REDIS_URL && REDIS_TOKEN) return await redisGet(key);
+    return null;
   } catch (err) {
     console.warn(`[kv] get failed (${(err as Error).message}) — continuing from memory`);
     return null;
@@ -37,19 +39,62 @@ export async function kvGet(key: string): Promise<string | null> {
 }
 
 export async function kvSet(key: string, value: string): Promise<boolean> {
-  if (!kvEnabled()) return false;
   try {
-    const res = await fetch(`${URL_ENV}/set/${encodeURIComponent(key)}`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${TOKEN_ENV}` },
-      body: value,
-      cache: 'no-store',
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-    if (!res.ok) console.warn(`[kv] set ${res.status} — state stayed in memory only`);
-    return res.ok;
+    if (DATABASE_URL) return await neonSet(key, value);
+    if (REDIS_URL && REDIS_TOKEN) return await redisSet(key, value);
+    return false;
   } catch (err) {
     console.warn(`[kv] set failed (${(err as Error).message}) — state stayed in memory only`);
     return false;
   }
+}
+
+/* ---------- neon ---------- */
+
+async function neonGet(key: string): Promise<string | null> {
+  const sql = neon(DATABASE_URL!);
+  const rows = (await sql`SELECT value FROM store_snapshot WHERE key = ${key}`) as {
+    value: unknown;
+  }[];
+  if (!rows.length) return null;
+  // JSONB comes back parsed; store.ts wants the raw string it wrote.
+  return JSON.stringify(rows[0].value);
+}
+
+async function neonSet(key: string, value: string): Promise<boolean> {
+  const sql = neon(DATABASE_URL!);
+  await sql`
+    INSERT INTO store_snapshot (key, value, updated_at)
+    VALUES (${key}, ${value}::jsonb, now())
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+  `;
+  return true;
+}
+
+/* ---------- upstash ---------- */
+
+async function redisGet(key: string): Promise<string | null> {
+  const res = await fetch(`${REDIS_URL}/get/${encodeURIComponent(key)}`, {
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+    cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (!res.ok) {
+    console.warn(`[kv] upstash get ${res.status} — continuing from memory`);
+    return null;
+  }
+  const body = (await res.json()) as { result?: string | null };
+  return body.result ?? null;
+}
+
+async function redisSet(key: string, value: string): Promise<boolean> {
+  const res = await fetch(`${REDIS_URL}/set/${encodeURIComponent(key)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
+    body: value,
+    cache: 'no-store',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (!res.ok) console.warn(`[kv] upstash set ${res.status} — state stayed in memory only`);
+  return res.ok;
 }
