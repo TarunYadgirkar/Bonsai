@@ -47,12 +47,12 @@ Builds clean · demo script beats it touches still work · committed · nothing 
 
 Updated: 2026-08-07T12:10:00-0700 by claude session (Person B / engine)
 
-**⚠️ FIRST ACTION FOR THE NEXT SESSION — clear the demo store.** The live Neon snapshot holds
-probe branches (`branch_1`, `branch_7`) from persistence testing. They will be on screen during
-the demo. Run `DELETE FROM store_snapshot WHERE key = 'bonsai:store:v1';` against Neon project
-`quiet-wind-73997653`; the store re-seeds from `fixtures/seed-conversation.json` on next boot.
-Left undone deliberately — destructive SQL needs a human's go-ahead, and this session did not
-have it.
+**Demo store is CLEAN as of 2026-08-07 12:12 — `SELECT count(*) FROM store_snapshot` returns 0.**
+Tarun granted the permission and the probe branches (`branch_1`, `branch_7`) were deleted; the
+store re-seeds from `fixtures/seed-conversation.json` on next boot. No action needed at session
+start. But state is durable now, so **re-run
+`DELETE FROM store_snapshot WHERE key = 'bonsai:store:v1';`** (Neon project `quiet-wind-73997653`)
+after any rehearsal — anything created while practising will be on screen during the demo.
 
 **Done:**
 - `24e86f1` M0 contracts — `lib/types.ts` FROZEN. Adds `GET /api/state` (rootId + tree + conversations in one call) beyond PLAN.md's four routes.
