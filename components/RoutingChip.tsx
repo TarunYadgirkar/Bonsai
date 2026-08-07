@@ -97,6 +97,12 @@ export function RoutingChip({
               <span className="text-neutral-200">{routing.effortNote}</span>
               <span>Complexity</span>
               <span className="text-neutral-200">{routing.complexity}/3</span>
+              {routing.servedBy && (
+                <>
+                  <span>Served by</span>
+                  <span className="truncate font-mono text-neutral-200">{routing.servedBy}</span>
+                </>
+              )}
             </span>
             <span className="border-t border-white/10 pt-1.5 text-[11px] leading-snug text-neutral-300">
               {routing.reason}

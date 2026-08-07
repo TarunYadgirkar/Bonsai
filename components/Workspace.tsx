@@ -261,6 +261,23 @@ export function Workspace() {
     }
   };
 
+  /** A second tree, not a branch: no parent, no inherited transcript. */
+  const newChat = async () => {
+    try {
+      const res = await fetch('/api/conversation', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(`POST /api/conversation → ${res.status}`);
+      const data: { node: { id: string } } = await res.json();
+      applyState(await fetchState());
+      select(data.node.id);
+    } catch (err) {
+      setError(describe(err));
+    }
+  };
+
   const selectMode = (mode: ModeSelection | null) => {
     if (!activeId) return;
     setModes((prev) => ({ ...prev, [activeId]: mode }));
@@ -370,6 +387,7 @@ export function Workspace() {
         onSelect={select}
         onOpenEconomics={() => setEconomicsOpen(true)}
         onReset={reset}
+        onNewChat={newChat}
         flashId={merged?.parentId ?? null}
         stats={nodeStats}
         session={

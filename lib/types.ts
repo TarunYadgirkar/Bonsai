@@ -75,6 +75,11 @@ export interface RoutingDecision {
   modelLabel?: string;
   /** What the chip should read: "Opus 5 · High effort". No tier names on the surface. */
   label?: string;
+  /**
+   * Upstream model that actually answered, when a live provider served it. Absent on the mock.
+   * The chip keeps Bonsai's vocabulary; this is what stops it claiming a model that didn't run.
+   */
+  servedBy?: string;
   /** Human phrasing of reasoning effort, e.g. "low effort, single pass". */
   effortNote: string;
   contextTokens: number;
