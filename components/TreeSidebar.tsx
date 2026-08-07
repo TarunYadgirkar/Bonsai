@@ -33,10 +33,15 @@ export function TreeSidebar({
   nodes,
   activeId,
   onSelect,
+  onOpenEconomics,
+  flashId,
 }: {
   nodes: BranchNode[];
   activeId: string | null;
   onSelect: (id: string) => void;
+  onOpenEconomics: () => void;
+  /** Node a merged insight just landed on — pulses for a beat. */
+  flashId: string | null;
 }) {
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-neutral-950">
@@ -53,11 +58,17 @@ export function TreeSidebar({
           return (
             <button
               key={node.id}
+              // The merge animation looks this up to find where the insight should fly.
+              data-node-id={node.id}
               onClick={() => onSelect(node.id)}
               style={{ paddingLeft: `${node.depth * 14 + 10}px` }}
-              className={`group mb-0.5 flex w-full flex-col items-start gap-1 rounded-md py-2 pr-2 text-left transition-colors ${
+              className={`group mb-0.5 flex w-full flex-col items-start gap-1 rounded-md py-2 pr-2 text-left ring-1 transition-all duration-700 ${
                 isActive ? 'bg-white/10' : 'hover:bg-white/5'
-              } ${node.archived ? 'opacity-45' : ''}`}
+              } ${node.archived ? 'opacity-45' : ''} ${
+                node.id === flashId
+                  ? 'bg-emerald-400/15 ring-emerald-300/60'
+                  : 'ring-transparent'
+              }`}
             >
               <span className="flex w-full items-center gap-1.5">
                 {node.depth > 0 && (
@@ -100,6 +111,18 @@ export function TreeSidebar({
           );
         })}
       </nav>
+
+      {/* DEMO.md Beat 5 opens from here. */}
+      <div className="border-t border-white/10 p-2">
+        <button
+          onClick={onOpenEconomics}
+          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-neutral-300 transition-colors hover:bg-white/5"
+        >
+          <span aria-hidden>📊</span>
+          Economics
+          <span className="ml-auto text-[10px] text-neutral-600">tokens · spend</span>
+        </button>
+      </div>
     </aside>
   );
 }
