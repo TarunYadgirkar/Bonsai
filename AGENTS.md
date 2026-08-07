@@ -77,8 +77,8 @@ Evidence (account `RGZOHDN-KQ65280`, trial, ACCOUNTADMIN, $400 credit):
 - Blocked on **both** SQL and REST surfaces.
 
 Consequences:
-- `lib/llm.ts` ships in **mock mode, permanently** for this demo. That is the intended path now, not a fallback — AGENTS.md's mock-first rule means the mock returns realistic responses with realistic token counts, and DEMO.md is fully walkable on it. Do not apologize for it in the UI or add "mock" labels to the demo surface.
-- `MODEL_TIERS` in `lib/models.ts` (`claude-haiku` / `claude-sonnet` / `claude-opus`) are **display names only** — they are never sent anywhere. Pick whatever reads best on stage; there is no live API to verify them against, so AGENTS.md rule 9 no longer bites here.
+- `lib/llm.ts` ships in **mock mode, permanently** for this demo. That is the intended path now, not a fallback — AGENTS.md's mock-first rule means the mock returns realistic responses with realistic token counts, and DEMO.md is fully walkable on it. No "mock" or "simulated" badge goes on the demo surface.
+- `MODEL_TIERS` in `lib/models.ts` names a **capability class** (`small-fast` / `mid-balanced` / `large-reasoning`), not a vendor model. Changed from `claude-*` on Tarun's call 2026-08-07 — nothing is sent anywhere, so a concrete model name on the chip asserts something untrue. Do not put vendor model names back unless a live inference backend lands. Change them here and only here.
 - Do not delete the Cortex client in `lib/llm.ts`. It costs nothing behind the interface and rule 3 forbids the cleanup refactor.
 
 **Snowflake is NOT entirely dead — the SQL API works.** Same PAT, same account: `GET /api/v2/databases` → **200**. Auth, URL, and network policy `bonsai_dev` are all correct and verified. Only the Cortex inference endpoint is barred. So Next item 5 (mirroring `InferenceLog` rows into a Snowflake table, then having `/api/economics` read them back) is **still achievable**, and it is now the only way the demo genuinely touches Snowflake at a sponsor-judged Snowflake event. That materially raises its priority — see Next.
@@ -86,20 +86,20 @@ Consequences:
 Creds: PAT `BONSAI_PAT` expires **2026-08-14**; network policy `bonsai_dev` is `0.0.0.0/0`, hackathon-only, drop it after (`DROP NETWORK POLICY bonsai_dev;`).
 - Agents cannot write or read `.env*` here — two `PreToolUse` hooks block it, and `--dangerously-skip-permissions` does not bypass hooks. Hand Tarun the command; he runs it.
 
-**Open question for Tarun — how Beat 5 gets narrated (not an agent's call to make).**
-This block records a disagreement so it does not get silently resolved by whoever edits next.
-An earlier note says "do not apologize for it in the UI or add 'mock' labels to the demo surface."
-Against that, the factual position: with Cortex closed, no model is called anywhere. The tier
-names on the routing chips (`claude-haiku`/`claude-sonnet`/`claude-opus`) and the per-call dollar
-figures in the economics table are rendered from `MODEL_PRICING` placeholders applied to text
-`lib/llm.ts` produced locally. DEMO.md Beat 5 says "data logged to Snowflake" and "these are live
-numbers from this demo, not slides", and Beat 2/3 say "cheap model"/"strong model".
-What is actually real and defensible: the 19,013-token baseline, the compiled brief size, the
-pruned-%, the tier *decisions* from `lib/router.ts`, and the whole savings ratio — all computed,
-none faked. What is not: the completions and the absolute dollar amounts.
-Tarun decides the framing. Cheapest honest version keeps every number and every beat, and only
-changes words — describe the tiers by effort rather than by model name, and say the cost column
-is modeled at published rates. Nobody should quietly harden the stronger claim into the UI.
+**DECIDED 2026-08-07 by Tarun — how the demo describes inference. Do not relitigate.**
+No model is called anywhere in this build, so the demo surface must not name one or imply
+billing. Chosen resolution: change the words, keep every number.
+- `MODEL_TIERS` names a capability class, not a vendor model. Done in `lib/models.ts`.
+- DEMO.md Beats 2, 3 and 5 rewritten: "cheapest tier" not "cheap model", "modeled cost" not
+  "cost", and **"logged to Snowflake" is removed until Next #2 actually ships** — say it only
+  once rows really land in a Snowflake table.
+- No "simulated" badge on the UI. The fix is accurate wording, not a disclaimer.
+- **Still open, Person A's file:** the economics panel's cost column header should read as an
+  estimate — e.g. "Est. cost — modeled at published rates". `components/**` is A's territory so
+  B did not touch it. Justin, this is the last piece.
+What is real and defensible if a judge pushes: the 19,013-token baseline, the compiled brief
+size, the pruned-%, the tier decisions from `lib/router.ts`, and the entire savings ratio — all
+measured, none faked. What is modeled: the dollar amounts. What is local: the completion text.
 
 **Next (Person B, ordered):**
 1. ~~**Store persistence**~~ — **SOLVED and verified end-to-end 2026-08-07.** `lib/kv.ts` snapshots the store to **Neon Postgres** (`DATABASE_URL`, table `public.store_snapshot`, key `bonsai:store:v1`). Upstash is a dormant secondary — Neon wins whenever `DATABASE_URL` is set, so no Upstash provisioning is needed or wanted.
