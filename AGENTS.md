@@ -58,6 +58,13 @@ Cause: a `vercel --prod --force` from the CLI created a deployment under this po
 git-triggered ones had not been. Prefer an empty commit + push over `--force` to cycle lambdas.
 Agents cannot fix this — the API call is classifier-blocked and there is no CLI equivalent.
 
+**Snapshot cleared again 2026-08-07 12:52** (it held a 7-node tree frozen *before* the model·effort
+labels landed, so prod was serving decisions with no `label`). It will re-seed from the current
+`fixtures/seed-tree.json` on the first successful request — which cannot happen until the Vercel
+Authentication blocker above is cleared, since every `/api/*` is 403 right now.
+**An agent cannot disable that protection:** the Vercel MCP token returns
+`403 forbidden — You don't have permission to update the project`. Dashboard click only.
+
 **Demo store is CLEAN as of 2026-08-07 12:12 — `SELECT count(*) FROM store_snapshot` returns 0.**
 Tarun granted the permission and the probe branches (`branch_1`, `branch_7`) were deleted; the
 store re-seeds from `fixtures/seed-conversation.json` on next boot. No action needed at session
