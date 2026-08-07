@@ -124,6 +124,56 @@ Produced locally by `lib/llm.ts` is the completion text.
 4. ~~Verify the Cortex response parse~~ — moot, no live Cortex. Leave both the JSON and SSE branches in `lib/llm.ts` alone.
 5. ~~Pre-test deep-tier latency~~ — moot, mock responses are instant. Beat 3's risk is now purely visual pacing, not latency.
 
+## M5 — engine surface for the UI rebuild (2026-08-07 ~13:40, `22a88fe`) — READ THIS FIRST IF YOU ARE BUILDING UI
+
+The UI is being rebuilt in a separate Claude session. The engine changed underneath it. All
+changes to `lib/types.ts` are **additive** — the existing components still compile — but three
+things are new and one thing is gone.
+
+**Gone: tier names on the surface.** No more ⚡ Quick / 🧠 Thoughtful / 🔬 Deep. Routing reads as
+model + effort the way Claude states it — **"Opus 5 · High effort"**. `Tier` still exists in
+`lib/types.ts` because it is the classifier's internal 1–3 mapping and `lib/types.ts` is frozen;
+it is not a label. `components/TierBadge.tsx` still hardcodes the old emoji — that file is the
+UI session's to replace.
+
+**New: the mode picker is model × effort, or Auto.**
+- `GET /api/modes` serves the catalog: `models` (Haiku 4.5 / Sonnet 5 / Opus 5, each with id,
+  label, blurb, per-MTok rates), `efforts` (Low / Medium / High / Max, each with a token ceiling
+  and a note), `autoPicks` (what Auto resolves to per complexity level), `pricingNote`.
+  **Never hardcode a model name in a component** — `lib/models.ts` is the single source of truth.
+- Send a pick as `mode: { mode: 'manual', model: 'claude-opus-5', effort: 'max' }` on
+  `POST /api/chat` and `POST /api/branch`. `{ mode: 'auto' }` or omitting it runs the classifier.
+  A manual pick sets `overridden: true` on the decision, which is the honest signal for the chip.
+- `RoutingDecision` now carries `label` ("Opus 5 · Max effort"), `modelLabel` ("Opus 5"), and
+  `effort`. Render `label`; don't rebuild the string. `InferenceLog.effort` feeds the economics
+  table the same way.
+
+**New: the app boots with a pre-built tree, not a bare root.** Six branches off the seeded
+conversation, one per feature, so nothing has to be typed live:
+`Free Ventures deadline` (Auto → Haiku 4.5 · Low, **already merged back**, so the root boots with
+an insight) · `ML@B workload` (Auto → Sonnet 5 · Medium) · `Rank my top 3` (Auto → Opus 5 · High)
+· `Why Codebase loses` (**depth 2**, a branch off a branch, 4 messages so a multi-turn branch is
+visible) · `Blueprint` (**manual** Opus 5 · Max, `overridden: true`) · `Off-brief question` (the
+compiled brief **declines** rather than inventing — the guardrail).
+`/api/economics` therefore boots populated: 14 logs, all three models, all four effort levels,
+~96% cost saved.
+- The fixture is `fixtures/seed-tree.json`, **generated, never hand-edited**. Regenerate with
+  `DATABASE_URL= npx next dev -p 3111` then `npx tsx scripts/build-seed-tree.ts` — it drives the
+  real API, so every brief, pruned-% and cost in it is computed rather than written by hand.
+  The root transcript stays in `seed-conversation.json`; the tree fixture only holds what the
+  branches added (rule 5 still holds).
+- **A node's chip shows the LAST turn's decision.** That is why the Opus and Sonnet branches have
+  no follow-up turns — a cheap follow-up would overwrite their chip with Haiku. Keep that in mind
+  before adding turns to the fixture.
+
+**Keep:** the Branch and Merge-insight button reactions/animations. Tarun called those out
+explicitly — do not lose them in the rebuild.
+
+**Snowflake is out of the demo.** Cortex is barred and the log table was never created, so
+`SNOWFLAKE_LOG_ENABLED` is unset and `lib/snowflake.ts` is inert: zero round trips, economics
+serves in-memory logs. The code stays for the record. **Do not put "logged to Snowflake" on any
+surface, and DEMO.md Beat 5 still says it — that line needs to go or the table needs creating.**
+
 ## Person A / UI — status (2026-08-07, `fb5c647`)
 
 **M0–M4 UI complete.** Tree sidebar, chat pane, running token counter, selection→branch with pruned-% badge, ⚡/🧠/🔬 chips with hover card + override-pins-branch, merge-insight, economics panel. Re-verified green against the engine at `ef129a6` (Neon/KV store): build clean, lint clean, merge archives + returns a `memoryId`, `/api/economics` reads back.
