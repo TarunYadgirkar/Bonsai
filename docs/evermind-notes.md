@@ -12,7 +12,7 @@
 
 EverOS is EverMind's memory layer: it ingests conversations/messages and turns them into structured, retrievable long-term memory. Memory comes in types (episodes, profile facts, atomic facts, plus knowledge documents) and in scopes (user memory, group memory, agent memory). Two ways to run it:
 
-1. **Cloud REST API (use this):** hosted **v2** API at `https://api.evermind.ai`. Auth = `Authorization: Bearer <EVERMIND_API_KEY>`, key from everos.evermind.ai. **Corrected Aug 7 from the official docs: use `/api/v2/memory/*`; v1 is legacy, kept only for backward compatibility.** Endpoints, request shapes and response shapes are in `docs/evermind-official-api.md` — that file is authoritative, this one is orientation.
+1. **Cloud REST API (use this):** hosted **v2** API at `https://api.evermind.ai`. Auth = `Authorization: Bearer <EVERMIND_API_KEY>`, key from everos.evermind.ai. **Corrected Aug 7 from the official docs: use `/api/v2/memory/*`; v1 is legacy, kept only for backward compatibility.** Endpoints, request shapes and response shapes are in `docs/evermind-official-v2.md` — that file is authoritative, this one is orientation.
 2. Local open-source server (`pip install everos`, `everos server start`) — backup only if cloud/wifi fails at the venue; it stores memory as local Markdown/SQLite. Python 3.12. Don't burn time here unless forced.
 
 There's also a Python SDK (`pip install everos-cloud`), but our stack is TypeScript — call REST directly from `lib/memory.ts`.
@@ -38,6 +38,6 @@ There's also a Python SDK (`pip install everos-cloud`), but our stack is TypeScr
 
 ## Open items
 
-- ~~Exact endpoint paths + request bodies~~ → done, `docs/evermind-official-api.md`.
+- ~~Exact endpoint paths + request bodies~~ → done, `docs/evermind-official-v2.md`.
 - Whether the hackathon provides event keys/credits (ask at sponsor hour; swap into `.env.local`).
 - Confirm the account is enabled for v2 — a 403 `VERSION_NOT_ALLOWED` means it is not, and we fall back to local memory.

@@ -96,6 +96,36 @@ Three mitigations, cheapest first:
 
 Recommendation: do (1) + (3). Treat (2) as the nice-to-have if there's time after M4.
 
+## Endpoints Bonsai does not use (recorded so nobody re-derives them)
+
+- `POST /api/v2/memory/edit` — bulk profile edit, cloud only. `user_id` + `operations[]` (1–50);
+  operation = `action` (`add`|`update`|`delete`), `type` (`explicit_info`|`implicit_traits`),
+  `data`, `item_id`, `reason`. Returns `{user_id, version, applied, results[]}`.
+- `POST /api/v2/memory/delete` — soft delete, cloud only. Any combination of
+  `user_id` / `agent_id` / `session_id`. Returns `{filters[], count}`.
+- `POST /api/v2/object/sign` — presign multimodal uploads. 3-step S3 flow; not our path.
+
+Field signatures by `memory_type`: **episode** → `summary`, `subject`, `episode`,
+`atomic_facts[]`, `sender_ids[]`, `timestamp` · **profile** → `profile_data` ·
+**agent_case** → `task_intent`, `approach`, `quality_score`, `key_insight` ·
+**agent_skill** → `name`, `description`, `content`, `confidence`, `maturity_score`,
+`source_case_ids[]`. `get` also returns `total_count` / `count`; paging is `page` /
+`page_size` (default 1 / 20, max 100).
+
+## Filters DSL
+
+Recursive `AND` / `OR` over scalar conditions. Supported fields: `user_id`/`agent_id`
+(`eq`, `in`), `session_id` (`eq`, `in`, `gt`, `gte`, `lt`, `lte`), `timestamp`
+(`eq`, `gt`, `gte`, `lt`, `lte`). A plain value means equality.
+
+```jsonc
+{"AND": [{"timestamp": {"gte": 1700000000000}}, {"session_id": "s1"}]}
+```
+
+**But note the exception in the timing trap above:** to read `unprocessed_messages[]` the
+`session_id` must be a bare top-level scalar (`{"session_id": "..."}`), *not* wrapped in
+`AND`/`OR` and *not* an operator map.
+
 ## Errors
 
 | HTTP | Meaning |
@@ -119,8 +149,20 @@ Auth, base URL, envelope shape, and the v2 entitlement are therefore confirmed. 
 `flush`→`search` read path is documented but unproven; **prove it before relying on it in
 Beat 4.** Test session id `bonsai_smoke_001`, sender/user id `bonsai_tarun`.
 
-## Env var naming — needs one decision
+## Env var naming — decided
 
-`.env.example` declares `EVERMIND_API_KEY`; EverOS's own docs and tooling use
-`EVEROS_API_KEY`. Pick one and use it in both `.env.example` and `lib/memory.ts` — B's call,
-since both files are B's territory.
+`EVERMIND_API_KEY` is canonical (it is what `.env.example` declares). `lib/memory.ts` also
+reads `EVEROS_API_KEY` as a fallback, so a key exported under EverOS's own name still works
+and nobody loses a demo to a variable-name mismatch.
+
+## What `lib/memory.ts` implements (B, done)
+
+- `writeInsight` → `add` with `async_mode:false`, then `flush`. Always mirrors to
+  `data/memory.json` regardless of the remote result — mitigation (1) + (3).
+- `searchMemories` → `search` with `method:"hybrid"`, `top_k:5`, `include_profile:true`;
+  pass `sessionId` to add the top-level scalar `filters` and merge `unprocessed_messages[]`
+  into the hits — mitigation (2), implemented since it was ~10 lines.
+- Any non-2xx or timeout (8s) logs one line and falls through to the local store.
+
+Still unproven: the live `flush` → `search` round-trip. Run
+`npx tsx --env-file=.env.local scripts/try-memory.ts` to prove it.

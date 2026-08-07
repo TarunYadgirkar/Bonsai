@@ -8,7 +8,8 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
 const BASE_URL = process.env.EVERMIND_BASE_URL ?? 'https://api.evermind.ai';
-const API_KEY = process.env.EVERMIND_API_KEY;
+/** `.env.example` declares EVERMIND_API_KEY; EverOS's own tooling uses EVEROS_API_KEY. Accept both. */
+const API_KEY = process.env.EVERMIND_API_KEY ?? process.env.EVEROS_API_KEY;
 const TIMEOUT_MS = 8000;
 const LOCAL_PATH = path.join(process.cwd(), 'data', 'memory.json');
 
@@ -35,6 +36,17 @@ interface LocalRecord {
   sessionId: string;
   text: string;
   ts: number;
+}
+
+interface SearchData {
+  episodes?: Array<{
+    id: string;
+    summary?: string;
+    episode?: string;
+    score?: number;
+    session_id?: string;
+  }>;
+  unprocessed_messages?: Array<{ id: string; content: string; session_id?: string }>;
 }
 
 export function isRemoteEnabled(): boolean {
@@ -161,27 +173,41 @@ export async function searchMemories(params: {
   query: string;
   userId: string;
   topK?: number;
+  /**
+   * Pin one session to also read its in-flight buffer. Must stay a top-level scalar —
+   * wrapping it in AND/OR or an operator map silently returns [] (docs/evermind-official-v2.md).
+   */
+  sessionId?: string;
 }): Promise<MemoryHit[]> {
   const topK = params.topK ?? 5;
 
-  const data = await post<{
-    episodes?: Array<{ id: string; summary?: string; episode?: string; score?: number; session_id?: string }>;
-  }>('/api/v2/memory/search', {
+  const data = await post<SearchData>('/api/v2/memory/search', {
     query: params.query,
     user_id: params.userId,
     method: 'hybrid',
     top_k: topK,
     include_profile: true,
+    ...(params.sessionId ? { filters: { session_id: params.sessionId } } : {}),
   });
 
-  if (data?.episodes?.length) {
-    return data.episodes.map((e) => ({
-      id: e.id,
-      text: e.summary ?? e.episode ?? '',
-      score: e.score ?? 0,
-      sessionId: e.session_id,
-    }));
-  }
+  const episodes = (data?.episodes ?? []).map((e) => ({
+    id: e.id,
+    text: e.summary ?? e.episode ?? '',
+    score: e.score ?? 0,
+    sessionId: e.session_id,
+  }));
+
+  // Extraction is async: a just-merged insight is still "accumulated", not an episode yet.
+  // The raw buffer is the only way to read it back inside a demo beat.
+  const buffered = (data?.unprocessed_messages ?? []).map((m) => ({
+    id: m.id,
+    text: m.content,
+    score: 0,
+    sessionId: m.session_id,
+  }));
+
+  const hits = [...episodes, ...buffered];
+  if (hits.length) return hits.slice(0, topK);
 
   return localSearch(await readLocal(), params.query, params.userId, topK);
 }
