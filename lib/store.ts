@@ -11,6 +11,7 @@ import type {
   Insight,
   Message,
   SeedConversation,
+  StateResponse,
   Tier,
 } from './types';
 
@@ -59,7 +60,10 @@ const pending: InferenceLog[] = [];
  */
 function build(): StoreShape {
   const fixture = seed as SeedConversation;
-  const preloaded = tree as SeedTree;
+  // Clone: an imported JSON module is a live singleton, and `logs` is pushed to in place by
+  // logInference. Without this, rehearsal logs stayed in the fixture array for the life of the
+  // process and every reset handed them straight back.
+  const preloaded = structuredClone(tree) as SeedTree;
   const root: Conversation = {
     id: fixture.id,
     title: fixture.title,
@@ -134,6 +138,20 @@ export async function loadStore(): Promise<void> {
 export async function saveStore(): Promise<void> {
   if (!kvEnabled()) return;
   await kvSet(KV_KEY, JSON.stringify(toSnapshot(store())));
+}
+
+/**
+ * Back to the opening state: rebuild from the fixtures, then overwrite the snapshot.
+ *
+ * Order matters. Clearing the snapshot row alone leaves a warm lambda holding the old tree in
+ * globalThis, and its next request writes that tree straight back — so the in-memory store is
+ * replaced first, then persisted over the top.
+ */
+export async function resetStore(): Promise<StateResponse> {
+  setStore(build());
+  pending.length = 0;
+  await saveStore();
+  return { rootId: rootId(), tree: buildTree(), conversations: listConversations() };
 }
 
 export function nextId(prefix: string): string {
