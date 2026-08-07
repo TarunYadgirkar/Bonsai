@@ -61,13 +61,17 @@ Updated: 2026-08-07T11:34:13-0700 by claude session (Person B / engine)
 `19,013 avail → 282 brief → 98.5% pruned → ⚡ quick / $0.0004` · deep question → `🔬 deep / $0.0175` · session totals `$0.0668 vs $2.0686 baseline = 96.8% cost saved`.
 
 **Blocked:**
-- **Snowflake creds absent.** `SNOWFLAKE_ACCOUNT_URL` / `SNOWFLAKE_PAT` are blank, so `lib/llm.ts` runs mock mode. Everything is behind the interface — dropping the two env vars in is the whole integration, no code change. Tarun is getting them.
-- **`MODEL_TIERS` in `lib/models.ts` are unverified** — `claude-haiku` / `claude-sonnet` / `claude-opus`, chosen because the names read clearly on stage. Confirm they exist in this Cortex account/region before trusting a live call; AGENTS.md rule 9 applies.
+- **Snowflake creds now EXIST and are valid — but this account has no Cortex entitlement.** Account `RGZOHDN-KQ65280` (trial, ACCOUNTADMIN, $400 credit). PAT `BONSAI_PAT` created, expires **2026-08-14**, behind network policy `bonsai_dev` (`0.0.0.0/0` — hackathon-only, drop it after). Verified 2026-08-07:
+  - `GET /api/v2/databases` → **200**. URL, PAT, network policy all correct. Auth is NOT the problem.
+  - `POST /api/v2/cortex/inference:complete` → **`003001` "This account is not allowed to access this endpoint."**
+  - Worksheet `SELECT AI_COMPLETE(...)` → "AI function `_COMPLETE_WITH_PROMPT_HISTORY_LLM` is not available for trial accounts."
+  Blocked on **both** SQL and REST surfaces, so this is an account entitlement/region issue — **no model name, param, or request shape will fix it.** Do not spend time tuning `lib/llm.ts` request bodies against it. Next move is asking the hackathon organizers for a Cortex-enabled account (it's a Snowflake-sponsored event) or checking `SELECT CURRENT_REGION();` for a supported region. Until then `lib/llm.ts` stays in mock mode, which DEMO.md fully survives.
+- **`MODEL_TIERS` in `lib/models.ts` are unverified** — `claude-haiku` / `claude-sonnet` / `claude-opus`, chosen because the names read clearly on stage. Cannot be verified at all until the entitlement above is resolved; AGENTS.md rule 9 applies.
 - Agents cannot write or read `.env*` here — two `PreToolUse` hooks block it, and `--dangerously-skip-permissions` does not bypass hooks. Hand Tarun the command; he runs it.
 
 **Next (Person B, ordered):**
 1. **Store persistence — highest risk, do first.** `lib/store.ts` keeps everything on `globalThis`. Fine on one warm instance; a Vercel cold start mid-demo drops every branch created on stage. `data/*.json` does **not** solve it — Vercel's filesystem is read-only outside `/tmp`. Either demo from localhost, or move to a real KV. Decide explicitly, don't leave it.
-2. Drop in the Snowflake env vars when they land, then run `npx tsx --env-file=.env.local scripts/try-engine.ts` and confirm both DEMO.md questions still route ⚡ and 🔬 against real Cortex.
+2. Snowflake env vars have landed but Cortex is entitlement-blocked (see Blocked). `npx tsx --env-file=.env.local scripts/try-engine.ts` is worth running anyway to confirm `lib/llm.ts` degrades to mock cleanly on a `003001` rather than throwing — AGENTS.md rule 8 says the demo never crashes on a 4xx, and that path is now testable for real. Re-run against live Cortex only once a working account exists.
 3. Verify the Cortex response parse. `lib/llm.ts` handles both a plain JSON body and an SSE stream because we could not confirm which this account returns — check which one actually comes back and delete the dead path if there's time.
 4. Pre-test deep-tier latency. `docs/snowflake-notes.md` warns big models are slow; the deep question must return inside demo patience (~10s) or Beat 3 dies on stage.
 5. Optional, only if 1–4 are done: mirror `InferenceLog` rows into a Snowflake table so Beat 5 is literally "queried from Snowflake". Pure stage line, zero product difference — it is cut-line #2 for a reason.
