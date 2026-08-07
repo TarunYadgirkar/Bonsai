@@ -16,7 +16,11 @@ async function main() {
   const write = await writeInsight({ userId: USER_ID, branchId: BRANCH_ID, text: INSIGHT });
   console.log(`write: remote=${write.remote}`);
 
-  const hits = await searchMemories({ query: 'When do Free Ventures applications close?', userId: USER_ID });
+  const hits = await searchMemories({
+    query: 'When do Free Ventures applications close?',
+    userId: USER_ID,
+    sessionId: BRANCH_ID,
+  });
   console.log(`search: ${hits.length} hit(s)`);
   for (const hit of hits) {
     console.log(`  [${hit.score.toFixed(2)}] ${hit.text.slice(0, 120)}`);
