@@ -1,11 +1,34 @@
 'use client';
 
-import { useState } from 'react';
-import type { RoutingDecision, Tier } from '@/lib/types';
-import { TIER_ICON, TIER_LABEL, TierBadge } from './TierBadge';
+import { useEffect, useState } from 'react';
+import type { Effort, ModeSelection, RoutingDecision } from '@/lib/types';
+import { EFFORT_LABEL, ModeBadge } from './ModeBadge';
 import { formatTokens } from './tokens';
 
-const TIERS: Tier[] = ['quick', 'thoughtful', 'deep'];
+interface ModelOption {
+  id: string;
+  label: string;
+  blurb: string;
+}
+
+interface Catalog {
+  models: ModelOption[];
+  efforts: { level: Effort; label: string; note: string }[];
+}
+
+/**
+ * Fetched once per page, not per chip — the catalog is static config and every assistant
+ * message renders one of these. A failure leaves the menu closed to manual picks and Auto
+ * still works, which is the mode that matters on stage.
+ */
+let catalogPromise: Promise<Catalog | null> | null = null;
+
+function loadCatalog(): Promise<Catalog | null> {
+  catalogPromise ??= fetch('/api/modes')
+    .then((res) => (res.ok ? res.json() : null))
+    .catch(() => null);
+  return catalogPromise;
+}
 
 /**
  * DEMO.md Beats 2-3: the chip is the whole routing story. Hover explains the decision,
@@ -13,14 +36,27 @@ const TIERS: Tier[] = ['quick', 'thoughtful', 'deep'];
  */
 export function RoutingChip({
   routing,
-  pinnedTier,
-  onPin,
+  mode,
+  onSelectMode,
 }: {
   routing: RoutingDecision;
-  pinnedTier: Tier | null;
-  onPin: (tier: Tier | null) => void;
+  mode: ModeSelection | null;
+  onSelectMode: (mode: ModeSelection | null) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+
+  useEffect(() => {
+    if (!menuOpen || catalog) return;
+    let cancelled = false;
+    loadCatalog().then((data) => !cancelled && data && setCatalog(data));
+    return () => {
+      cancelled = true;
+    };
+  }, [menuOpen, catalog]);
+
+  const isAuto = !mode || mode.mode === 'auto';
+  const label = routing.label ?? routing.modelLabel ?? routing.model;
 
   return (
     <span className="relative inline-flex">
@@ -31,7 +67,11 @@ export function RoutingChip({
         aria-expanded={menuOpen}
         title="Click to override"
       >
-        <TierBadge tier={routing.tier} size="sm" />
+        <ModeBadge
+          modelLabel={routing.modelLabel ?? routing.model}
+          effort={routing.effort}
+          size="sm"
+        />
         {routing.escalated && (
           <span className="text-[10px] text-amber-300/80">escalated</span>
         )}
@@ -43,9 +83,7 @@ export function RoutingChip({
         {!menuOpen && (
           <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-72 flex-col gap-1.5 rounded-lg border border-white/15 bg-neutral-950 p-3 text-left shadow-xl group-hover:flex">
             <span className="flex items-center justify-between">
-              <span className="text-xs font-medium text-white">
-                {TIER_ICON[routing.tier]} {TIER_LABEL[routing.tier]}
-              </span>
+              <span className="text-xs font-medium text-white">{label}</span>
               <span className="font-mono text-xs tabular-nums text-emerald-300">
                 ${routing.estCostUsd.toFixed(4)}
               </span>
@@ -55,8 +93,6 @@ export function RoutingChip({
               <span className="tabular-nums text-neutral-200">
                 {formatTokens(routing.contextTokens)} tokens
               </span>
-              <span>Model</span>
-              <span className="truncate text-neutral-200">{routing.model}</span>
               <span>Effort</span>
               <span className="text-neutral-200">{routing.effortNote}</span>
               <span>Complexity</span>
@@ -80,42 +116,67 @@ export function RoutingChip({
           />
           <span
             role="menu"
-            className="absolute bottom-full left-0 z-30 mb-2 flex w-52 flex-col rounded-lg border border-white/15 bg-neutral-950 p-1 shadow-xl"
+            className="absolute bottom-full left-0 z-30 mb-2 flex w-60 flex-col rounded-lg border border-white/15 bg-neutral-950 p-1 shadow-xl"
           >
-            <span className="px-2 py-1 text-[10px] uppercase tracking-wide text-neutral-500">
-              Pin this branch
-            </span>
-            {TIERS.map((tier) => (
-              <button
-                key={tier}
-                role="menuitem"
-                onClick={() => {
-                  onPin(tier);
-                  setMenuOpen(false);
-                }}
-                className={`flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-white/10 ${
-                  pinnedTier === tier ? 'text-white' : 'text-neutral-300'
-                }`}
-              >
-                <span aria-hidden>{TIER_ICON[tier]}</span>
-                {TIER_LABEL[tier]}
-                {pinnedTier === tier && <span className="ml-auto text-[10px]">pinned</span>}
-              </button>
-            ))}
             <button
               role="menuitem"
               onClick={() => {
-                onPin(null);
+                onSelectMode(null);
                 setMenuOpen(false);
               }}
-              className={`mt-0.5 flex items-center gap-2 rounded border-t border-white/10 px-2 py-1.5 text-left text-xs hover:bg-white/10 ${
-                pinnedTier === null ? 'text-white' : 'text-neutral-300'
+              className={`flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-white/10 ${
+                isAuto ? 'text-white' : 'text-neutral-300'
               }`}
             >
               <span aria-hidden>✨</span>
               Auto
-              {pinnedTier === null && <span className="ml-auto text-[10px]">active</span>}
+              <span className="text-[10px] text-neutral-500">router decides</span>
+              {isAuto && <span className="ml-auto text-[10px]">active</span>}
             </button>
+
+            <span className="mt-1 border-t border-white/10 px-2 pt-1.5 text-[10px] uppercase tracking-wide text-neutral-500">
+              Pin this branch
+            </span>
+
+            {catalog ? (
+              catalog.models.map((model) => (
+                <span key={model.id} className="px-1 py-0.5">
+                  <span className="px-1 text-[10px] text-neutral-400">{model.label}</span>
+                  <span className="mt-0.5 flex gap-1">
+                    {catalog.efforts.map((effort) => {
+                      const picked =
+                        mode?.mode === 'manual' &&
+                        mode.model === model.id &&
+                        mode.effort === effort.level;
+                      return (
+                        <button
+                          key={effort.level}
+                          role="menuitem"
+                          title={`${model.label} · ${effort.label} effort — ${effort.note}`}
+                          onClick={() => {
+                            onSelectMode({
+                              mode: 'manual',
+                              model: model.id,
+                              effort: effort.level,
+                            });
+                            setMenuOpen(false);
+                          }}
+                          className={`flex-1 rounded border px-1 py-1 text-[10px] transition-colors ${
+                            picked
+                              ? 'border-white/40 bg-white/10 text-white'
+                              : 'border-white/10 text-neutral-400 hover:bg-white/10 hover:text-neutral-200'
+                          }`}
+                        >
+                          {EFFORT_LABEL[effort.level]}
+                        </button>
+                      );
+                    })}
+                  </span>
+                </span>
+              ))
+            ) : (
+              <span className="px-2 py-1.5 text-[11px] text-neutral-500">Loading modes…</span>
+            )}
           </span>
         </>
       )}

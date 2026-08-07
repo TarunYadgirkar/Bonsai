@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Conversation, Tier } from '@/lib/types';
+import type { Conversation, ModeSelection } from '@/lib/types';
 import { RoutingChip } from './RoutingChip';
 import { conversationTokens, formatTokens } from './tokens';
 
@@ -11,9 +11,9 @@ export function ChatPane({
   conversation,
   onSend,
   onBranch,
-  onPin,
+  onSelectMode,
   onMerge,
-  pinnedTier,
+  mode,
   sending,
   branching,
   merging,
@@ -22,10 +22,10 @@ export function ChatPane({
   conversation: Conversation;
   onSend: (content: string) => void;
   onBranch: (selection: string) => void;
-  onPin: (tier: Tier | null) => void;
+  onSelectMode: (mode: ModeSelection | null) => void;
   /** Takes the button's viewport centre so the merge animation starts where it was clicked. */
   onMerge: (origin: { x: number; y: number }) => void;
-  pinnedTier: Tier | null;
+  mode: ModeSelection | null;
   sending: boolean;
   branching: boolean;
   merging: boolean;
@@ -208,8 +208,8 @@ export function ChatPane({
                   <span className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
                     <RoutingChip
                       routing={message.routing}
-                      pinnedTier={pinnedTier}
-                      onPin={onPin}
+                      mode={mode}
+                      onSelectMode={onSelectMode}
                     />
                   </span>
                 )}
@@ -262,9 +262,9 @@ export function ChatPane({
             Send
           </button>
         </div>
-        {pinnedTier && (
+        {mode?.mode === 'manual' && (
           <p className="mx-auto mt-1.5 max-w-3xl text-[10px] text-neutral-500">
-            Branch pinned to {pinnedTier} — classification skipped on every message here.
+            Branch pinned — classification skipped on every message here.
           </p>
         )}
       </footer>
