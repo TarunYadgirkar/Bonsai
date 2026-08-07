@@ -6,8 +6,25 @@
  * escalates only when the cheap answer fails a sanity check.
  */
 import { complete } from './llm';
-import { INTERNAL_TIER, MODEL_TIERS, TIER_EFFORT, estimateCostUsd } from './models';
-import type { Complexity, ContextBrief, RoutingDecision, Tier } from './types';
+import {
+  INTERNAL_TIER,
+  MODEL_TIERS,
+  TIER_DEFAULTS,
+  TIER_LABEL,
+  costForModel,
+  effortNote,
+  effortSpec,
+  modelSpec,
+  routingLabel,
+} from './models';
+import type {
+  Complexity,
+  ContextBrief,
+  Effort,
+  ModeSelection,
+  RoutingDecision,
+  Tier,
+} from './types';
 
 const TIER_BY_COMPLEXITY: Record<Complexity, Tier> = {
   1: 'quick',
@@ -26,18 +43,34 @@ export interface RouteParams {
   brief?: ContextBrief;
   contextTokens: number;
   pinnedTier?: Tier | null;
+  /** Mode picker. 'manual' names a model and an effort; 'auto' (or absent) classifies. */
+  mode?: ModeSelection;
 }
 
 export async function route(params: RouteParams): Promise<RoutingDecision> {
-  const { question, contextTokens, pinnedTier } = params;
+  const { question, contextTokens, pinnedTier, mode } = params;
 
-  // A pinned branch is the user's own labelled example — skip the classifier entirely.
+  // An explicit pick is the user's own labelled example — skip the classifier entirely.
+  if (mode?.mode === 'manual' && mode.model) {
+    const model = modelSpec(mode.model);
+    const effort = mode.effort ?? TIER_DEFAULTS[model.tier].effort;
+    return decision({
+      tier: model.tier,
+      model: model.id,
+      effort,
+      complexity: model.tier === 'deep' ? 3 : model.tier === 'thoughtful' ? 2 : 1,
+      contextTokens,
+      reason: `You picked ${model.label} at ${effortSpec(effort).label} effort; classification skipped.`,
+      overridden: true,
+    });
+  }
+
   if (pinnedTier) {
     return decision({
       tier: pinnedTier,
       complexity: TIER_BY_COMPLEXITY[3] === pinnedTier ? 3 : 2,
       contextTokens,
-      reason: `Branch pinned to ${pinnedTier} by you; classification skipped.`,
+      reason: `Branch pinned to ${TIER_LABEL[pinnedTier]} by you; classification skipped.`,
       overridden: true,
     });
   }
@@ -106,14 +139,22 @@ function decision(params: {
   reason: string;
   overridden: boolean;
   escalated?: boolean;
+  model?: string;
+  effort?: Effort;
 }): RoutingDecision {
-  const outputTokens = params.tier === 'deep' ? 700 : params.tier === 'thoughtful' ? 350 : 160;
+  const model = params.model ?? MODEL_TIERS[params.tier];
+  const effort = params.effort ?? TIER_DEFAULTS[params.tier].effort;
+  // Effort is priced as headroom to think: the ceiling it buys is what the estimate assumes.
+  const outputTokens = Math.round(effortSpec(effort).maxTokens * 0.5);
   return {
     tier: params.tier,
-    model: MODEL_TIERS[params.tier],
-    effortNote: TIER_EFFORT[params.tier],
+    model,
+    effort,
+    modelLabel: modelSpec(model).label,
+    label: routingLabel(model, effort),
+    effortNote: effortNote(model, effort),
     contextTokens: params.contextTokens,
-    estCostUsd: estimateCostUsd(params.tier, params.contextTokens, outputTokens),
+    estCostUsd: costForModel(model, params.contextTokens, outputTokens),
     reason: params.reason,
     complexity: params.complexity,
     escalated: params.escalated ?? false,
@@ -141,7 +182,12 @@ export async function completeWithEscalation(params: {
     { role: 'user' as const, content: params.userPrompt },
   ];
 
-  const first = await complete({ tier: params.routing.tier, messages });
+  const first = await complete({
+    tier: params.routing.tier,
+    model: params.routing.model,
+    effort: params.routing.effort,
+    messages,
+  });
   if (!answerFailsSanityCheck(first.text)) {
     return {
       text: first.text,
@@ -161,16 +207,28 @@ export async function completeWithEscalation(params: {
     };
   }
 
-  const second = await complete({ tier: upgraded, messages });
+  const upgradedModel = TIER_DEFAULTS[upgraded].model;
+  const upgradedEffort = TIER_DEFAULTS[upgraded].effort;
+  const second = await complete({
+    tier: upgraded,
+    model: upgradedModel,
+    effort: upgradedEffort,
+    messages,
+  });
   return {
     text: second.text,
     routing: {
       ...params.routing,
       tier: upgraded,
-      model: MODEL_TIERS[upgraded],
-      effortNote: TIER_EFFORT[upgraded],
+      model: upgradedModel,
+      effort: upgradedEffort,
+      modelLabel: modelSpec(upgradedModel).label,
+      label: routingLabel(upgradedModel, upgradedEffort),
+      effortNote: effortNote(upgradedModel, upgradedEffort),
       escalated: true,
-      reason: `${params.routing.reason} Escalated to ${upgraded}: the ${params.routing.tier} answer failed the sanity check.`,
+      reason: `${params.routing.reason} Escalated to ${routingLabel(upgradedModel, upgradedEffort)}: the ${
+        params.routing.label ?? params.routing.modelLabel
+      } answer failed the sanity check.`,
       estCostUsd: first.estCostUsd + second.estCostUsd,
     },
     inputTokens: first.inputTokens + second.inputTokens,
