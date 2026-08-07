@@ -40,9 +40,19 @@ export function ChatPane({
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [conversation.messages.length, conversation.id]);
 
-  const tokens = conversationTokens(conversation.messages);
   const brief = conversation.brief;
+  // A branch's context is its compiled brief plus whatever has been said since — not just
+  // the messages. Without the brief a fresh branch reads "0 context tokens" while the header
+  // right above it says "466 relevant", which is two numbers for the same thing.
+  const tokens = conversationTokens(conversation.messages) + (brief?.briefTokens ?? 0);
 
+  /**
+   * Recomputes the floating Branch button's anchor from the live selection.
+   *
+   * Also runs on scroll, and that is load-bearing: dragging a selection near the bottom edge
+   * auto-scrolls the container, and clearing the selection on scroll instead of re-anchoring
+   * it made the Branch button silently never appear — which is Beats 2 and 3.
+   */
   const captureSelection = () => {
     const sel = window.getSelection();
     const text = sel?.toString().trim() ?? '';
@@ -51,6 +61,12 @@ export function ChatPane({
       return;
     }
     const rect = sel.getRangeAt(0).getBoundingClientRect();
+    const bounds = scrollRef.current?.getBoundingClientRect();
+    // Selection scrolled out of the chat area — drop the button rather than float it loose.
+    if (bounds && (rect.bottom < bounds.top || rect.top > bounds.bottom)) {
+      setSelection(null);
+      return;
+    }
     setSelection({ text, x: rect.left + rect.width / 2, y: rect.top });
   };
 
@@ -151,7 +167,7 @@ export function ChatPane({
       <div
         ref={scrollRef}
         onMouseUp={captureSelection}
-        onScroll={() => setSelection(null)}
+        onScroll={captureSelection}
         className="flex-1 overflow-y-auto px-6 py-4"
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-4">

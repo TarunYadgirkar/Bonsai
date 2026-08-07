@@ -35,6 +35,18 @@ function nodeCenter(id: string): { x: number; y: number } | null {
 const FLASH_MS = 2600;
 
 /**
+ * The raw selection is chat markdown, so a highlight that clips a bold marker names the tree
+ * node `*Reassess once, in week six.** Not`. The node label is on screen for the rest of the
+ * demo — send a cleaned title (the contract already has the field) and keep `selection` raw,
+ * because the compiler still wants the real text.
+ */
+function titleFromSelection(selection: string): string {
+  const clean = selection.replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim();
+  if (!clean) return 'Branch';
+  return clean.length > 42 ? `${clean.slice(0, 42).trimEnd()}…` : clean;
+}
+
+/**
  * Person A territory (AGENTS.md): this consumes the API routes and nothing else.
  * No lib/ engine code is imported here — only the frozen types from lib/types.ts.
  */
@@ -133,7 +145,11 @@ export function Workspace() {
       const res = await fetch('/api/branch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ parentId: activeId, selection }),
+        body: JSON.stringify({
+          parentId: activeId,
+          selection,
+          title: titleFromSelection(selection),
+        }),
       });
       if (!res.ok) throw new Error(`POST /api/branch → ${res.status}`);
       const data: BranchResponse = await res.json();
