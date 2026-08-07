@@ -25,3 +25,11 @@ export function formatTokens(n: number): string {
   if (n < 1000) return String(n);
   return `${(n / 1000).toFixed(1)}k`;
 }
+
+/**
+ * Demo-scale money: a single quick-tier call costs ~$0.0002, so two decimals would
+ * render the whole session as "$0.00" and kill Beat 5. Four decimals under a dollar.
+ */
+export function formatUsd(n: number): string {
+  return n < 1 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;
+}
