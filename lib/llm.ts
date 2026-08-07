@@ -4,9 +4,9 @@
  * Mock mode activates automatically when SNOWFLAKE_ACCOUNT_URL or SNOWFLAKE_PAT is missing,
  * with realistic token math, so the DEMO.md script is walkable with zero keys (AGENTS.md).
  */
-import { MODEL_TIERS, estimateCostUsd } from './models';
+import { MODEL_TIERS, TIER_DEFAULTS, costForModel, effortSpec } from './models';
 import { estimateTokens } from './tokens';
-import type { Tier } from './types';
+import type { Effort, Tier } from './types';
 
 const ACCOUNT_URL = process.env.SNOWFLAKE_ACCOUNT_URL;
 const PAT = process.env.SNOWFLAKE_PAT;
@@ -21,7 +21,11 @@ export interface LlmMessage {
 export interface CompleteParams {
   tier: Tier;
   messages: LlmMessage[];
-  /** Effort is expressed as an output-token ceiling — Cortex has no reasoning-effort knob. */
+  /** ModelSpec.id. Defaults to the tier's model, so callers that only know a tier still work. */
+  model?: string;
+  /** Reasoning effort. Priced and capped as an output-token ceiling. */
+  effort?: Effort;
+  /** Explicit ceiling, overriding the one the effort level implies. */
   maxTokens?: number;
   temperature?: number;
 }
@@ -46,16 +50,11 @@ export function isCortexEnabled(): boolean {
   return Boolean(ACCOUNT_URL && PAT && process.env.SNOWFLAKE_CORTEX_ENABLED === '1');
 }
 
-const MAX_TOKENS_BY_TIER: Record<Tier, number> = {
-  quick: 300,
-  thoughtful: 700,
-  deep: 1500,
-};
-
 export async function complete(params: CompleteParams): Promise<CompleteResult> {
   const { tier, messages } = params;
-  const model = MODEL_TIERS[tier];
-  const maxTokens = params.maxTokens ?? MAX_TOKENS_BY_TIER[tier];
+  const model = params.model ?? MODEL_TIERS[tier];
+  const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
+  const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
   const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
 
   if (!isCortexEnabled()) {
@@ -98,7 +97,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
       tier,
       inputTokens: usedInput,
       outputTokens: usedOutput,
-      estCostUsd: estimateCostUsd(tier, usedInput, usedOutput),
+      estCostUsd: costForModel(model, usedInput, usedOutput),
       mock: false,
     };
   } catch (err) {
@@ -288,7 +287,7 @@ function mockComplete(
     tier,
     inputTokens,
     outputTokens,
-    estCostUsd: estimateCostUsd(tier, inputTokens, outputTokens),
+    estCostUsd: costForModel(model, inputTokens, outputTokens),
     mock: true,
   };
 }

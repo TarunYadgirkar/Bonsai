@@ -1,4 +1,5 @@
 import seed from '@/fixtures/seed-conversation.json';
+import tree from '@/fixtures/seed-tree.json';
 import { kvEnabled, kvGet, kvSet } from './kv';
 import { mirrorInferenceLogs } from './snowflake';
 import { messagesTokens, prunedPct } from './tokens';
@@ -29,6 +30,14 @@ interface StoreShape {
   seq: number;
 }
 
+/** Shape of fixtures/seed-tree.json. Generated, never hand-edited. */
+interface SeedTree {
+  rootInsights?: Insight[];
+  branches?: Conversation[];
+  logs?: InferenceLog[];
+  seq?: number;
+}
+
 interface StoreSnapshot {
   conversations: Conversation[];
   logs: InferenceLog[];
@@ -42,23 +51,31 @@ const KV_KEY = 'bonsai:store:v1';
 /** Logs written this request, waiting to be mirrored to Snowflake by flushLogs(). */
 const pending: InferenceLog[] = [];
 
+/**
+ * Boots the pre-built demo tree: the root transcript from `seed-conversation.json` plus the
+ * scenario branches, insights and inference logs frozen in `seed-tree.json` (regenerate with
+ * scripts/build-seed-tree.ts). The root's messages live in one file only — the tree fixture
+ * carries what the branches added, never a copy of the transcript.
+ */
 function build(): StoreShape {
   const fixture = seed as SeedConversation;
+  const preloaded = tree as SeedTree;
   const root: Conversation = {
     id: fixture.id,
     title: fixture.title,
     parentId: null,
     profile: fixture.profile,
     messages: fixture.messages,
-    insights: [],
+    insights: preloaded.rootInsights ?? [],
     pinnedTier: null,
     archived: false,
   };
+  const branches = (preloaded.branches ?? []) as Conversation[];
   return {
-    conversations: new Map([[root.id, root]]),
-    logs: [],
+    conversations: new Map([root, ...branches].map((c) => [c.id, c])),
+    logs: (preloaded.logs ?? []) as InferenceLog[],
     rootId: root.id,
-    seq: 0,
+    seq: preloaded.seq ?? 0,
   };
 }
 

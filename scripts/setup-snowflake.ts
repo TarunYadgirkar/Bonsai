@@ -21,6 +21,9 @@ const DATABASE = process.env.SNOWFLAKE_DATABASE ?? 'BONSAI';
 const SCHEMA = process.env.SNOWFLAKE_SCHEMA ?? 'PUBLIC';
 
 async function main(): Promise<void> {
+  // The app keeps the mirror off by default (see snowflakeEnabled); this script is the opt-in.
+  process.env.SNOWFLAKE_LOG_ENABLED = '1';
+
   if (!snowflakeEnabled()) {
     console.error('SNOWFLAKE_ACCOUNT_URL / SNOWFLAKE_PAT missing — nothing to set up.');
     process.exit(1);
