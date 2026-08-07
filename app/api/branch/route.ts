@@ -6,6 +6,7 @@ import { completeWithEscalation, route } from '@/lib/router';
 import {
   availableTokensFor,
   buildTree,
+  flushLogs,
   getConversation,
   loadStore,
   logInference,
@@ -80,7 +81,12 @@ export async function POST(request: Request) {
   let answer: Message | undefined;
 
   if (question) {
-    const initial = await route({ question, brief, contextTokens: brief.briefTokens });
+    const initial = await route({
+      question,
+      brief,
+      contextTokens: brief.briefTokens,
+      mode: body.mode,
+    });
     const result = await completeWithEscalation({
       routing: initial,
       systemPrompt: ANSWER_SYSTEM_PROMPT,
@@ -103,6 +109,8 @@ export async function POST(request: Request) {
         branchId,
         purpose: 'chat',
         tier: routing.tier,
+        model: routing.model,
+        effort: routing.effort,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         baselineInputTokens: brief.availableTokens,
@@ -131,6 +139,7 @@ export async function POST(request: Request) {
   }
 
   await saveStore();
+  await flushLogs();
 
   const response: BranchResponse = { node, conversation, brief, message: answer, routing };
   return Response.json(response);

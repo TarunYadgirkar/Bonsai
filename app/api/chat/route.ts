@@ -3,6 +3,7 @@ import { completeWithEscalation, route } from '@/lib/router';
 import {
   appendMessage,
   availableTokensFor,
+  flushLogs,
   getConversation,
   loadStore,
   logInference,
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
     brief: conversation.brief,
     contextTokens,
     pinnedTier,
+    mode: body.mode,
   });
 
   const result = await completeWithEscalation({
@@ -76,6 +78,8 @@ export async function POST(request: Request) {
       branchId: conversation.id,
       purpose: 'chat',
       tier: result.routing.tier,
+      model: result.routing.model,
+      effort: result.routing.effort,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
       baselineInputTokens: conversation.brief
@@ -87,6 +91,7 @@ export async function POST(request: Request) {
   );
 
   await saveStore();
+  await flushLogs();
 
   const response: ChatResponse = {
     branchId: conversation.id,

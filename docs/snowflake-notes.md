@@ -34,9 +34,31 @@ Cortex exposes **many models behind one API with per-request model selection** �
 - deep → strongest available (large Claude/Mistral/Llama-class)
 Put the three chosen names in one place: `lib/llm.ts` `MODEL_TIERS` const. Internal calls (classifier, compiler, merge-distiller) always use the quick tier.
 
-## Economics logging
+## Economics logging — SHIPPED, this is the live Snowflake path
 
-Simplest thing that works: append every inference (ts, branchId, tier, model, contextTokens, outputTokens, estCostUsd, escalated?, overridden?) to `data/inference-log.json`; `/api/economics` aggregates. If time allows (it's a stretch goal, see PLAN cut lines), mirror rows into a Snowflake table so the panel is literally "queried from Snowflake" — nice line on stage, zero product difference.
+`lib/snowflake.ts` mirrors every `InferenceLog` into a Snowflake table over the SQL API, and
+`/api/economics` reads the panel's rows back out with a `SELECT`. Both degrade silently to the
+local `data/inference-log.json` / in-memory logs when the SQL API is unreachable (rule 8).
+
+- Endpoint: `POST {SNOWFLAKE_ACCOUNT_URL}/api/v2/statements`, `Authorization: Bearer $SNOWFLAKE_PAT`
+  plus `X-Snowflake-Authorization-Token-Type: PROGRAMMATIC_ACCESS_TOKEN` (the header is optional per
+  the PAT docs; sent explicitly so the auth mode is never guessed).
+- Body: `{statement, timeout, database, schema, warehouse, role, bindings}`. Bind values are **all
+  `TEXT`** and cast in SQL (`?::NUMBER`, `?::BOOLEAN`); Snowflake's binding type names vary per
+  column type and a wrong one is a 422, so one type plus explicit casts can't drift.
+- Every value in a response `data` array is a string, including numbers and booleans — `toLog()`
+  converts.
+- Table `BONSAI.PUBLIC.INFERENCE_LOG` (override with `SNOWFLAKE_DATABASE` / `SNOWFLAKE_SCHEMA` /
+  `SNOWFLAKE_LOG_TABLE`), one row per inference plus a `logged_at TIMESTAMP_LTZ` default.
+  `ts` is stored as the raw ISO string so the round trip is lossless; `logged_at` is the real
+  timestamp for ordering and for a judge poking at the table in a worksheet.
+- Setup + round-trip proof: `npx tsx --env-file=.env.local scripts/setup-snowflake.ts`
+  (`--count` reports rows without writing, `--keep` leaves the probe row behind).
+- DDL runs in the setup script, never per request — a `CREATE TABLE IF NOT EXISTS` on the demo path
+  buys latency and nothing else.
+
+**`/api/economics` only serves Snowflake rows when the table covers every log id in the current
+store.** A partial read falls back to memory, because a short table on stage looks like lost data.
 
 ## Gotchas
 

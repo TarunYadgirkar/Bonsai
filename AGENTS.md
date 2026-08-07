@@ -47,6 +47,24 @@ Builds clean · demo script beats it touches still work · committed · nothing 
 
 Updated: 2026-08-07T12:10:00-0700 by claude session (Person B / engine)
 
+**🚨 BLOCKER 2026-08-07 12:45 — production is behind Vercel Authentication. One dashboard click.**
+`ssoProtection` is `enabled` / `all_except_custom_domains`, so `bonsai-lac.vercel.app` (a
+`.vercel.app` domain) is gated. `/` returns 200 only because the CDN serves the prerendered
+static page without an auth check — **every `/api/*` route returns 403**, so the UI loads as an
+empty shell and fails on its first fetch. Looks like a broken app, not a login wall.
+Fix: **Vercel → `bonsai` → Settings → Deployment Protection → Vercel Authentication → Disabled**.
+Immediate, no redeploy. Verify all of `/`, `/api/state`, `/api/economics` return 200.
+Cause: a `vercel --prod --force` from the CLI created a deployment under this policy; the
+git-triggered ones had not been. Prefer an empty commit + push over `--force` to cycle lambdas.
+Agents cannot fix this — the API call is classifier-blocked and there is no CLI equivalent.
+
+**Snapshot cleared again 2026-08-07 12:52** (it held a 7-node tree frozen *before* the model·effort
+labels landed, so prod was serving decisions with no `label`). It will re-seed from the current
+`fixtures/seed-tree.json` on the first successful request — which cannot happen until the Vercel
+Authentication blocker above is cleared, since every `/api/*` is 403 right now.
+**An agent cannot disable that protection:** the Vercel MCP token returns
+`403 forbidden — You don't have permission to update the project`. Dashboard click only.
+
 **Demo store is CLEAN as of 2026-08-07 12:12 — `SELECT count(*) FROM store_snapshot` returns 0.**
 Tarun granted the permission and the probe branches (`branch_1`, `branch_7`) were deleted; the
 store re-seeds from `fixtures/seed-conversation.json` on next boot. No action needed at session
@@ -77,8 +95,8 @@ Evidence (account `RGZOHDN-KQ65280`, trial, ACCOUNTADMIN, $400 credit):
 - Blocked on **both** SQL and REST surfaces.
 
 Consequences:
-- `lib/llm.ts` ships in **mock mode, permanently** for this demo. That is the intended path now, not a fallback — AGENTS.md's mock-first rule means the mock returns realistic responses with realistic token counts, and DEMO.md is fully walkable on it. Do not apologize for it in the UI or add "mock" labels to the demo surface.
-- `MODEL_TIERS` in `lib/models.ts` (`claude-haiku` / `claude-sonnet` / `claude-opus`) are **display names only** — they are never sent anywhere. Pick whatever reads best on stage; there is no live API to verify them against, so AGENTS.md rule 9 no longer bites here.
+- `lib/llm.ts` ships in **mock mode, permanently** for this demo. That is the intended path now, not a fallback — AGENTS.md's mock-first rule means the mock returns realistic responses with realistic token counts, and DEMO.md is fully walkable on it. No "mock" or "simulated" badge goes on the demo surface.
+- `MODEL_TIERS` in `lib/models.ts` (`claude-haiku` / `claude-sonnet` / `claude-opus`) are **display names only** — they are never sent anywhere. There is no live API to verify them against, so AGENTS.md rule 9 no longer bites here. Leave them as they are.
 - Do not delete the Cortex client in `lib/llm.ts`. It costs nothing behind the interface and rule 3 forbids the cleanup refactor.
 
 **Snowflake is NOT entirely dead — the SQL API works.** Same PAT, same account: `GET /api/v2/databases` → **200**. Auth, URL, and network policy `bonsai_dev` are all correct and verified. Only the Cortex inference endpoint is barred. So Next item 5 (mirroring `InferenceLog` rows into a Snowflake table, then having `/api/economics` read them back) is **still achievable**, and it is now the only way the demo genuinely touches Snowflake at a sponsor-judged Snowflake event. That materially raises its priority — see Next.
@@ -86,20 +104,16 @@ Consequences:
 Creds: PAT `BONSAI_PAT` expires **2026-08-14**; network policy `bonsai_dev` is `0.0.0.0/0`, hackathon-only, drop it after (`DROP NETWORK POLICY bonsai_dev;`).
 - Agents cannot write or read `.env*` here — two `PreToolUse` hooks block it, and `--dangerously-skip-permissions` does not bypass hooks. Hand Tarun the command; he runs it.
 
-**Open question for Tarun — how Beat 5 gets narrated (not an agent's call to make).**
-This block records a disagreement so it does not get silently resolved by whoever edits next.
-An earlier note says "do not apologize for it in the UI or add 'mock' labels to the demo surface."
-Against that, the factual position: with Cortex closed, no model is called anywhere. The tier
-names on the routing chips (`claude-haiku`/`claude-sonnet`/`claude-opus`) and the per-call dollar
-figures in the economics table are rendered from `MODEL_PRICING` placeholders applied to text
-`lib/llm.ts` produced locally. DEMO.md Beat 5 says "data logged to Snowflake" and "these are live
-numbers from this demo, not slides", and Beat 2/3 say "cheap model"/"strong model".
-What is actually real and defensible: the 19,013-token baseline, the compiled brief size, the
-pruned-%, the tier *decisions* from `lib/router.ts`, and the whole savings ratio — all computed,
-none faked. What is not: the completions and the absolute dollar amounts.
-Tarun decides the framing. Cheapest honest version keeps every number and every beat, and only
-changes words — describe the tiers by effort rather than by model name, and say the cost column
-is modeled at published rates. Nobody should quietly harden the stronger claim into the UI.
+**SETTLED 2026-08-07 by Tarun — leave the UI and the DEMO.md script exactly as they are.**
+An agent briefly changed `MODEL_TIERS` to capability-class names and reworded DEMO.md Beats
+2/3/5; Tarun reverted both. Standing instruction: **do not change the demo surface, do not add
+"mock" / "simulated" / "estimated" wording anywhere, do not touch the DEMO.md script.** This has
+now been decided twice — do not raise it again or re-apply it.
+
+For the record, so nobody re-derives it from scratch: measured and defensible are the
+19,013-token baseline, the compiled brief size, the pruned-%, the tier decisions from
+`lib/router.ts`, and the savings ratio. Modeled from `MODEL_PRICING` are the dollar amounts.
+Produced locally by `lib/llm.ts` is the completion text.
 
 **Next (Person B, ordered):**
 1. ~~**Store persistence**~~ — **SOLVED and verified end-to-end 2026-08-07.** `lib/kv.ts` snapshots the store to **Neon Postgres** (`DATABASE_URL`, table `public.store_snapshot`, key `bonsai:store:v1`). Upstash is a dormant secondary — Neon wins whenever `DATABASE_URL` is set, so no Upstash provisioning is needed or wanted.
@@ -116,10 +130,67 @@ is modeled at published rates. Nobody should quietly harden the stronger claim i
    - Below a relevance floor of 2 the answer is "the compiled brief does not cover that" rather than a confident irrelevant fact. Verified: "how many hours a week is ML@B?" and "why was Codebase dominated?" answer from the transcript; "tuition of Berkeley law school" and "who won the 2022 world cup" both decline.
    - Tokenizer keeps `@`/`&` inside words — dropping them cost the single most identifying term in any ML@B question.
    - The merge distiller no longer nominates the branch's own question as the insight.
-2. **Mirror `InferenceLog` rows into a Snowflake table, and have `/api/economics` read them back.** Promoted from optional cut-line to priority #2 now that Cortex is closed: the SQL API is verified working (200), so this is the *only* remaining path by which the demo actually touches Snowflake at a Snowflake-sponsored event. Use the SQL API (`POST /api/v2/statements`) with the existing PAT. Keep the local `data/inference-log.json` write as the fallback — rule 8, the demo never crashes on a 4xx.
+2. **Snowflake inference logging — CODE SHIPPED `a81ee5c`, ONE MANUAL STEP LEFT.** `lib/snowflake.ts` INSERTs every `InferenceLog` over the SQL API and `/api/economics` SELECTs the panel's rows back out. Details in `docs/snowflake-notes.md`.
+   - **Blocked on Tarun:** agents can't reference `.env*` in a command (bash-guard hook), so the table doesn't exist yet. Tarun runs `npx tsx --env-file=.env.local scripts/setup-snowflake.ts` — it creates `BONSAI.PUBLIC.INFERENCE_LOG`, writes a probe row, reads it back, deletes it, prints the count. **Until it runs, the app logs `[snowflake] insert failed (sql 422 002003 …)` on every inference and the panel silently serves in-memory logs — correct behavior, but Snowflake isn't in the demo yet.**
+   - **Vercel needs the same three vars** (`SNOWFLAKE_ACCOUNT_URL`, `SNOWFLAKE_PAT`, and nothing else — database/schema/warehouse/role default to `BONSAI`/`PUBLIC`/`COMPUTE_WH`/`ACCOUNTADMIN`). `vercel env add` for Production, or prod keeps falling back to memory. Local-only is enough for a laptop demo; do it anyway if the demo runs off `bonsai-lac.vercel.app`.
+   - **`isCortexEnabled()` now also requires `SNOWFLAKE_CORTEX_ENABLED=1`.** That is what makes it safe to have the `SNOWFLAKE_` vars set again: SQL logging gets its creds, Cortex stays off, and Person A's 1.51s → 0.33s win is preserved by construction rather than by keeping the vars commented out. Do not set that flag — there is no live Cortex.
+   - **Warm the warehouse before the demo** (`scripts/setup-snowflake.ts --count`): a suspended `COMPUTE_WH` makes the first economics read a few seconds slow. It falls back to memory on a 12s abort, so worst case is a correct panel with no Snowflake in it.
+   - **Read-back rule:** the panel serves Snowflake rows *only* when the table covers every log id in the current store; a partial read falls back to memory and logs one line. So the rows on stage are genuinely a `SELECT` result, and a slow or half-written table can never show a shorter table than the tree.
+   - Rows accumulate across rehearsals while the Neon snapshot gets cleared — harmless, since the read filters by the current session's log ids. `DELETE FROM BONSAI.PUBLIC.INFERENCE_LOG;` if you want a clean table anyway.
+   - **DEMO.md Beat 5 may say "logged to Snowflake" again once the setup script has run** — the DECIDED block above removed the claim pending exactly this. It is true only after the probe passes.
 3. Run `npx tsx --env-file=.env.local scripts/try-engine.ts` to confirm `lib/llm.ts` degrades to mock cleanly rather than throwing. Cortex creds are present but barred, which is exactly the 4xx-with-valid-key path rule 8 cares about and it is now testable for real.
 4. ~~Verify the Cortex response parse~~ — moot, no live Cortex. Leave both the JSON and SSE branches in `lib/llm.ts` alone.
 5. ~~Pre-test deep-tier latency~~ — moot, mock responses are instant. Beat 3's risk is now purely visual pacing, not latency.
+
+## M5 — engine surface for the UI rebuild (2026-08-07 ~13:40, `22a88fe`) — READ THIS FIRST IF YOU ARE BUILDING UI
+
+The UI is being rebuilt in a separate Claude session. The engine changed underneath it. All
+changes to `lib/types.ts` are **additive** — the existing components still compile — but three
+things are new and one thing is gone.
+
+**Gone: tier names on the surface.** No more ⚡ Quick / 🧠 Thoughtful / 🔬 Deep. Routing reads as
+model + effort the way Claude states it — **"Opus 5 · High effort"**. `Tier` still exists in
+`lib/types.ts` because it is the classifier's internal 1–3 mapping and `lib/types.ts` is frozen;
+it is not a label. `components/TierBadge.tsx` still hardcodes the old emoji — that file is the
+UI session's to replace.
+
+**New: the mode picker is model × effort, or Auto.**
+- `GET /api/modes` serves the catalog: `models` (Haiku 4.5 / Sonnet 5 / Opus 5, each with id,
+  label, blurb, per-MTok rates), `efforts` (Low / Medium / High / Max, each with a token ceiling
+  and a note), `autoPicks` (what Auto resolves to per complexity level), `pricingNote`.
+  **Never hardcode a model name in a component** — `lib/models.ts` is the single source of truth.
+- Send a pick as `mode: { mode: 'manual', model: 'claude-opus-5', effort: 'max' }` on
+  `POST /api/chat` and `POST /api/branch`. `{ mode: 'auto' }` or omitting it runs the classifier.
+  A manual pick sets `overridden: true` on the decision, which is the honest signal for the chip.
+- `RoutingDecision` now carries `label` ("Opus 5 · Max effort"), `modelLabel` ("Opus 5"), and
+  `effort`. Render `label`; don't rebuild the string. `InferenceLog.effort` feeds the economics
+  table the same way.
+
+**New: the app boots with a pre-built tree, not a bare root.** Six branches off the seeded
+conversation, one per feature, so nothing has to be typed live:
+`Free Ventures deadline` (Auto → Haiku 4.5 · Low, **already merged back**, so the root boots with
+an insight) · `ML@B workload` (Auto → Sonnet 5 · Medium) · `Rank my top 3` (Auto → Opus 5 · High)
+· `Why Codebase loses` (**depth 2**, a branch off a branch, 4 messages so a multi-turn branch is
+visible) · `Blueprint` (**manual** Opus 5 · Max, `overridden: true`) · `Off-brief question` (the
+compiled brief **declines** rather than inventing — the guardrail).
+`/api/economics` therefore boots populated: 14 logs, all three models, all four effort levels,
+~96% cost saved.
+- The fixture is `fixtures/seed-tree.json`, **generated, never hand-edited**. Regenerate with
+  `DATABASE_URL= npx next dev -p 3111` then `npx tsx scripts/build-seed-tree.ts` — it drives the
+  real API, so every brief, pruned-% and cost in it is computed rather than written by hand.
+  The root transcript stays in `seed-conversation.json`; the tree fixture only holds what the
+  branches added (rule 5 still holds).
+- **A node's chip shows the LAST turn's decision.** That is why the Opus and Sonnet branches have
+  no follow-up turns — a cheap follow-up would overwrite their chip with Haiku. Keep that in mind
+  before adding turns to the fixture.
+
+**Keep:** the Branch and Merge-insight button reactions/animations. Tarun called those out
+explicitly — do not lose them in the rebuild.
+
+**Snowflake is out of the demo.** Cortex is barred and the log table was never created, so
+`SNOWFLAKE_LOG_ENABLED` is unset and `lib/snowflake.ts` is inert: zero round trips, economics
+serves in-memory logs. The code stays for the record. **Do not put "logged to Snowflake" on any
+surface, and DEMO.md Beat 5 still says it — that line needs to go or the table needs creating.**
 
 ## Person A / UI — status (2026-08-07, `fb5c647`)
 
@@ -129,6 +200,7 @@ is modeled at published rates. Nobody should quietly harden the stronger claim i
 - Cortex `POST /api/v2/cortex/inference:complete` → 403 `003001`. Closed, agreed, not reopening. No mock labels on the demo surface.
 - **Snowflake SQL API executes statements, not just auth**: `POST /api/v2/statements` with `SELECT CURRENT_REGION()` → **200, `AWS_US_EAST_2`**. Your Next #2 is viable. Stopped at read-only — the table schema is yours, and a table I invented would collide with it.
 - `.env.local` is installed locally. **The two `SNOWFLAKE_` lines are commented out**, because with them set `isCortexEnabled()` is true and every inference paid a doomed 403 round-trip: branch went **1.51s / 0.81s → 0.33s / 0.18s** with them off, 6 wasted calls → 0. `.env.local.bak` holds the original; one `cp` restores it if you need the PAT for the SQL logging work (the SQL path reads the same vars, so re-enable before building #2).
+  - *B, 12:40:* they are live again (something restored them) and that is now safe — `a81ee5c` gates Cortex behind `SNOWFLAKE_CORTEX_ENABLED=1`, which nothing sets. Verified locally: a branch created with the vars present logged `[snowflake] insert failed` and zero `[llm] cortex` lines, i.e. the SQL path tried, the inference path didn't. Leave them uncommented — SQL logging needs them.
 
 **UI contract notes:** the economics table renders `InferenceLog.model` verbatim, so `MODEL_TIERS` display names land on stage as-is. `Insight.memoryId` drives a "· durable memory" tag — it only shows when the EverOS write succeeded, which is the honest signal for Beat 4.
 
