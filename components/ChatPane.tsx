@@ -107,7 +107,7 @@ export function ChatPane({
           {conversation.parentId &&
             (conversation.archived ? (
               <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
-                ✓ Merged · archived
+                Merged · archived
               </span>
             ) : (
               <button
@@ -118,7 +118,7 @@ export function ChatPane({
                 disabled={merging || conversation.messages.length === 0}
                 className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs font-medium text-emerald-200 transition-colors hover:bg-emerald-400/20 disabled:opacity-40"
               >
-                {merging ? 'Distilling…' : '⤴ Merge insight'}
+                {merging ? 'Distilling…' : 'Merge insight'}
               </button>
             ))}
 
@@ -233,9 +233,9 @@ export function ChatPane({
             window.getSelection()?.removeAllRanges();
           }}
           style={{ left: selection.x, top: selection.y - 10 }}
-          className="fixed z-40 -translate-x-1/2 -translate-y-full rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 shadow-lg hover:bg-emerald-400"
+          className="fixed z-40 -translate-x-1/2 -translate-y-full rounded-lg border border-black/70 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-black/40 hover:bg-emerald-500"
         >
-          🌱 Branch
+          Branch
         </button>
       )}
 

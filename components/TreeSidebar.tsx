@@ -229,7 +229,6 @@ export function TreeSidebar({
           onClick={onOpenEconomics}
           className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-neutral-300 transition-colors hover:bg-white/5"
         >
-          <span aria-hidden>📊</span>
           Economics
           <span className="ml-auto font-mono text-[10px] tabular-nums text-neutral-600">
             {session
@@ -253,7 +252,6 @@ export function TreeSidebar({
               : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-300'
           }`}
         >
-          <span aria-hidden>↺</span>
           {resetting ? 'Resetting…' : confirming ? 'Discard this run?' : 'Reset demo'}
           <span className="ml-auto text-[10px] text-neutral-600">
             {confirming ? 'click again' : 'back to start'}

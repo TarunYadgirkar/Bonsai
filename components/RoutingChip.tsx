@@ -128,7 +128,6 @@ export function RoutingChip({
                 isAuto ? 'text-white' : 'text-neutral-300'
               }`}
             >
-              <span aria-hidden>✨</span>
               Auto
               <span className="text-[10px] text-neutral-500">router decides</span>
               {isAuto && <span className="ml-auto text-[10px]">active</span>}
