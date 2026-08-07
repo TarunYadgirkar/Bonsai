@@ -12,17 +12,24 @@ export function ChatPane({
   onSend,
   onBranch,
   onPin,
+  onMerge,
   pinnedTier,
   sending,
   branching,
+  merging,
+  highlightInsightId,
 }: {
   conversation: Conversation;
   onSend: (content: string) => void;
   onBranch: (selection: string) => void;
   onPin: (tier: Tier | null) => void;
+  /** Takes the button's viewport centre so the merge animation starts where it was clicked. */
+  onMerge: (origin: { x: number; y: number }) => void;
   pinnedTier: Tier | null;
   sending: boolean;
   branching: boolean;
+  merging: boolean;
+  highlightInsightId: string | null;
 }) {
   const [draft, setDraft] = useState('');
   const [selection, setSelection] = useState<Selection | null>(null);
@@ -79,16 +86,67 @@ export function ChatPane({
           )}
         </div>
 
-        {/* Running input-token counter — DEMO.md Beat 1 points straight at this. */}
-        <div className="ml-auto shrink-0 text-right">
-          <div className="font-mono text-lg leading-none tabular-nums text-white">
-            {formatTokens(tokens)}
-          </div>
-          <div className="text-[10px] uppercase tracking-wide text-neutral-500">
-            context tokens
+        <div className="ml-auto flex shrink-0 items-center gap-4">
+          {/* Merge insight — DEMO.md Beat 4. Only branches have a parent to merge into. */}
+          {conversation.parentId &&
+            (conversation.archived ? (
+              <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
+                ✓ Merged · archived
+              </span>
+            ) : (
+              <button
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  onMerge({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+                }}
+                disabled={merging || conversation.messages.length === 0}
+                className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs font-medium text-emerald-200 transition-colors hover:bg-emerald-400/20 disabled:opacity-40"
+              >
+                {merging ? 'Distilling…' : '⤴ Merge insight'}
+              </button>
+            ))}
+
+          {/* Running input-token counter — DEMO.md Beat 1 points straight at this. */}
+          <div className="text-right">
+            <div className="font-mono text-lg leading-none tabular-nums text-white">
+              {formatTokens(tokens)}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-neutral-500">
+              context tokens
+            </div>
           </div>
         </div>
       </header>
+
+      {/*
+        Merged insights live outside the scroll area on purpose: the root is 72 messages
+        deep, and DEMO.md Beat 4 has to show the distilled line landing without scrolling.
+      */}
+      {conversation.insights.length > 0 && (
+        <div className="max-h-32 shrink-0 overflow-y-auto border-b border-emerald-400/20 bg-emerald-400/[0.06] px-6 py-2.5">
+          <div className="mx-auto max-w-3xl">
+            <div className="text-[10px] uppercase tracking-wide text-emerald-300/70">
+              Merged insights · {conversation.insights.length}
+            </div>
+            {conversation.insights.map((insight) => (
+              <p
+                key={insight.id}
+                // The freshly landed insight glows for a beat so the merge reads on a projector.
+                className={`-mx-1 mt-1 rounded px-1 py-0.5 text-xs text-emerald-100 ring-1 transition-all duration-700 ${
+                  insight.id === highlightInsightId
+                    ? 'bg-emerald-400/20 ring-emerald-300/60'
+                    : 'ring-transparent'
+                }`}
+              >
+                {insight.text}
+                {insight.memoryId && (
+                  <span className="ml-1.5 text-[10px] text-emerald-300/60">· durable memory</span>
+                )}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div
         ref={scrollRef}
@@ -113,19 +171,6 @@ export function ChatPane({
                 {brief.excludedNote}
               </p>
             </details>
-          )}
-
-          {conversation.insights.length > 0 && (
-            <div className="rounded-lg border border-emerald-400/20 bg-emerald-400/5 px-3 py-2">
-              <div className="text-[10px] uppercase tracking-wide text-emerald-300/70">
-                Merged insights
-              </div>
-              {conversation.insights.map((insight) => (
-                <p key={insight.id} className="mt-1 text-xs text-emerald-100">
-                  {insight.text}
-                </p>
-              ))}
-            </div>
           )}
 
           {conversation.messages.map((message) => (
