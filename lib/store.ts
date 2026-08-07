@@ -92,13 +92,18 @@ function fromSnapshot(snapshot: StoreSnapshot): StoreShape {
  */
 export async function loadStore(): Promise<void> {
   if (!kvEnabled()) return;
-  const raw = await kvGet(KV_KEY);
-  if (!raw) {
+  const read = await kvGet(KV_KEY);
+
+  // Only an empty store may be seeded. On a read error, keep memory and write nothing —
+  // seeding here would overwrite a live tree with the fixture.
+  if (read.status === 'error') return;
+  if (read.status === 'miss') {
     await saveStore();
     return;
   }
+
   try {
-    setStore(fromSnapshot(JSON.parse(raw) as StoreSnapshot));
+    setStore(fromSnapshot(JSON.parse(read.value) as StoreSnapshot));
   } catch {
     console.warn('[store] unreadable KV snapshot — keeping in-memory state');
   }
