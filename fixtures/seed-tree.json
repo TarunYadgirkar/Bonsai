@@ -19,7 +19,7 @@
     },
     {
       "title": "Blueprint club inquiry",
-      "scenario": "manual override — Opus 5 at max effort on a question Auto would route cheap"
+      "scenario": "manual override — the ceiling model at max effort on a question Auto would route cheap"
     },
     {
       "title": "Law school tuition inquiry (off-brief)",
@@ -315,14 +315,14 @@
           "content": "- Candidates worth researching: Machine Learning at Berkeley (ML@B), Free Ventures, Codebase, Blueprint, Berkeley Consulting, and the hackathon org scene.\n- **Culture is the strongest part.** Blueprint is consistently described as the warmest of the technical orgs.\n- Blueprint's marginal technical contribution is close to zero for you.\n- Given your stated goals lean builder-first and technical, Blueprint is the \"safe but slightly off-target\" option — which is exactly why it keeps showing up in your slot-2 consideration rather than winning it.\n- **Technical project orgs (same category as ML@B / Codebase / Blueprint)**\n\nThat is what this branch's brief supports; anything beyond it would need more of the parent thread pulled in.",
           "routing": {
             "tier": "deep",
-            "model": "claude-opus-5",
+            "model": "claude-fable-5",
             "effort": "max",
-            "modelLabel": "Opus 5",
-            "label": "Opus 5 · Max effort",
-            "effortNote": "Opus 5 · Max effort — exhaustive, weighs alternatives",
+            "modelLabel": "Fable 5",
+            "label": "Fable 5 · Max effort",
+            "effortNote": "Fable 5 · Max effort — exhaustive, weighs alternatives",
             "contextTokens": 488,
-            "estCostUsd": 0.02217,
-            "reason": "You picked Opus 5 at Max effort; classification skipped.",
+            "estCostUsd": 0.03695,
+            "reason": "You picked Fable 5 at Max effort; classification skipped.",
             "complexity": 3,
             "escalated": false,
             "overridden": true
@@ -588,11 +588,11 @@
       "branchId": "branch_28",
       "purpose": "chat",
       "tier": "deep",
-      "model": "claude-opus-5",
+      "model": "claude-fable-5",
       "effort": "max",
       "inputTokens": 558,
       "outputTokens": 184,
-      "estCostUsd": 0.02217,
+      "estCostUsd": 0.03695,
       "escalated": false,
       "overridden": false,
       "baselineInputTokens": 19012,

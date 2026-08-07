@@ -8,6 +8,7 @@
 import { complete } from './llm';
 import {
   INTERNAL_TIER,
+  CEILING_MODEL,
   MODEL_TIERS,
   TIER_DEFAULTS,
   TIER_LABEL,
@@ -198,7 +199,14 @@ export async function completeWithEscalation(params: {
   }
 
   const upgraded = NEXT_TIER[params.routing.tier];
-  if (!upgraded) {
+
+  /*
+   * Above deep there is no higher tier, but there is a higher model: a deep answer that still
+   * fails the check escalates onto the ceiling model rather than giving up. Only once — if the
+   * ceiling itself punts, more spend is not the answer, and the brief is what's wrong.
+   */
+  const atCeiling = params.routing.model === CEILING_MODEL;
+  if (!upgraded && atCeiling) {
     return {
       text: first.text,
       routing: { ...params.routing, estCostUsd: first.estCostUsd },
@@ -207,10 +215,11 @@ export async function completeWithEscalation(params: {
     };
   }
 
-  const upgradedModel = TIER_DEFAULTS[upgraded].model;
-  const upgradedEffort = TIER_DEFAULTS[upgraded].effort;
+  const upgradedTier = upgraded ?? params.routing.tier;
+  const upgradedModel = upgraded ? TIER_DEFAULTS[upgraded].model : CEILING_MODEL;
+  const upgradedEffort = upgraded ? TIER_DEFAULTS[upgraded].effort : params.routing.effort ?? 'high';
   const second = await complete({
-    tier: upgraded,
+    tier: upgradedTier,
     model: upgradedModel,
     effort: upgradedEffort,
     messages,
@@ -219,7 +228,7 @@ export async function completeWithEscalation(params: {
     text: second.text,
     routing: {
       ...params.routing,
-      tier: upgraded,
+      tier: upgradedTier,
       model: upgradedModel,
       effort: upgradedEffort,
       modelLabel: modelSpec(upgradedModel).label,
