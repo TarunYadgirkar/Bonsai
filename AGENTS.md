@@ -45,7 +45,7 @@ Builds clean · demo script beats it touches still work · committed · nothing 
 
 ## Ongoing
 
-Updated: 2026-08-07T12:05:00-0700 by claude session (Person B / engine)
+Updated: 2026-08-07T12:00:00-0700 by claude session (Person B / engine)
 
 **Done:**
 - `24e86f1` M0 contracts — `lib/types.ts` FROZEN. Adds `GET /api/state` (rootId + tree + conversations in one call) beyond PLAN.md's four routes.
@@ -80,7 +80,12 @@ Creds: PAT `BONSAI_PAT` expires **2026-08-14**; network policy `bonsai_dev` is `
 - Agents cannot write or read `.env*` here — two `PreToolUse` hooks block it, and `--dangerously-skip-permissions` does not bypass hooks. Hand Tarun the command; he runs it.
 
 **Next (Person B, ordered):**
-1. **Store persistence — highest risk, do first.** `lib/store.ts` keeps everything on `globalThis`. Fine on one warm instance; a Vercel cold start mid-demo drops every branch created on stage. `data/*.json` does **not** solve it — Vercel's filesystem is read-only outside `/tmp`. Either demo from localhost, or move to a real KV. Decide explicitly, don't leave it.
+1. ~~**Store persistence**~~ — **SOLVED and verified end-to-end 2026-08-07.** `lib/kv.ts` snapshots the store to **Neon Postgres** (`DATABASE_URL`, table `public.store_snapshot`, key `bonsai:store:v1`). Upstash is a dormant secondary — Neon wins whenever `DATABASE_URL` is set, so no Upstash provisioning is needed or wanted.
+   - Proof: created `branch_12`, killed the dev process, restarted, branch was still in `GET /api/state`. Zero `[kv]` warnings, so it was the real Neon path, not the silent in-memory fallback.
+   - Neon project `bonsai` = `quiet-wind-73997653`, branch `br-dawn-tree-aw122xx7`, db `neondb`, region `aws-us-east-1`. Table already created.
+   - **Still required:** `DATABASE_URL` (pooled string) must be in local `.env.local` **and** in Vercel env vars for all three environments. Prod keeps cold-starting until the Vercel side is set.
+   - **Debugging trap:** `lib/kv.ts:36` swallows every error by design (rule 8), so a wrong `DATABASE_URL` degrades to in-memory *silently* and looks identical to no config. Always confirm via a restart-survival test, never by assuming.
+   - **⚠️ Demo hygiene:** the live snapshot currently contains throwaway probe branches (`branch_1`, `branch_12`). Clear it before demoing — `DELETE FROM store_snapshot WHERE key = 'bonsai:store:v1';` — the store re-seeds from `fixtures/seed-conversation.json` on next boot.
 2. **Mirror `InferenceLog` rows into a Snowflake table, and have `/api/economics` read them back.** Promoted from optional cut-line to priority #2 now that Cortex is closed: the SQL API is verified working (200), so this is the *only* remaining path by which the demo actually touches Snowflake at a Snowflake-sponsored event. Use the SQL API (`POST /api/v2/statements`) with the existing PAT. Keep the local `data/inference-log.json` write as the fallback — rule 8, the demo never crashes on a 4xx.
 3. Run `npx tsx --env-file=.env.local scripts/try-engine.ts` to confirm `lib/llm.ts` degrades to mock cleanly rather than throwing. Cortex creds are present but barred, which is exactly the 4xx-with-valid-key path rule 8 cares about and it is now testable for real.
 4. ~~Verify the Cortex response parse~~ — moot, no live Cortex. Leave both the JSON and SSE branches in `lib/llm.ts` alone.
