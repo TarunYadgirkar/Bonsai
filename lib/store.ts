@@ -1,4 +1,5 @@
 import seed from '@/fixtures/seed-conversation.json';
+import { kvEnabled, kvGet, kvSet } from './kv';
 import { messagesTokens, prunedPct } from './tokens';
 import type {
   BranchNode,
@@ -12,11 +13,13 @@ import type {
 } from './types';
 
 /**
- * In-memory store, seeded from the fixture.
+ * In-memory store, seeded from the fixture, optionally mirrored to Upstash.
  *
- * Held on globalThis so Next's dev hot-reload doesn't wipe the tree mid-demo. This does NOT
- * survive across serverless instances on Vercel — M3 swaps the backing store for data/*.json
- * per AGENTS.md. Demo on one warm instance until then.
+ * globalThis alone survives Next's dev hot-reload but NOT a Vercel cold start or a second
+ * serverless instance — a branch created on stage would vanish on the next request. With KV env
+ * vars present, `loadStore()` re-reads the snapshot on every request and `saveStore()` writes it
+ * back, so globalThis degrades to a per-request cache and any instance sees the same tree.
+ * Without them the behavior is unchanged.
  */
 interface StoreShape {
   conversations: Map<string, Conversation>;
@@ -25,7 +28,15 @@ interface StoreShape {
   seq: number;
 }
 
+interface StoreSnapshot {
+  conversations: Conversation[];
+  logs: InferenceLog[];
+  rootId: string;
+  seq: number;
+}
+
 const GLOBAL_KEY = Symbol.for('bonsai.store');
+const KV_KEY = 'bonsai:store:v1';
 
 function build(): StoreShape {
   const fixture = seed as SeedConversation;
@@ -51,6 +62,52 @@ function store(): StoreShape {
   const g = globalThis as typeof globalThis & { [GLOBAL_KEY]?: StoreShape };
   if (!g[GLOBAL_KEY]) g[GLOBAL_KEY] = build();
   return g[GLOBAL_KEY];
+}
+
+function setStore(next: StoreShape): void {
+  (globalThis as typeof globalThis & { [GLOBAL_KEY]?: StoreShape })[GLOBAL_KEY] = next;
+}
+
+function toSnapshot(s: StoreShape): StoreSnapshot {
+  return {
+    conversations: [...s.conversations.values()],
+    logs: s.logs,
+    rootId: s.rootId,
+    seq: s.seq,
+  };
+}
+
+function fromSnapshot(snapshot: StoreSnapshot): StoreShape {
+  return {
+    conversations: new Map(snapshot.conversations.map((c) => [c.id, c])),
+    logs: snapshot.logs,
+    rootId: snapshot.rootId,
+    seq: snapshot.seq,
+  };
+}
+
+/**
+ * Call at the top of every route. No-op without KV env vars. Re-reads on every request rather
+ * than caching, because a warm instance holding a stale tree is exactly the failure this fixes.
+ */
+export async function loadStore(): Promise<void> {
+  if (!kvEnabled()) return;
+  const raw = await kvGet(KV_KEY);
+  if (!raw) {
+    await saveStore();
+    return;
+  }
+  try {
+    setStore(fromSnapshot(JSON.parse(raw) as StoreSnapshot));
+  } catch {
+    console.warn('[store] unreadable KV snapshot — keeping in-memory state');
+  }
+}
+
+/** Call before responding from any route that mutated state. Awaited: a frozen lambda drops it. */
+export async function saveStore(): Promise<void> {
+  if (!kvEnabled()) return;
+  await kvSet(KV_KEY, JSON.stringify(toSnapshot(store())));
 }
 
 export function nextId(prefix: string): string {

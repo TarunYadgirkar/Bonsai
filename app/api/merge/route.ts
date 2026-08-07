@@ -4,8 +4,10 @@ import { INTERNAL_TIER, buildLog, mockInsight } from '@/lib/mock';
 import {
   appendInsight,
   getConversation,
+  loadStore,
   logInference,
   nextId,
+  saveStore,
   updateConversation,
 } from '@/lib/store';
 import { estimateTokens, messagesTokens } from '@/lib/tokens';
@@ -23,6 +25,7 @@ export async function POST(request: Request) {
     return Response.json({ error: 'branchId is required' } satisfies ApiError, { status: 400 });
   }
 
+  await loadStore();
   const branch = getConversation(body.branchId);
   if (!branch) {
     return Response.json({ error: `unknown branch ${body.branchId}` } satisfies ApiError, {
@@ -70,6 +73,8 @@ export async function POST(request: Request) {
       baselineInputTokens: branch.brief?.availableTokens ?? inputTokens,
     }),
   );
+
+  await saveStore();
 
   const response: MergeResponse = {
     insight,

@@ -7,9 +7,11 @@ import {
   availableTokensFor,
   buildTree,
   getConversation,
+  loadStore,
   logInference,
   nextId,
   putConversation,
+  saveStore,
 } from '@/lib/store';
 import { estimateTokens } from '@/lib/tokens';
 import type {
@@ -33,6 +35,7 @@ export async function POST(request: Request) {
     });
   }
 
+  await loadStore();
   const parent = getConversation(body.parentId);
   if (!parent) {
     return Response.json({ error: `unknown parent ${body.parentId}` } satisfies ApiError, {
@@ -126,6 +129,8 @@ export async function POST(request: Request) {
       status: 500,
     });
   }
+
+  await saveStore();
 
   const response: BranchResponse = { node, conversation, brief, message: answer, routing };
   return Response.json(response);

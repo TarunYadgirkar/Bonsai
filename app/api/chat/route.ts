@@ -1,6 +1,14 @@
 import { buildLog } from '@/lib/mock';
 import { completeWithEscalation, route } from '@/lib/router';
-import { appendMessage, availableTokensFor, getConversation, logInference, nextId } from '@/lib/store';
+import {
+  appendMessage,
+  availableTokensFor,
+  getConversation,
+  loadStore,
+  logInference,
+  nextId,
+  saveStore,
+} from '@/lib/store';
 import { messagesTokens } from '@/lib/tokens';
 import type { ApiError, ChatRequest, ChatResponse } from '@/lib/types';
 
@@ -15,6 +23,7 @@ export async function POST(request: Request) {
     });
   }
 
+  await loadStore();
   const conversation = getConversation(body.branchId);
   if (!conversation) {
     return Response.json({ error: `unknown branch ${body.branchId}` } satisfies ApiError, {
@@ -76,6 +85,8 @@ export async function POST(request: Request) {
       overridden: result.routing.overridden,
     }),
   );
+
+  await saveStore();
 
   const response: ChatResponse = {
     branchId: conversation.id,

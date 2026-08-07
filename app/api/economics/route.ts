@@ -1,4 +1,4 @@
-import { listLogs } from '@/lib/store';
+import { listLogs, loadStore } from '@/lib/store';
 import type { EconomicsBaseline, EconomicsResponse, EconomicsTotals } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -9,6 +9,7 @@ function pctSaved(baseline: number, actual: number): number {
 }
 
 export async function GET() {
+  await loadStore();
   const logs = listLogs();
 
   const totals: EconomicsTotals = logs.reduce<EconomicsTotals>(
