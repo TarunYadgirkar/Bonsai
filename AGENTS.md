@@ -45,7 +45,14 @@ Builds clean · demo script beats it touches still work · committed · nothing 
 
 ## Ongoing
 
-Updated: 2026-08-07T12:00:00-0700 by claude session (Person B / engine)
+Updated: 2026-08-07T12:10:00-0700 by claude session (Person B / engine)
+
+**⚠️ FIRST ACTION FOR THE NEXT SESSION — clear the demo store.** The live Neon snapshot holds
+probe branches (`branch_1`, `branch_7`) from persistence testing. They will be on screen during
+the demo. Run `DELETE FROM store_snapshot WHERE key = 'bonsai:store:v1';` against Neon project
+`quiet-wind-73997653`; the store re-seeds from `fixtures/seed-conversation.json` on next boot.
+Left undone deliberately — destructive SQL needs a human's go-ahead, and this session did not
+have it.
 
 **Done:**
 - `24e86f1` M0 contracts — `lib/types.ts` FROZEN. Adds `GET /api/state` (rootId + tree + conversations in one call) beyond PLAN.md's four routes.
@@ -79,13 +86,36 @@ Consequences:
 Creds: PAT `BONSAI_PAT` expires **2026-08-14**; network policy `bonsai_dev` is `0.0.0.0/0`, hackathon-only, drop it after (`DROP NETWORK POLICY bonsai_dev;`).
 - Agents cannot write or read `.env*` here — two `PreToolUse` hooks block it, and `--dangerously-skip-permissions` does not bypass hooks. Hand Tarun the command; he runs it.
 
+**Open question for Tarun — how Beat 5 gets narrated (not an agent's call to make).**
+This block records a disagreement so it does not get silently resolved by whoever edits next.
+An earlier note says "do not apologize for it in the UI or add 'mock' labels to the demo surface."
+Against that, the factual position: with Cortex closed, no model is called anywhere. The tier
+names on the routing chips (`claude-haiku`/`claude-sonnet`/`claude-opus`) and the per-call dollar
+figures in the economics table are rendered from `MODEL_PRICING` placeholders applied to text
+`lib/llm.ts` produced locally. DEMO.md Beat 5 says "data logged to Snowflake" and "these are live
+numbers from this demo, not slides", and Beat 2/3 say "cheap model"/"strong model".
+What is actually real and defensible: the 19,013-token baseline, the compiled brief size, the
+pruned-%, the tier *decisions* from `lib/router.ts`, and the whole savings ratio — all computed,
+none faked. What is not: the completions and the absolute dollar amounts.
+Tarun decides the framing. Cheapest honest version keeps every number and every beat, and only
+changes words — describe the tiers by effort rather than by model name, and say the cost column
+is modeled at published rates. Nobody should quietly harden the stronger claim into the UI.
+
 **Next (Person B, ordered):**
 1. ~~**Store persistence**~~ — **SOLVED and verified end-to-end 2026-08-07.** `lib/kv.ts` snapshots the store to **Neon Postgres** (`DATABASE_URL`, table `public.store_snapshot`, key `bonsai:store:v1`). Upstash is a dormant secondary — Neon wins whenever `DATABASE_URL` is set, so no Upstash provisioning is needed or wanted.
    - Proof: created `branch_12`, killed the dev process, restarted, branch was still in `GET /api/state`. Zero `[kv]` warnings, so it was the real Neon path, not the silent in-memory fallback.
    - Neon project `bonsai` = `quiet-wind-73997653`, branch `br-dawn-tree-aw122xx7`, db `neondb`, region `aws-us-east-1`. Table already created.
-   - **Still required:** `DATABASE_URL` (pooled string) must be in local `.env.local` **and** in Vercel env vars for all three environments. Prod keeps cold-starting until the Vercel side is set.
-   - **Debugging trap:** `lib/kv.ts:36` swallows every error by design (rule 8), so a wrong `DATABASE_URL` degrades to in-memory *silently* and looks identical to no config. Always confirm via a restart-survival test, never by assuming.
+   - **Vercel side is DONE.** `DATABASE_URL` (pooled) is set encrypted on Production + Preview + Development via `vercel env add`. **Production persistence verified live at 12:08**: `POST /api/branch` on `bonsai-lac.vercel.app` created `branch_7`, a later request to `GET /api/state` returned it, and `/api/economics` read back 4 logs / 97.1% cost saved. The snapshot row moved in step. Prod is genuinely on Neon, not in-memory.
+   - `4670413` **fixed a data-loss bug in the first cut of this**: `kvGet` returned `null` for both "no snapshot yet" and "read failed", so a single transient Neon error made `loadStore` treat a populated store as empty and overwrite it with the fixture — the tree disappearing mid-demo. It now returns `hit` / `miss` / `error`, and only `miss` seeds. Verified by pointing `DATABASE_URL` at a dead host: two read failures logged, snapshot `updated_at` unchanged.
+     - Record correction: `4670413`'s commit message says this was observed resetting production. It was not — the 12:05 reset was the parallel session's deliberate `DELETE` at 12:03. The bug was real and reachable; the production sighting was a misread.
+   - **Debugging trap:** `lib/kv.ts` still swallows errors by design (rule 8), so a wrong `DATABASE_URL` degrades to in-memory *silently*. It no longer destroys data when it does, but it still looks identical to no config. Confirm with a restart-survival test, never by assuming.
    - **Demo hygiene:** snapshot was cleared 2026-08-07 12:03 (0 rows), so the tree re-seeds clean from `fixtures/seed-conversation.json`. State is durable now, so **anything you create while rehearsing persists into the demo** — re-run `DELETE FROM store_snapshot WHERE key = 'bonsai:store:v1';` after any practice run.
+1b. **Mock engine hardened for off-script questions (`42566b8`) — done, but know what it does.** Since the mock is now the product, not a fallback, `lib/llm.ts` no longer answers from a canned table:
+   - `compileBrief` used to return the same six Free Ventures facts for *every* branch — highlighting "ML@B" produced a brief about Free Ventures. It now ranks sentences out of the real parent transcript against the branch topic, so pruning is genuine for any selection.
+   - Answers are drawn from the compiled brief's own facts. The two DEMO.md questions still return their rehearsed wording verbatim (matched by regex on the question), so Beats 2 and 3 are unchanged.
+   - Below a relevance floor of 2 the answer is "the compiled brief does not cover that" rather than a confident irrelevant fact. Verified: "how many hours a week is ML@B?" and "why was Codebase dominated?" answer from the transcript; "tuition of Berkeley law school" and "who won the 2022 world cup" both decline.
+   - Tokenizer keeps `@`/`&` inside words — dropping them cost the single most identifying term in any ML@B question.
+   - The merge distiller no longer nominates the branch's own question as the insight.
 2. **Mirror `InferenceLog` rows into a Snowflake table, and have `/api/economics` read them back.** Promoted from optional cut-line to priority #2 now that Cortex is closed: the SQL API is verified working (200), so this is the *only* remaining path by which the demo actually touches Snowflake at a Snowflake-sponsored event. Use the SQL API (`POST /api/v2/statements`) with the existing PAT. Keep the local `data/inference-log.json` write as the fallback — rule 8, the demo never crashes on a 4xx.
 3. Run `npx tsx --env-file=.env.local scripts/try-engine.ts` to confirm `lib/llm.ts` degrades to mock cleanly rather than throwing. Cortex creds are present but barred, which is exactly the 4xx-with-valid-key path rule 8 cares about and it is now testable for real.
 4. ~~Verify the Cortex response parse~~ — moot, no live Cortex. Leave both the JSON and SSE branches in `lib/llm.ts` alone.
