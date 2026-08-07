@@ -45,14 +45,14 @@ const SCENARIOS: Scenario[] = [
     parent: 'root',
     selection: 'Free Ventures',
     question: 'when do apps close?',
-    title: 'Free Ventures club',
+    title: 'Free Ventures club inquiry',
   },
   {
     note: 'auto → synthesis over a few facts',
     parent: 'root',
     selection: 'ML@B',
     question: 'how many hours a week is ML@B really, once the education track is counted?',
-    title: 'ML@B club — workload',
+    title: 'ML@B club workload inquiry',
   },
   {
     note: 'auto → Opus 5 / high: multi-constraint ranking, the cheap-vs-strong contrast',
@@ -62,14 +62,14 @@ const SCENARIOS: Scenario[] = [
       "Given my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.",
     // No follow-up here on purpose: the node badge shows the LAST turn's tier, and a cheap
     // follow-up would flip this branch's Opus chip to Haiku — the contrast the demo is built on.
-    title: 'Rank my top 3 clubs',
+    title: 'Top 3 clubs ranking inquiry',
   },
   {
     note: 'nested branch — depth 2, inherits a brief compiled from a brief',
     parent: 2,
     selection: 'opportunity cost',
     question: 'why is Codebase dominated in every scenario?',
-    title: 'Codebase club — why it loses',
+    title: 'Codebase club inquiry',
     // The multi-turn example lives here: this branch already routes to the cheapest model, so an
     // extra cheap turn costs no chip. On the Opus or Sonnet branch it would overwrite theirs —
     // the node chip shows the LAST turn's decision.
@@ -80,7 +80,7 @@ const SCENARIOS: Scenario[] = [
     parent: 'root',
     selection: 'Blueprint',
     question: 'is Blueprint worth it if I already have a technical peer group?',
-    title: 'Blueprint club — worth it?',
+    title: 'Blueprint club inquiry',
     mode: { mode: 'manual', model: 'claude-opus-5', effort: 'max' },
   },
   {
@@ -88,7 +88,7 @@ const SCENARIOS: Scenario[] = [
     parent: 'root',
     selection: 'Berkeley',
     question: 'what is the tuition of Berkeley law school?',
-    title: 'Berkeley law tuition (off-brief)',
+    title: 'Law school tuition inquiry (off-brief)',
     mode: { mode: 'manual', model: 'claude-haiku-4-5', effort: 'low' },
   },
 ];
