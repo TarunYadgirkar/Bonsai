@@ -43,6 +43,37 @@ The app must fully run, and the DEMO.md script must be walkable, with zero keys 
 
 Builds clean · demo script beats it touches still work · committed · nothing outside territory touched.
 
+## Ongoing
+
+Updated: 2026-08-07T11:34:13-0700 by claude session (Person B / engine)
+
+**Done:**
+- `24e86f1` M0 contracts — `lib/types.ts` FROZEN. Adds `GET /api/state` (rootId + tree + conversations in one call) beyond PLAN.md's four routes.
+- `6f66832` M0 stubs — `lib/store.ts` (fixture-seeded, on `globalThis`), `lib/tokens.ts`, `lib/models.ts`, `lib/mock.ts`, all five routes.
+- `f3f4fca` repo flattened (was a nested `bonsai/` subdir), `.gitignore` + `.env.example` added.
+- `5ebf6d4` fixture grown 16 → 72 messages, **19,013 available tokens** so DEMO.md Beat 1's "19,000" is literally true. Original 16 messages untouched.
+- `1bdce9c` / `d9936b1` / `4ef7995` EverOS **v2** memory layer, wired into `/api/merge` (write) and `/api/branch` (recall).
+- `467a174` EverOS round trip **verified live on Vercel prod** — merge wrote an insight, a branch ~8s later recalled it as a real extracted episode.
+- `ab67242` M1+M2 engine — `lib/llm.ts` (Cortex), `lib/compiler.ts` (compileBrief), `lib/router.ts` (classifier + escalation), `scripts/try-engine.ts`. Routes now use the engine, merge distills a real insight.
+- Vercel project `bonsai` created and GitHub-connected; `main` auto-deploys. Live: **https://bonsai-lac.vercel.app** (the `bonsai-<hash>` preview URLs are 302-protected; the canonical alias is public). `EVERMIND_API_KEY` set encrypted on Production + Preview + Development.
+
+**Live numbers from the real pipeline (mock LLM mode, real EverOS):**
+`19,013 avail → 282 brief → 98.5% pruned → ⚡ quick / $0.0004` · deep question → `🔬 deep / $0.0175` · session totals `$0.0668 vs $2.0686 baseline = 96.8% cost saved`.
+
+**Blocked:**
+- **Snowflake creds absent.** `SNOWFLAKE_ACCOUNT_URL` / `SNOWFLAKE_PAT` are blank, so `lib/llm.ts` runs mock mode. Everything is behind the interface — dropping the two env vars in is the whole integration, no code change. Tarun is getting them.
+- **`MODEL_TIERS` in `lib/models.ts` are unverified** — `claude-haiku` / `claude-sonnet` / `claude-opus`, chosen because the names read clearly on stage. Confirm they exist in this Cortex account/region before trusting a live call; AGENTS.md rule 9 applies.
+- Agents cannot write or read `.env*` here — two `PreToolUse` hooks block it, and `--dangerously-skip-permissions` does not bypass hooks. Hand Tarun the command; he runs it.
+
+**Next (Person B, ordered):**
+1. **Store persistence — highest risk, do first.** `lib/store.ts` keeps everything on `globalThis`. Fine on one warm instance; a Vercel cold start mid-demo drops every branch created on stage. `data/*.json` does **not** solve it — Vercel's filesystem is read-only outside `/tmp`. Either demo from localhost, or move to a real KV. Decide explicitly, don't leave it.
+2. Drop in the Snowflake env vars when they land, then run `npx tsx --env-file=.env.local scripts/try-engine.ts` and confirm both DEMO.md questions still route ⚡ and 🔬 against real Cortex.
+3. Verify the Cortex response parse. `lib/llm.ts` handles both a plain JSON body and an SSE stream because we could not confirm which this account returns — check which one actually comes back and delete the dead path if there's time.
+4. Pre-test deep-tier latency. `docs/snowflake-notes.md` warns big models are slow; the deep question must return inside demo patience (~10s) or Beat 3 dies on stage.
+5. Optional, only if 1–4 are done: mirror `InferenceLog` rows into a Snowflake table so Beat 5 is literally "queried from Snowflake". Pure stage line, zero product difference — it is cut-line #2 for a reason.
+
+**Do not cut** (DEMO.md): branch + compiled brief with pruned-%, the ⚡/🔬 contrast on the two demo questions, merge-insight, the counters. Note the mock classifier is deliberately heuristic so that contrast survives with zero keys — do not "simplify" it to a constant.
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know
