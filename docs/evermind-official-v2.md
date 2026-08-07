@@ -142,12 +142,24 @@ Our key returns 200 on v2, so the account is provisioned for v2 — no 403 risk.
 | Call | Verified? |
 |---|---|
 | `add` (`async_mode:false`) | ✅ live, HTTP 200, `{"message_count":2,"status":"accumulated"}` |
-| `flush` | ❌ not run — sandbox blocked the request |
-| `search` | ❌ not run — sandbox blocked the request |
+| `flush` | ✅ live on Vercel prod, Aug 7 |
+| `search` | ✅ live on Vercel prod, Aug 7 |
 
-Auth, base URL, envelope shape, and the v2 entitlement are therefore confirmed. The
-`flush`→`search` read path is documented but unproven; **prove it before relying on it in
-Beat 4.** Test session id `bonsai_smoke_001`, sender/user id `bonsai_tarun`.
+**The full round trip is proven end to end on the deployed URL.** `POST /api/merge` wrote the
+insight; ~8s later `POST /api/branch` recalled it as a real extracted episode
+(`6a762069c12dc117a8179a6b`), not a buffered message:
+
+> "On August 7, 2026 (Friday), at 18:13 UTC, bonsai_tarun stated that Free Ventures apps close
+> on September 11, 2026 (Friday), and that the user plans to apply with the startup."
+
+So the timing trap is real but survivable: `add(async_mode:false)` + `flush` extracted inside a
+demo beat's worth of time. Keep the `unprocessed_messages` fallback anyway — extraction latency
+is not a guarantee, and Beat 4 gets one take.
+
+**One production caveat:** the `data/memory.json` mirror does NOT work on Vercel — the
+filesystem is read-only outside `/tmp`, so `writeLocal` logs and skips. On the deployed URL
+EverOS is the only store. Locally the mirror still works. Test session id `bonsai_smoke_001`,
+sender/user id `bonsai_tarun`.
 
 ## Env var naming — decided
 

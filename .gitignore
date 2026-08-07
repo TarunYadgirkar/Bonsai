@@ -17,3 +17,5 @@ npm-debug.log*
 # next scaffold artifacts (regenerated on every build)
 next-env.d.ts
 *.tsbuildinfo
+.vercel
+.env*
