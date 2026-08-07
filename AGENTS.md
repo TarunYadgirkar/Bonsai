@@ -47,6 +47,17 @@ Builds clean · demo script beats it touches still work · committed · nothing 
 
 Updated: 2026-08-07T12:10:00-0700 by claude session (Person B / engine)
 
+**🚨 BLOCKER 2026-08-07 12:45 — production is behind Vercel Authentication. One dashboard click.**
+`ssoProtection` is `enabled` / `all_except_custom_domains`, so `bonsai-lac.vercel.app` (a
+`.vercel.app` domain) is gated. `/` returns 200 only because the CDN serves the prerendered
+static page without an auth check — **every `/api/*` route returns 403**, so the UI loads as an
+empty shell and fails on its first fetch. Looks like a broken app, not a login wall.
+Fix: **Vercel → `bonsai` → Settings → Deployment Protection → Vercel Authentication → Disabled**.
+Immediate, no redeploy. Verify all of `/`, `/api/state`, `/api/economics` return 200.
+Cause: a `vercel --prod --force` from the CLI created a deployment under this policy; the
+git-triggered ones had not been. Prefer an empty commit + push over `--force` to cycle lambdas.
+Agents cannot fix this — the API call is classifier-blocked and there is no CLI equivalent.
+
 **Demo store is CLEAN as of 2026-08-07 12:12 — `SELECT count(*) FROM store_snapshot` returns 0.**
 Tarun granted the permission and the probe branches (`branch_1`, `branch_7`) were deleted; the
 store re-seeds from `fixtures/seed-conversation.json` on next boot. No action needed at session
