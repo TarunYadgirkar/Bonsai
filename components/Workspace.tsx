@@ -1,8 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { BranchResponse, ChatResponse, StateResponse, Tier } from '@/lib/types';
+import type {
+  BranchResponse,
+  ChatResponse,
+  MergeResponse,
+  StateResponse,
+  Tier,
+} from '@/lib/types';
 import { ChatPane } from './ChatPane';
+import { EconomicsPanel } from './EconomicsPanel';
+import { MergeFlight, type Flight } from './MergeFlight';
 import { TreeSidebar } from './TreeSidebar';
 
 /** Pure fetch — returns data, touches no state, so effects can own their own setState. */
@@ -14,6 +22,17 @@ async function fetchState(): Promise<StateResponse> {
 
 const describe = (err: unknown) =>
   err instanceof Error ? err.message : String(err);
+
+/** Where a merged insight should fly to: the parent's row in the sidebar. */
+function nodeCenter(id: string): { x: number; y: number } | null {
+  const el = document.querySelector(`[data-node-id="${CSS.escape(id)}"]`);
+  if (!el) return null;
+  const rect = el.getBoundingClientRect();
+  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+}
+
+/** How long the landing glow stays up on the parent node and its new insight. */
+const FLASH_MS = 2600;
 
 /**
  * Person A territory (AGENTS.md): this consumes the API routes and nothing else.
@@ -31,6 +50,17 @@ export function Workspace() {
    * message is what makes the override stick for the whole branch.
    */
   const [pins, setPins] = useState<Record<string, Tier | null>>({});
+  const [merging, setMerging] = useState(false);
+  const [flight, setFlight] = useState<Flight | null>(null);
+  /** The insight that just landed, so the parent node and the line itself can glow. */
+  const [merged, setMerged] = useState<{ parentId: string; insightId: string } | null>(null);
+  const [economicsOpen, setEconomicsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!merged) return;
+    const timer = setTimeout(() => setMerged(null), FLASH_MS);
+    return () => clearTimeout(timer);
+  }, [merged]);
 
   const applyState = useCallback((data: StateResponse) => {
     setState(data);
@@ -116,6 +146,35 @@ export function Workspace() {
     }
   };
 
+  /** DEMO.md Beat 4: distil the branch into one line, fly it to the parent, archive the branch. */
+  const merge = async (origin: { x: number; y: number }) => {
+    if (!activeId || merging) return;
+    setMerging(true);
+    try {
+      const res = await fetch('/api/merge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branchId: activeId, archive: true }),
+      });
+      if (!res.ok) throw new Error(`POST /api/merge → ${res.status}`);
+      const data: MergeResponse = await res.json();
+
+      // Measure the target before the refetch reflows anything.
+      setFlight({
+        id: data.insight.id,
+        text: data.insight.text,
+        parentId: data.parentId,
+        from: origin,
+        to: nodeCenter(data.parentId) ?? origin,
+      });
+      await loadState();
+    } catch (err) {
+      setError(describe(err));
+    } finally {
+      setMerging(false);
+    }
+  };
+
   const pin = (tier: Tier | null) => {
     if (!activeId) return;
     setPins((prev) => ({ ...prev, [activeId]: tier }));
@@ -158,9 +217,17 @@ export function Workspace() {
     state.conversations.find((c) => c.id === state.rootId) ??
     state.conversations[0];
 
+  const branchTitles = Object.fromEntries(state.conversations.map((c) => [c.id, c.title]));
+
   return (
     <main className="flex min-h-0 flex-1">
-      <TreeSidebar nodes={state.tree} activeId={active?.id ?? null} onSelect={setActiveId} />
+      <TreeSidebar
+        nodes={state.tree}
+        activeId={active?.id ?? null}
+        onSelect={setActiveId}
+        onOpenEconomics={() => setEconomicsOpen(true)}
+        flashId={merged?.parentId ?? null}
+      />
       {active ? (
         <ChatPane
           // Remount per conversation so draft + text selection reset with the branch.
@@ -169,14 +236,39 @@ export function Workspace() {
           onSend={send}
           onBranch={branch}
           onPin={pin}
+          onMerge={merge}
           pinnedTier={pins[active.id] ?? active.pinnedTier ?? null}
           sending={sending}
           branching={branching}
+          merging={merging}
+          highlightInsightId={
+            merged && merged.parentId === active.id ? merged.insightId : null
+          }
         />
       ) : (
         <section className="flex flex-1 items-center justify-center bg-neutral-900">
           <p className="text-sm text-neutral-500">No conversation selected.</p>
         </section>
+      )}
+
+      {flight && (
+        <MergeFlight
+          key={flight.id}
+          flight={flight}
+          onDone={() => {
+            setFlight(null);
+            // Land on the parent so the merged line is on screen when the pill lands.
+            setActiveId(flight.parentId);
+            setMerged({ parentId: flight.parentId, insightId: flight.id });
+          }}
+        />
+      )}
+
+      {economicsOpen && (
+        <EconomicsPanel
+          branchTitles={branchTitles}
+          onClose={() => setEconomicsOpen(false)}
+        />
       )}
     </main>
   );
