@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type {
   BranchResponse,
   ChatResponse,
+  EconomicsResponse,
   MergeResponse,
   StateResponse,
   Tier,
@@ -11,13 +12,29 @@ import type {
 import { ChatPane } from './ChatPane';
 import { EconomicsPanel } from './EconomicsPanel';
 import { MergeFlight, type Flight } from './MergeFlight';
-import { TreeSidebar } from './TreeSidebar';
+import { TreeSidebar, type NodeStats } from './TreeSidebar';
+import { conversationTokens } from './tokens';
 
 /** Pure fetch — returns data, touches no state, so effects can own their own setState. */
 async function fetchState(): Promise<StateResponse> {
   const res = await fetch('/api/state');
   if (!res.ok) throw new Error(`GET /api/state → ${res.status}`);
   return res.json();
+}
+
+/**
+ * The tree cards carry per-branch spend, which only the inference log knows. This is
+ * decoration on top of the tree — a failure here must never blank the sidebar, so it
+ * resolves to null and the cards simply omit the cost.
+ */
+async function fetchEconomics(): Promise<EconomicsResponse | null> {
+  try {
+    const res = await fetch('/api/economics', { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
 }
 
 const describe = (err: unknown) =>
@@ -52,6 +69,7 @@ function titleFromSelection(selection: string): string {
  */
 export function Workspace() {
   const [state, setState] = useState<StateResponse | null>(null);
+  const [economics, setEconomics] = useState<EconomicsResponse | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -87,6 +105,9 @@ export function Workspace() {
     } catch (err) {
       setError(describe(err));
     }
+    // Independent of the state load: cost figures refresh, a miss just leaves the old ones.
+    const logs = await fetchEconomics();
+    if (logs) setEconomics(logs);
   }, [applyState]);
 
   useEffect(() => {
@@ -95,6 +116,7 @@ export function Workspace() {
       (data) => !cancelled && applyState(data),
       (err) => !cancelled && setError(describe(err)),
     );
+    fetchEconomics().then((logs) => !cancelled && logs && setEconomics(logs));
     return () => {
       cancelled = true;
     };
@@ -235,6 +257,32 @@ export function Workspace() {
 
   const branchTitles = Object.fromEntries(state.conversations.map((c) => [c.id, c.title]));
 
+  // Per-branch spend, summed over every inference the engine logged against that branch.
+  const costByBranch = new Map<string, number>();
+  for (const log of economics?.logs ?? []) {
+    costByBranch.set(log.branchId, (costByBranch.get(log.branchId) ?? 0) + log.estCostUsd);
+  }
+
+  // An insight is stored on the parent it landed on, so count them back onto their source.
+  const mergedByBranch = new Map<string, number>();
+  for (const conversation of state.conversations) {
+    for (const insight of conversation.insights) {
+      mergedByBranch.set(insight.branchId, (mergedByBranch.get(insight.branchId) ?? 0) + 1);
+    }
+  }
+
+  const nodeStats: Record<string, NodeStats> = Object.fromEntries(
+    state.conversations.map((c) => [
+      c.id,
+      {
+        // Same formula as the chat header (ChatPane) so the card and the header agree.
+        contextTokens: conversationTokens(c.messages) + (c.brief?.briefTokens ?? 0),
+        costUsd: costByBranch.get(c.id) ?? null,
+        mergedInsights: mergedByBranch.get(c.id) ?? 0,
+      },
+    ]),
+  );
+
   return (
     <main className="flex min-h-0 flex-1">
       <TreeSidebar
@@ -243,6 +291,16 @@ export function Workspace() {
         onSelect={setActiveId}
         onOpenEconomics={() => setEconomicsOpen(true)}
         flashId={merged?.parentId ?? null}
+        stats={nodeStats}
+        session={
+          // Before the first inference the totals are all zero — show the label, not "$0.0000".
+          economics && economics.totals.inferenceCount > 0
+            ? {
+                costUsd: economics.totals.costUsd,
+                inputTokens: economics.totals.inputTokens,
+              }
+            : null
+        }
       />
       {active ? (
         <ChatPane
