@@ -239,7 +239,35 @@ rather than `tier`. The layout module is label-agnostic and needs no change.
 Build clean, lint clean, verified in-browser against the pre-M5 store: branch → depth-2 nesting,
 merge → arc → archived card → insight landing on the parent.
 
-**Do not cut** (DEMO.md): branch + compiled brief with pruned-%, the ⚡/🔬 contrast on the two demo questions, merge-insight, the counters. Note the mock classifier is deliberately heuristic so that contrast survives with zero keys — do not "simplify" it to a constant.
+### Requested next, UI session — "make it behave like a real website" (Tarun, 2026-08-07 ~14:10)
+
+Three things. The engine half of the third is **done and deployed**; the other two are `app/**` /
+`components/**`, so B did not touch them.
+
+1. **Back / forward must work.** The selected branch lives in React state, so the browser buttons
+   do nothing and a shared link always lands on the root. Put the selection in the URL —
+   `/?branch=branch_15` with `useSearchParams` + `router.push` is the smallest change that works;
+   a `/b/[branchId]` route is nicer if there is time. Back/forward then work for free.
+2. **Reload must land where you were.** Follows from 1 — state already comes from `GET /api/state`
+   on mount, so once the branch id is in the URL a refresh restores the view. Nothing else needed.
+3. **Reset button — endpoint is live: `POST /api/reset`.** No body. Returns a full
+   `StateResponse` (`rootId` / `tree` / `conversations`), so render its response directly instead
+   of re-fetching. Put it somewhere deliberate — it throws away everything the audience just
+   watched you create. Confirm before firing.
+   - **Use this instead of deleting the Neon row.** Clearing the snapshot by hand does not reset a
+     warm lambda: globalThis still holds the old tree and the next request writes it straight back.
+     That is exactly what happened at 13:55 — the manual `DELETE` left an 8-node tree in production.
+     `resetStore()` replaces memory first, then persists over the top.
+   - Also fixed in that commit: `logInference` was pushing into the imported JSON fixture array in
+     place, so rehearsal logs accumulated in the fixture for the life of the process and survived
+     every rebuild. `build()` now clones. Verified: 8 nodes / 17 logs after a rehearsal → 7 / 14
+     after reset.
+
+**Production is green as of 14:15** — Vercel Authentication off, `/`, `/api/state`, `/api/modes`,
+`/api/economics`, `/api/reset` all 200, tree reset to the pre-built 7 nodes with model·effort
+labels, 14 logs, 95.8% cost saved.
+
+**Do not cut** (DEMO.md): branch + compiled brief with pruned-%, the cheap-vs-strong contrast on the two demo questions, merge-insight, the counters. Note the mock classifier is deliberately heuristic so that contrast survives with zero keys — do not "simplify" it to a constant.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
