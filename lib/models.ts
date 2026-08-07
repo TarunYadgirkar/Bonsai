@@ -1,19 +1,20 @@
 import type { Tier } from './types';
 
 /**
- * Single source of truth for tier -> Snowflake Cortex model, per docs/snowflake-notes.md.
+ * Single source of truth for tier -> model class. Surfaced on the routing chips.
  *
- * PLACEHOLDERS. Model availability varies by Cortex account and region — confirm the exact
- * names against the AI_COMPLETE docs page and the trial account before M1 lands, and change
- * them here only. Nothing else in the codebase should name a model.
+ * These name a capability class, not a specific model, and that is deliberate: Cortex is
+ * unavailable for this build (see AGENTS.md), so no request is sent anywhere and a concrete
+ * vendor model name on screen would assert something untrue. Restore real model identifiers
+ * here — and only here — if a live inference backend ever lands.
  */
 export const MODEL_TIERS: Record<Tier, string> = {
-  quick: 'claude-haiku',
-  thoughtful: 'claude-sonnet',
-  deep: 'claude-opus',
+  quick: 'small-fast',
+  thoughtful: 'mid-balanced',
+  deep: 'large-reasoning',
 };
 
-/** USD per 1M tokens. Placeholders — replace with the account's real Cortex rates. */
+/** USD per 1M tokens, at published rates for each class. Modeled, not billed. */
 export const MODEL_PRICING: Record<Tier, { input: number; output: number }> = {
   quick: { input: 0.8, output: 4 },
   thoughtful: { input: 3, output: 15 },
