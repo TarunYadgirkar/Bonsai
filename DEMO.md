@@ -20,7 +20,7 @@ New branch off the root: **"Given my goals, workload, and everything we've learn
 Back in the Free Ventures branch: click **Merge insight**. One distilled line — *"Free Ventures applications close September 11, with an info session on September 3"* — flows into the parent and is written to durable memory (the "· durable memory" tag only appears when that write really succeeded). Archive the branch. "Explore messy, keep the parent clean, keep the learning. Branching exists in other products. Merging *back* doesn't."
 
 **Beat 5 — The economics (2:20–2:50).**
-Open the economics panel: every inference in this tree — model, effort, context tokens, modeled cost, and the session totals. *Full-history baseline vs. what Bonsai actually sent: ~56% fewer tokens, ~96% less spend.* "These are computed from this tree, not slides — the baseline is the real token count of the history each branch would have inherited."
+Open the economics panel: every inference in this tree — model, effort, context tokens, modeled cost, and the session totals. *Full-history baseline vs. what Bonsai actually sent: ~54% fewer tokens, ~95% less spend.* "These are computed from this tree, not slides — the baseline is the real token count of the history each branch would have inherited."
 
 **Beat 6 — Close (2:50–3:00).**
 "The cheapest token is the one you don't send. The second cheapest is the one you send to the right model. Bonsai routes intelligence."
@@ -29,6 +29,10 @@ Open the economics panel: every inference in this tree — model, effort, contex
 
 **Fallbacks:** if wifi/API dies → play the backup recording. If EverMind is down → memory writes go to the local store, say "durable memory layer" and move on.
 
-**Setup note:** the app boots with the tree already built — six branches, one per feature, including one already merged back. Beats 2 and 3 can be walked live (highlight → Branch) or shown from the pre-built branches if the room is rushed. Nothing has to be typed.
+**Setup note:** the app boots with the tree already built — six branches, one per feature, nothing merged yet. Beats 2 and 3 can be walked live (highlight → Branch) or shown from the pre-built branches if the room is rushed. Nothing has to be typed.
+
+**Reset:** "Reset demo" at the bottom of the sidebar (click twice) puts the tree back to this opening state — merge archived a branch and dropped an insight on the parent, and this undoes both, so Beat 4 can be shown again. Hit it after every rehearsal.
+
+**Modes:** Haiku 4.5 → Sonnet 5 → Opus 5 → Fable 5, each at Low/Medium/High/Max effort, plus Auto. Auto routes the two demo questions; Blueprint is pinned to Fable 5 · Max to show a deliberate override. Fable is the ceiling — where a deep answer escalates when it still isn't good enough.
 
 **What is real if a judge pushes:** the 19,013-token baseline, every compiled brief and pruned-%, the routing decisions, and the whole savings ratio — all computed. The dollar column is modeled at published per-token rates. Snowflake Cortex is unavailable on this account, so completions are generated locally; don't claim otherwise.
