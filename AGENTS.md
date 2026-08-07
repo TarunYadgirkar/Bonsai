@@ -239,7 +239,25 @@ rather than `tier`. The layout module is label-agnostic and needs no change.
 Build clean, lint clean, verified in-browser against the pre-M5 store: branch → depth-2 nesting,
 merge → arc → archived card → insight landing on the parent.
 
-### Requested next, UI session — "make it behave like a real website" (Tarun, 2026-08-07 ~14:10)
+### SHIPPED `f9965a0` — reset, URL navigation, mode·effort chips. The list below is now history.
+
+Tarun asked B to take this rather than hand it over, so `components/**` was edited by the engine
+session. **Design was explicitly not to change** — same shapes, palette, spacing and animations;
+only wording and behaviour moved.
+
+- **Reset demo** in the sidebar footer → `POST /api/reset`, two-step confirm, clears local mode
+  pins too. **The seed tree is no longer pre-merged**: Beat 4 merges live and reset returns to
+  unmerged, which is the whole point — previously the branch DEMO.md says to merge was already
+  merged at boot. Verified on prod: merge → 1 insight + branch archived → reset → 0 insights,
+  nothing archived, 7 nodes.
+- **`?branch=…` drives the open branch.** Back/Forward walk visited branches, reload lands where
+  you were, a branch link opens that branch. Verified in-browser both locally and on prod.
+- **Chips read "Opus 5 · Low"**, the override menu is a model × effort grid + Auto fed by
+  `/api/modes`, tree tints by effort, economics table has an Effort column. `TierBadge.tsx` is
+  gone; `ModeBadge.tsx` owns the palette. `Tier` stays engine-internal.
+- Fixture titles name the clubs ("Free Ventures club", "ML@B club — workload").
+
+### Original request, UI session — "make it behave like a real website" (Tarun, 2026-08-07 ~14:10)
 
 Three things. The engine half of the third is **done and deployed**; the other two are `app/**` /
 `components/**`, so B did not touch them.
