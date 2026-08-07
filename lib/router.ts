@@ -192,7 +192,7 @@ export async function completeWithEscalation(params: {
   if (!answerFailsSanityCheck(first.text)) {
     return {
       text: first.text,
-      routing: { ...params.routing, estCostUsd: first.estCostUsd },
+      routing: { ...params.routing, estCostUsd: first.estCostUsd, servedBy: first.servedBy },
       inputTokens: first.inputTokens,
       outputTokens: first.outputTokens,
     };
@@ -209,7 +209,7 @@ export async function completeWithEscalation(params: {
   if (!upgraded && atCeiling) {
     return {
       text: first.text,
-      routing: { ...params.routing, estCostUsd: first.estCostUsd },
+      routing: { ...params.routing, estCostUsd: first.estCostUsd, servedBy: first.servedBy },
       inputTokens: first.inputTokens,
       outputTokens: first.outputTokens,
     };
@@ -234,6 +234,7 @@ export async function completeWithEscalation(params: {
       modelLabel: modelSpec(upgradedModel).label,
       label: routingLabel(upgradedModel, upgradedEffort),
       effortNote: effortNote(upgradedModel, upgradedEffort),
+      servedBy: second.servedBy,
       escalated: true,
       reason: `${params.routing.reason} Escalated to ${routingLabel(upgradedModel, upgradedEffort)}: the ${
         params.routing.label ?? params.routing.modelLabel

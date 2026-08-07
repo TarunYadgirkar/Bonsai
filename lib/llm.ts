@@ -1,10 +1,13 @@
 /**
- * Snowflake Cortex client. One model parameter, many models — the substrate the router needs.
+ * Inference. One model parameter, many models — the substrate the router needs.
  *
- * Mock mode activates automatically when SNOWFLAKE_ACCOUNT_URL or SNOWFLAKE_PAT is missing,
- * with realistic token math, so the DEMO.md script is walkable with zero keys (AGENTS.md).
+ * Three layers, first one available wins:
+ *   1. A live provider (lib/provider.ts) when ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY is set.
+ *   2. Snowflake Cortex, kept behind its interface but barred on this account (AGENTS.md → CLOSED).
+ *   3. The mock, with realistic token math, so DEMO.md is walkable with zero keys.
  */
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, effortSpec } from './models';
+import { providerComplete } from './provider';
 import { estimateTokens } from './tokens';
 import type { Effort, Tier } from './types';
 
@@ -37,8 +40,10 @@ export interface CompleteResult {
   inputTokens: number;
   outputTokens: number;
   estCostUsd: number;
-  /** True when the response came from the mock, not from Cortex. */
+  /** True when the response came from the mock rather than a live model. */
   mock: boolean;
+  /** Upstream model that actually answered. Absent on the mock. */
+  servedBy?: string;
 }
 
 /**
@@ -56,6 +61,28 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
   const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
   const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
   const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
+
+  // A live key wins over everything: real completion, real token counts off the API's own usage.
+  const live = await providerComplete({
+    model,
+    messages,
+    maxTokens,
+    temperature: params.temperature,
+  });
+  if (live) {
+    const usedInput = live.inputTokens || inputTokens;
+    const usedOutput = live.outputTokens || estimateTokens(live.text);
+    return {
+      text: live.text,
+      model,
+      tier,
+      inputTokens: usedInput,
+      outputTokens: usedOutput,
+      estCostUsd: costForModel(model, usedInput, usedOutput),
+      mock: false,
+      servedBy: live.servedBy,
+    };
+  }
 
   if (!isCortexEnabled()) {
     return mockComplete(tier, model, messages, inputTokens);

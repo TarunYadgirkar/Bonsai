@@ -132,6 +132,7 @@ export function TreeSidebar({
   onSelect,
   onOpenEconomics,
   onReset,
+  onNewChat,
   flashId,
   stats,
   session,
@@ -142,6 +143,8 @@ export function TreeSidebar({
   onOpenEconomics: () => void;
   /** Throws away the current run and re-seeds the demo tree. */
   onReset: () => Promise<void>;
+  /** Starts an empty root conversation alongside the existing trees. */
+  onNewChat: () => Promise<void>;
   /** Node a merged insight just landed on — pulses for a beat. */
   flashId: string | null;
   stats: Record<string, NodeStats>;
@@ -151,6 +154,17 @@ export function TreeSidebar({
   const layout = layoutTree(nodes);
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
+
+  const [creating, setCreating] = useState(false);
+
+  const startNewChat = async () => {
+    setCreating(true);
+    try {
+      await onNewChat();
+    } finally {
+      setCreating(false);
+    }
+  };
 
   const runReset = async () => {
     setResetting(true);
@@ -167,9 +181,18 @@ export function TreeSidebar({
       className="flex shrink-0 flex-col border-r border-white/10 bg-neutral-950"
       style={{ width: CANVAS_WIDTH }}
     >
-      <div className="border-b border-white/10 px-4 py-3">
-        <h1 className="text-sm font-semibold tracking-tight text-white">Bonsai</h1>
-        <p className="mt-0.5 text-[11px] text-neutral-500">Grow conversations as trees</p>
+      <div className="flex items-start justify-between gap-2 border-b border-white/10 px-4 py-3">
+        <div className="min-w-0">
+          <h1 className="text-sm font-semibold tracking-tight text-white">Bonsai</h1>
+          <p className="mt-0.5 text-[11px] text-neutral-500">Grow conversations as trees</p>
+        </div>
+        <button
+          onClick={startNewChat}
+          disabled={creating}
+          className="shrink-0 rounded-md border border-white/15 px-2 py-1 text-[11px] text-neutral-300 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+        >
+          {creating ? 'Starting…' : 'New chat'}
+        </button>
       </div>
 
       <div className="relative min-h-0 flex-1 overflow-y-auto">
