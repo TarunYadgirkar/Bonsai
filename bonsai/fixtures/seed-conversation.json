@@ -1,0 +1,32 @@
+{
+  "id": "conv_root_berkeley_clubs",
+  "title": "Berkeley Clubs Research",
+  "note": "Demo fixture. Illustrative club facts written for the demo — not verified real-world info. Agents may APPEND messages to make this longer/richer (target: feels like an hour of research) but must not alter existing facts, especially the Free Ventures deadline and the Berkeley Consulting rejection, which the demo depends on.",
+  "profile": {
+    "name": "Tarun",
+    "context": "Incoming Berkeley freshman, applied math, CS-focused. Building a startup on the side.",
+    "goals": [
+      "startup and technical exposure over resume-padding",
+      "tight community over huge orgs",
+      "wary of clubs with brutal recruiting processes or huge time commitments"
+    ]
+  },
+  "messages": [
+    { "id": "m1", "role": "user", "content": "I'm an incoming Berkeley freshman doing applied math but really I care about CS, AI, and startups. I want to figure out which clubs to actually go for in the fall. I'd rather join 2 great ones than 5 mediocre ones." },
+    { "id": "m2", "role": "assistant", "content": "Good constraint. Let's define what 'great' means for you first: do you want clubs that get you building (project/dev clubs), clubs that get you into the startup ecosystem (accelerator/VC-adjacent), or clubs that are mostly social/community?" },
+    { "id": "m3", "role": "user", "content": "Building and startup ecosystem. Community matters but as a property of the club, not the point of it. Also I'm already running a startup with a cofounder so time is genuinely limited — maybe 8-10 hrs/week total for clubs." },
+    { "id": "m4", "role": "assistant", "content": "Noted: builder-first, startup-adjacent, tight-knit, hard cap around 8-10 hours/week across everything. Candidates worth researching: Machine Learning at Berkeley (ML@B), Free Ventures, Codebase, Blueprint, Berkeley Consulting, and the hackathon org scene. Want to go through them one by one?" },
+    { "id": "m5", "role": "user", "content": "Yeah let's do it. Start with ML@B." },
+    { "id": "m6", "role": "assistant", "content": "ML@B: the serious ML org — research-style projects and industry collaborations. Strong technical signal and alumni network. The flip side: selective admissions and a real workload; members describe it as a part-time job during project cycles. Given your 8-10 hour cap while running a startup, it would likely be your ONLY club if you join." },
+    { "id": "m7", "role": "user", "content": "Hmm. Strong maybe. What about Free Ventures? That one sounds most aligned with what I'm already doing." },
+    { "id": "m8", "role": "assistant", "content": "Free Ventures is Berkeley's student-run startup accelerator — you apply WITH your startup, and if accepted you get structure, mentorship, and demo day exposure. For someone already building, it converts time you're already spending into community and accountability rather than adding a new workload. Key logistics from their fall cycle: applications close September 11, with an info session on September 3." },
+    { "id": "m9", "role": "user", "content": "Ok that's basically perfect for us. What about Codebase?" },
+    { "id": "m10", "role": "assistant", "content": "Codebase does semester-long software projects for real industry clients in small teams. Great engineering experience and a close-knit team structure. But it's a significant fixed commitment on someone else's project — which competes directly with your startup hours rather than compounding them. Good option if you want pure swe reps; redundant if Free Ventures works out." },
+    { "id": "m11", "role": "user", "content": "What about Berkeley Consulting? A friend keeps hyping it." },
+    { "id": "m12", "role": "assistant", "content": "Berkeley Consulting is prestigious and well-run, but it's consulting: client decks and business analysis, with a famously intense multi-round recruiting process including case-style interviews. Based on everything you've said — builder-first, allergic to heavy recruiting theater — this looks like a poor fit despite the brand." },
+    { "id": "m13", "role": "user", "content": "Yeah, ruling out Berkeley Consulting. Case interviews for a club is exactly what I said I didn't want. What about Blueprint?" },
+    { "id": "m14", "role": "assistant", "content": "Ruled out: Berkeley Consulting (recruiting process mismatch). Blueprint builds software for nonprofits — mission-driven, welcoming culture, moderate commitment. It's the most community-warm option on your list, though the least startup-adjacent. A reasonable second club if your first is Free Ventures rather than ML@B." },
+    { "id": "m15", "role": "user", "content": "Ok so current state of my head: Free Ventures is priority one, then it's ML@B vs Codebase vs Blueprint for the second slot, leaning ML@B if I can survive the workload. Keep all this — I'll come back after I talk to my cofounder about the Free Ventures app." },
+    { "id": "m16", "role": "assistant", "content": "Saved state: Priority 1 = Free Ventures (apply with the startup; apps close Sept 11, info session Sept 3). Slot 2 = ML@B vs Codebase vs Blueprint — leaning ML@B, workload is the open question against your 8-10 hr/week cap. Ruled out = Berkeley Consulting (case-interview recruiting). Open thread: cofounder conversation before the Free Ventures application." }
+  ]
+}
