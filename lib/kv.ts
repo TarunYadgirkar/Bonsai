@@ -26,15 +26,27 @@ export function kvBackend(): 'neon' | 'upstash' | 'memory' {
   return 'memory';
 }
 
-/** Returns null on miss AND on any failure — callers keep whatever is already in memory. */
-export async function kvGet(key: string): Promise<string | null> {
+/**
+ * A miss and a failure must stay distinguishable. Collapsing both to null lets one transient
+ * read error convince loadStore() the store is empty, which overwrites a live tree with a fresh
+ * fixture — the tree vanishing mid-demo is the exact failure this whole file exists to prevent.
+ */
+export type KvRead =
+  | { status: 'hit'; value: string }
+  | { status: 'miss' }
+  | { status: 'error' };
+
+export async function kvGet(key: string): Promise<KvRead> {
   try {
-    if (DATABASE_URL) return await neonGet(key);
-    if (REDIS_URL && REDIS_TOKEN) return await redisGet(key);
-    return null;
+    const value = DATABASE_URL
+      ? await neonGet(key)
+      : REDIS_URL && REDIS_TOKEN
+        ? await redisGet(key)
+        : null;
+    return value === null ? { status: 'miss' } : { status: 'hit', value };
   } catch (err) {
     console.warn(`[kv] get failed (${(err as Error).message}) — continuing from memory`);
-    return null;
+    return { status: 'error' };
   }
 }
 
@@ -79,10 +91,8 @@ async function redisGet(key: string): Promise<string | null> {
     cache: 'no-store',
     signal: AbortSignal.timeout(TIMEOUT_MS),
   });
-  if (!res.ok) {
-    console.warn(`[kv] upstash get ${res.status} — continuing from memory`);
-    return null;
-  }
+  // Throw, don't return null: a 5xx is an error, not an empty store.
+  if (!res.ok) throw new Error(`upstash get ${res.status}`);
   const body = (await res.json()) as { result?: string | null };
   return body.result ?? null;
 }
