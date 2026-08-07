@@ -13,7 +13,7 @@
 
 ## Person B, pre-event scratch session (~10:15 AM, outside the repo)
 
-> Create a scratch folder. Two tasks, nothing fancy: (1) Using the Snowflake account in my env vars (SNOWFLAKE_ACCOUNT_URL, SNOWFLAKE_PAT), make one successful REST call to Cortex `AI_COMPLETE` (`/api/v2/cortex/inference:complete`) with model `claude-haiku` or any cheap available model, prompt "say ok", and print the response + token usage. (2) Using EVERMIND_API_KEY, hit the EverOS v1 API: add one memory, then search it back, print both responses. Consult the API notes in ~/bonsai/docs/ if present; if a call fails, show me the exact request and error — do not invent endpoints. Stop when both round-trips print.
+> Create a scratch folder. Two tasks, nothing fancy: (1) Using the Snowflake account in my env vars (SNOWFLAKE_ACCOUNT_URL, SNOWFLAKE_PAT), make one successful REST call to Cortex `AI_COMPLETE` (`/api/v2/cortex/inference:complete`) with model `claude-haiku` or any cheap available model, prompt "say ok", and print the response + token usage. (2) Using EVERMIND_API_KEY, hit the EverOS v1 API: add one memory, then search it back, print both responses. Consult the API notes in ~/TarunsCode/bonsai/docs/ if present; if a call fails, show me the exact request and error — do not invent endpoints. Stop when both round-trips print.
 
 ## Person A — M0 kickoff (11:00, empty repo dir)
 
