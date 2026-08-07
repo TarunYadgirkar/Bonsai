@@ -1,5 +1,7 @@
 import type { Effort, Tier } from './types';
 
+// Presentation is model + effort, never a tier name — see routingLabel at the bottom of this file.
+
 /**
  * The catalog behind the mode picker: three Claude models × four effort levels, plus Auto
  * (no explicit choice — the router classifies and picks for you).
@@ -83,7 +85,7 @@ export function effortSpec(level: Effort): EffortSpec {
   return EFFORTS.find((e) => e.level === level) ?? EFFORTS[0];
 }
 
-/** A manual pick lands on the tier its model is the default for — that drives the ⚡/🧠/🔬 chip. */
+/** A manual pick lands on the tier its model is the default for; the tier stays internal. */
 export function tierFor(modelId: string): Tier {
   return modelSpec(modelId).tier;
 }
@@ -121,8 +123,18 @@ export const TIER_EFFORT: Record<Tier, string> = {
   deep: effortNote(MODEL_TIERS.deep, 'high'),
 };
 
+/**
+ * How a routing decision reads on screen: model and effort, the way Claude states it —
+ * "Opus 5 · High effort". The old ⚡/🧠/🔬 tier names are gone from the surface (Tarun,
+ * 2026-08-07); `Tier` survives only as the classifier's internal 1-3 mapping.
+ */
+export function routingLabel(modelId: string, effort: Effort): string {
+  return `${modelSpec(modelId).label} · ${effortSpec(effort).label} effort`;
+}
+
+/** What Auto's choice reads as for a given tier, for pickers that still think in tiers. */
 export const TIER_LABEL: Record<Tier, string> = {
-  quick: '⚡ Quick',
-  thoughtful: '🧠 Thoughtful',
-  deep: '🔬 Deep',
+  quick: routingLabel(TIER_DEFAULTS.quick.model, TIER_DEFAULTS.quick.effort),
+  thoughtful: routingLabel(TIER_DEFAULTS.thoughtful.model, TIER_DEFAULTS.thoughtful.effort),
+  deep: routingLabel(TIER_DEFAULTS.deep.model, TIER_DEFAULTS.deep.effort),
 };

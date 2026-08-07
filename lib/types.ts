@@ -73,6 +73,8 @@ export interface RoutingDecision {
   effort?: Effort;
   /** Display label for the chosen model, e.g. "Opus 5". Always set by the engine. */
   modelLabel?: string;
+  /** What the chip should read: "Opus 5 · High effort". No tier names on the surface. */
+  label?: string;
   /** Human phrasing of reasoning effort, e.g. "low effort, single pass". */
   effortNote: string;
   contextTokens: number;

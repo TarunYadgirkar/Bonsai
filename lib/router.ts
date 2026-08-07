@@ -10,10 +10,12 @@ import {
   INTERNAL_TIER,
   MODEL_TIERS,
   TIER_DEFAULTS,
+  TIER_LABEL,
   costForModel,
   effortNote,
   effortSpec,
   modelSpec,
+  routingLabel,
 } from './models';
 import type {
   Complexity,
@@ -68,7 +70,7 @@ export async function route(params: RouteParams): Promise<RoutingDecision> {
       tier: pinnedTier,
       complexity: TIER_BY_COMPLEXITY[3] === pinnedTier ? 3 : 2,
       contextTokens,
-      reason: `Branch pinned to ${pinnedTier} by you; classification skipped.`,
+      reason: `Branch pinned to ${TIER_LABEL[pinnedTier]} by you; classification skipped.`,
       overridden: true,
     });
   }
@@ -149,6 +151,7 @@ function decision(params: {
     model,
     effort,
     modelLabel: modelSpec(model).label,
+    label: routingLabel(model, effort),
     effortNote: effortNote(model, effort),
     contextTokens: params.contextTokens,
     estCostUsd: costForModel(model, params.contextTokens, outputTokens),
@@ -220,9 +223,12 @@ export async function completeWithEscalation(params: {
       model: upgradedModel,
       effort: upgradedEffort,
       modelLabel: modelSpec(upgradedModel).label,
+      label: routingLabel(upgradedModel, upgradedEffort),
       effortNote: effortNote(upgradedModel, upgradedEffort),
       escalated: true,
-      reason: `${params.routing.reason} Escalated to ${upgraded}: the ${params.routing.tier} answer failed the sanity check.`,
+      reason: `${params.routing.reason} Escalated to ${routingLabel(upgradedModel, upgradedEffort)}: the ${
+        params.routing.label ?? params.routing.modelLabel
+      } answer failed the sanity check.`,
       estCostUsd: first.estCostUsd + second.estCostUsd,
     },
     inputTokens: first.inputTokens + second.inputTokens,

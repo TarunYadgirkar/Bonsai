@@ -50,13 +50,13 @@ const SCENARIOS: Scenario[] = [
     title: 'ML@B workload',
   },
   {
-    note: 'auto → deep: multi-constraint ranking, the ⚡-vs-🔬 contrast',
+    note: 'auto → Opus 5 / high: multi-constraint ranking, the cheap-vs-strong contrast',
     parent: 'root',
     selection: 'which clubs to join',
     question:
       "Given my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.",
     // No follow-up here on purpose: the node badge shows the LAST turn's tier, and a cheap
-    // follow-up would flip this branch's 🔬 to ⚡ — the exact contrast the demo is built on.
+    // follow-up would flip this branch's Opus chip to Haiku — the contrast the demo is built on.
     title: 'Rank my top 3',
   },
   {
@@ -65,8 +65,9 @@ const SCENARIOS: Scenario[] = [
     selection: 'opportunity cost',
     question: 'why is Codebase dominated in every scenario?',
     title: 'Why Codebase loses',
-    // The multi-turn example lives here: this branch is already quick, so an extra cheap turn
-    // costs no badge. Putting it on the deep or thoughtful branch would overwrite their chip.
+    // The multi-turn example lives here: this branch already routes to the cheapest model, so an
+    // extra cheap turn costs no chip. On the Opus or Sonnet branch it would overwrite theirs —
+    // the node chip shows the LAST turn's decision.
     followUps: [{ content: 'what changes if I only have 8 hours a week?' }],
   },
   {
