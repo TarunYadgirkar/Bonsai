@@ -49,6 +49,9 @@ interface SearchData {
   unprocessed_messages?: Array<{ id: string; content: string; session_id?: string }>;
 }
 
+/** Stable owner id for every memory Bonsai writes. Matches the test id in docs/evermind-official-v2.md. */
+export const MEMORY_USER_ID = 'bonsai_tarun';
+
 export function isRemoteEnabled(): boolean {
   return Boolean(API_KEY);
 }

@@ -1,11 +1,13 @@
+import { MEMORY_USER_ID, type MemoryHit, searchMemories } from '@/lib/memory';
 import { buildLog, mockBrief, mockMessage, mockRoute } from '@/lib/mock';
 import { buildTree, getConversation, logInference, nextId, putConversation } from '@/lib/store';
-import { estimateTokens } from '@/lib/tokens';
+import { estimateTokens, prunedPct } from '@/lib/tokens';
 import type {
   ApiError,
   BranchRequest,
   BranchResponse,
   Conversation,
+  ContextBrief,
   Message,
   RoutingDecision,
 } from '@/lib/types';
@@ -27,7 +29,14 @@ export async function POST(request: Request) {
 
   const branchId = nextId('branch');
   const question = body.question ?? '';
-  const brief = mockBrief(branchId, parent.id, body.selection, question);
+  const base = mockBrief(branchId, parent.id, body.selection, question);
+
+  // Per-branch memory recall — what the branch is FOR decides which memories it deserves.
+  const hits = await searchMemories({
+    query: question || body.selection,
+    userId: MEMORY_USER_ID,
+  });
+  const brief = hits.length ? withMemory(base, hits) : base;
 
   let messages: Message[] = [];
   let routing: RoutingDecision | undefined;
@@ -73,4 +82,20 @@ export async function POST(request: Request) {
 
   const response: BranchResponse = { node, conversation, brief, message: answer, routing };
   return Response.json(response);
+}
+
+/** Folding memory in grows the brief, so the token math and pruned-% have to be recomputed. */
+function withMemory(base: ContextBrief, hits: MemoryHit[]): ContextBrief {
+  const markdown = `${base.markdown}\n\n## Recalled memory\n${hits
+    .map((h) => `- ${h.text}`)
+    .join('\n')}`;
+  const briefTokens = estimateTokens(markdown);
+  return {
+    ...base,
+    facts: [...base.facts, ...hits.map((h) => `Recalled: ${h.text}`)],
+    markdown,
+    briefTokens,
+    prunedPct: prunedPct(base.availableTokens, briefTokens),
+    memoryIds: hits.map((h) => h.id),
+  };
 }
