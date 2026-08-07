@@ -1,7 +1,11 @@
-import { buildLog, mockMessage, mockRoute } from '@/lib/mock';
+import { buildLog } from '@/lib/mock';
+import { completeWithEscalation, route } from '@/lib/router';
 import { appendMessage, availableTokensFor, getConversation, logInference, nextId } from '@/lib/store';
-import { estimateTokens } from '@/lib/tokens';
+import { messagesTokens } from '@/lib/tokens';
 import type { ApiError, ChatRequest, ChatResponse } from '@/lib/types';
+
+const ANSWER_SYSTEM_PROMPT =
+  'You answer using only the context provided. If it is a compiled brief, it is deliberately minimal and self-contained; if it genuinely lacks what you need, say so plainly rather than guessing.';
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<ChatRequest>;
@@ -25,29 +29,63 @@ export async function POST(request: Request) {
     createdAt: new Date().toISOString(),
   });
 
-  // A branch answers off its compiled brief; the root has no brief and carries its own history.
+  // A branch answers off its compiled brief plus its own turns; the root carries full history.
+  const priorTurns = messagesTokens(conversation.messages);
   const contextTokens = conversation.brief
-    ? conversation.brief.briefTokens
-    : availableTokensFor(conversation.parentId) + estimateTokens(body.content);
+    ? conversation.brief.briefTokens + priorTurns
+    : priorTurns + availableTokensFor(conversation.parentId);
+
+  const context = conversation.brief
+    ? `${conversation.brief.markdown}\n\n---\n## This branch so far\n${renderTurns(conversation.messages)}`
+    : renderTurns(conversation.messages);
 
   const pinnedTier = body.pinnedTier ?? conversation.pinnedTier;
-  const routing = mockRoute(body.content, contextTokens, pinnedTier);
-  const message = mockMessage(routing.tier, body.content, routing);
+  const initial = await route({
+    question: body.content,
+    brief: conversation.brief,
+    contextTokens,
+    pinnedTier,
+  });
+
+  const result = await completeWithEscalation({
+    routing: initial,
+    systemPrompt: ANSWER_SYSTEM_PROMPT,
+    userPrompt: `${context}\n\n---\n${body.content}`,
+  });
+
+  const message = {
+    id: nextId('msg'),
+    role: 'assistant' as const,
+    content: result.text,
+    routing: result.routing,
+    createdAt: new Date().toISOString(),
+  };
   appendMessage(conversation.id, message);
 
   const log = logInference(
     buildLog({
       branchId: conversation.id,
       purpose: 'chat',
-      tier: routing.tier,
-      inputTokens: contextTokens,
-      outputTokens: estimateTokens(message.content),
+      tier: result.routing.tier,
+      inputTokens: result.inputTokens,
+      outputTokens: result.outputTokens,
       baselineInputTokens: conversation.brief
-        ? conversation.brief.availableTokens
+        ? conversation.brief.availableTokens + priorTurns
         : contextTokens,
+      escalated: result.routing.escalated,
+      overridden: result.routing.overridden,
     }),
   );
 
-  const response: ChatResponse = { branchId: conversation.id, message, routing, log };
+  const response: ChatResponse = {
+    branchId: conversation.id,
+    message,
+    routing: result.routing,
+    log,
+  };
   return Response.json(response);
+}
+
+function renderTurns(messages: { role: string; content: string }[]): string {
+  return messages.map((m) => `${m.role}: ${m.content}`).join('\n\n');
 }

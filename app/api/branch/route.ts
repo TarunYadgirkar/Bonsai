@@ -1,16 +1,29 @@
-import { MEMORY_USER_ID, type MemoryHit, searchMemories } from '@/lib/memory';
-import { buildLog, mockBrief, mockMessage, mockRoute } from '@/lib/mock';
-import { buildTree, getConversation, logInference, nextId, putConversation } from '@/lib/store';
-import { estimateTokens, prunedPct } from '@/lib/tokens';
+import { compileBrief } from '@/lib/compiler';
+import { MEMORY_USER_ID, searchMemories } from '@/lib/memory';
+import { buildLog } from '@/lib/mock';
+import { INTERNAL_TIER } from '@/lib/models';
+import { completeWithEscalation, route } from '@/lib/router';
+import {
+  availableTokensFor,
+  buildTree,
+  getConversation,
+  logInference,
+  nextId,
+  putConversation,
+} from '@/lib/store';
+import { estimateTokens } from '@/lib/tokens';
 import type {
   ApiError,
   BranchRequest,
   BranchResponse,
   Conversation,
-  ContextBrief,
   Message,
   RoutingDecision,
+  UserProfile,
 } from '@/lib/types';
+
+const ANSWER_SYSTEM_PROMPT =
+  'You answer using only the compiled brief provided. It is deliberately minimal and self-contained. If the brief genuinely lacks what you need, say so plainly rather than guessing.';
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<BranchRequest>;
@@ -29,22 +42,55 @@ export async function POST(request: Request) {
 
   const branchId = nextId('branch');
   const question = body.question ?? '';
-  const base = mockBrief(branchId, parent.id, body.selection, question);
+  const availableTokens = availableTokensFor(parent.id) + estimateTokens(body.selection);
 
-  // Per-branch memory recall — what the branch is FOR decides which memories it deserves.
-  const hits = await searchMemories({
+  // Per-branch retrieval: what the branch is FOR decides which memories it deserves.
+  const memories = await searchMemories({
     query: question || body.selection,
     userId: MEMORY_USER_ID,
   });
-  const brief = hits.length ? withMemory(base, hits) : base;
+
+  const brief = await compileBrief({
+    briefId: nextId('brief'),
+    branchId,
+    parentMessages: parent.messages,
+    profile: profileFor(parent),
+    selection: body.selection,
+    question,
+    memories,
+    availableTokens,
+  });
+
+  logInference(
+    buildLog({
+      branchId,
+      purpose: 'compile',
+      tier: INTERNAL_TIER,
+      inputTokens: availableTokens,
+      outputTokens: brief.briefTokens,
+      baselineInputTokens: availableTokens,
+    }),
+  );
 
   let messages: Message[] = [];
   let routing: RoutingDecision | undefined;
   let answer: Message | undefined;
 
   if (question) {
-    routing = mockRoute(question, brief.briefTokens, null);
-    answer = mockMessage(routing.tier, question, routing);
+    const initial = await route({ question, brief, contextTokens: brief.briefTokens });
+    const result = await completeWithEscalation({
+      routing: initial,
+      systemPrompt: ANSWER_SYSTEM_PROMPT,
+      userPrompt: `${brief.markdown}\n\n---\n${question}`,
+    });
+    routing = result.routing;
+    answer = {
+      id: nextId('msg'),
+      role: 'assistant',
+      content: result.text,
+      routing,
+      createdAt: new Date().toISOString(),
+    };
     messages = [
       { id: nextId('msg'), role: 'user', content: question, createdAt: new Date().toISOString() },
       answer,
@@ -54,9 +100,10 @@ export async function POST(request: Request) {
         branchId,
         purpose: 'chat',
         tier: routing.tier,
-        inputTokens: brief.briefTokens,
-        outputTokens: estimateTokens(answer.content),
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
         baselineInputTokens: brief.availableTokens,
+        escalated: routing.escalated,
       }),
     );
   }
@@ -84,18 +131,12 @@ export async function POST(request: Request) {
   return Response.json(response);
 }
 
-/** Folding memory in grows the brief, so the token math and pruned-% have to be recomputed. */
-function withMemory(base: ContextBrief, hits: MemoryHit[]): ContextBrief {
-  const markdown = `${base.markdown}\n\n## Recalled memory\n${hits
-    .map((h) => `- ${h.text}`)
-    .join('\n')}`;
-  const briefTokens = estimateTokens(markdown);
-  return {
-    ...base,
-    facts: [...base.facts, ...hits.map((h) => `Recalled: ${h.text}`)],
-    markdown,
-    briefTokens,
-    prunedPct: prunedPct(base.availableTokens, briefTokens),
-    memoryIds: hits.map((h) => h.id),
-  };
+/** Only the root carries the profile; a branch off a branch still needs it. */
+function profileFor(conversation: Conversation): UserProfile | undefined {
+  let cursor: Conversation | undefined = conversation;
+  while (cursor) {
+    if (cursor.profile) return cursor.profile;
+    cursor = cursor.parentId ? getConversation(cursor.parentId) : undefined;
+  }
+  return undefined;
 }

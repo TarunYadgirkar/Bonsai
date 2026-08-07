@@ -1,3 +1,4 @@
+import { complete } from '@/lib/llm';
 import { MEMORY_USER_ID, writeInsight } from '@/lib/memory';
 import { INTERNAL_TIER, buildLog, mockInsight } from '@/lib/mock';
 import {
@@ -8,7 +9,13 @@ import {
   updateConversation,
 } from '@/lib/store';
 import { estimateTokens, messagesTokens } from '@/lib/tokens';
-import type { ApiError, Insight, MergeRequest, MergeResponse } from '@/lib/types';
+import type {
+  ApiError,
+  Conversation,
+  Insight,
+  MergeRequest,
+  MergeResponse,
+} from '@/lib/types';
 
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<MergeRequest>;
@@ -28,7 +35,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const text = mockInsight(branch.brief?.selection ?? branch.title);
+  const text = await distill(branch);
 
   // Durable write is best-effort: it never blocks the merge, and always mirrors locally.
   const memory = await writeInsight({
@@ -71,4 +78,33 @@ export async function POST(request: Request) {
     log,
   };
   return Response.json(response);
+}
+
+/**
+ * The whole point of cherry-picking: one durable line, not a summary of the excursion.
+ * Cheapest tier, per AGENTS.md rule 7 — we are demoing cost discipline.
+ */
+async function distill(branch: Conversation): Promise<string> {
+  if (!branch.messages.length) return mockInsight(branch.brief?.selection ?? branch.title);
+
+  const result = await complete({
+    tier: INTERNAL_TIER,
+    maxTokens: 120,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'Extract the single durable conclusion from this branch — the one thing the parent conversation should learn. One sentence, under 20 words, self-contained with referents resolved. No preamble, no quotes, just the sentence.',
+      },
+      {
+        role: 'user',
+        content: `Branch topic: ${branch.brief?.selection ?? branch.title}\n\n${branch.messages
+          .map((m) => `${m.role}: ${m.content}`)
+          .join('\n\n')}`,
+      },
+    ],
+  });
+
+  const line = result.text.trim().split('\n')[0]?.replace(/^["']|["']$/g, '') ?? '';
+  return line || mockInsight(branch.brief?.selection ?? branch.title);
 }
