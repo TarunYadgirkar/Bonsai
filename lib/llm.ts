@@ -199,9 +199,13 @@ const STOPWORDS = new Set(
     .split(' '),
 );
 
-/** Content words only — the shared basis for every mock relevance score. */
+/**
+ * Content words only — the shared basis for every mock relevance score. `@` and `&` stay in the
+ * token because the club names in this fixture are ML@B and similar; splitting them drops the
+ * single most identifying word in the question.
+ */
 function keywords(text: string): string[] {
-  const words = text.toLowerCase().match(/[a-z][a-z0-9'-]{2,}/g) ?? [];
+  const words = text.toLowerCase().match(/[a-z][a-z0-9'@&+-]{2,}/g) ?? [];
   return [...new Set(words.filter((w) => !STOPWORDS.has(w)))];
 }
 
@@ -227,6 +231,7 @@ function rankByRelevance(
   terms: string[],
   limit: number,
   topic?: string,
+  minScore = 1,
 ): string[] {
   const needle = topic?.trim().toLowerCase();
   return candidates
@@ -234,7 +239,7 @@ function rankByRelevance(
       const mentions = needle && text.toLowerCase().includes(needle) ? TOPIC_MENTION_WEIGHT : 0;
       return { text, score: relevance(text, terms) + mentions, i };
     })
-    .filter((c) => c.score > 0)
+    .filter((c) => c.score >= minScore)
     .sort((a, b) => b.score - a.score || a.i - b.i)
     .slice(0, limit)
     .map((c) => c.text);
@@ -295,6 +300,7 @@ const DEMO_ANSWERS = {
 } as const;
 
 const FACTS_PER_TIER: Record<Tier, number> = { quick: 1, thoughtful: 3, deep: 5 };
+const ANSWER_MIN_SCORE = 2;
 
 /** Pull the compiled facts back out of the brief the caller pasted into the prompt. */
 function factsFromBrief(prompt: string): string[] {
@@ -315,7 +321,14 @@ function mockAnswer(tier: Tier, prompt: string): string {
   if (DEADLINE_QUESTION.test(question)) return DEMO_ANSWERS.deadline;
   if (RANKING_QUESTION.test(question)) return DEMO_ANSWERS.ranking;
 
-  const hits = rankByRelevance(factsFromBrief(prompt), keywords(question), FACTS_PER_TIER[tier]);
+  // Two matching terms, not one: a lone "Berkeley" hit is not an answer, it is a coincidence.
+  const hits = rankByRelevance(
+    factsFromBrief(prompt),
+    keywords(question),
+    FACTS_PER_TIER[tier],
+    undefined,
+    ANSWER_MIN_SCORE,
+  );
   if (!hits.length) {
     return 'The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does.';
   }
@@ -329,7 +342,9 @@ const INSIGHT_MAX_WORDS = 20;
 function mockDistill(prompt: string): string {
   const topic = /Branch topic:\s*(.*)$/m.exec(prompt)?.[1] ?? '';
   const body = prompt.split(/^Branch topic:.*$/m).pop() ?? prompt;
-  const best = rankByRelevance(sentencesOf(body), keywords(topic), 1)[0];
+  // An insight is a conclusion, so the branch's own questions are not candidates for it.
+  const statements = sentencesOf(body).filter((s) => !s.endsWith('?'));
+  const best = rankByRelevance(statements, keywords(topic), 1, topic)[0];
   if (!best) return `No durable conclusion reached on ${topic || 'this branch'}.`;
   const words = best.replace(/\*\*/g, '').split(/\s+/);
   return words.length <= INSIGHT_MAX_WORDS
