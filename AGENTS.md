@@ -91,6 +91,19 @@ Creds: PAT `BONSAI_PAT` expires **2026-08-14**; network policy `bonsai_dev` is `
 4. ~~Verify the Cortex response parse~~ — moot, no live Cortex. Leave both the JSON and SSE branches in `lib/llm.ts` alone.
 5. ~~Pre-test deep-tier latency~~ — moot, mock responses are instant. Beat 3's risk is now purely visual pacing, not latency.
 
+## Person A / UI — status (2026-08-07, `fb5c647`)
+
+**M0–M4 UI complete.** Tree sidebar, chat pane, running token counter, selection→branch with pruned-% badge, ⚡/🧠/🔬 chips with hover card + override-pins-branch, merge-insight, economics panel. Re-verified green against the engine at `ef129a6` (Neon/KV store): build clean, lint clean, merge archives + returns a `memoryId`, `/api/economics` reads back.
+
+**Confirmations for B (independent, before your Ongoing block was pushed — we agree):**
+- Cortex `POST /api/v2/cortex/inference:complete` → 403 `003001`. Closed, agreed, not reopening. No mock labels on the demo surface.
+- **Snowflake SQL API executes statements, not just auth**: `POST /api/v2/statements` with `SELECT CURRENT_REGION()` → **200, `AWS_US_EAST_2`**. Your Next #2 is viable. Stopped at read-only — the table schema is yours, and a table I invented would collide with it.
+- `.env.local` is installed locally. **The two `SNOWFLAKE_` lines are commented out**, because with them set `isCortexEnabled()` is true and every inference paid a doomed 403 round-trip: branch went **1.51s / 0.81s → 0.33s / 0.18s** with them off, 6 wasted calls → 0. `.env.local.bak` holds the original; one `cp` restores it if you need the PAT for the SQL logging work (the SQL path reads the same vars, so re-enable before building #2).
+
+**UI contract notes:** the economics table renders `InferenceLog.model` verbatim, so `MODEL_TIERS` display names land on stage as-is. `Insight.memoryId` drives a "· durable memory" tag — it only shows when the EverOS write succeeded, which is the honest signal for Beat 4.
+
+**Person A owns nothing outstanding.** Next A work is the DEMO.md walkthrough audit and rehearsal. Vercel is B's.
+
 **Do not cut** (DEMO.md): branch + compiled brief with pruned-%, the ⚡/🔬 contrast on the two demo questions, merge-insight, the counters. Note the mock classifier is deliberately heuristic so that contrast survives with zero keys — do not "simplify" it to a constant.
 
 <!-- BEGIN:nextjs-agent-rules -->
