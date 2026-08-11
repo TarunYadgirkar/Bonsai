@@ -183,6 +183,7 @@ export function Workspace() {
       // Mode rides along only when the user changed it since the last send: a manual pick
       // pins the branch server-side, an explicit Auto unpins it. Every other message relies
       // on the persisted pin.
+      const hadPending = branchId in pendingModes;
       const pending = pendingModes[branchId];
       const res = await fetch('/api/chat', {
         method: 'POST',
@@ -190,15 +191,18 @@ export function Workspace() {
         body: JSON.stringify({
           branchId,
           content,
-          mode: branchId in pendingModes ? (pending ?? { mode: 'auto' as const }) : undefined,
+          mode: hadPending ? (pending ?? { mode: 'auto' as const }) : undefined,
         }),
       });
       if (!res.ok) throw new Error(`POST /api/chat → ${res.status}`);
       const data: ChatResponse = await res.json();
 
-      // The server persisted the pick — pinnedMode is the truth from here on.
+      // The server persisted the pick — pinnedMode is the truth from here on. Drop the entry
+      // only if it is still the one this request sent: a pick made while the request was in
+      // flight has not reached the server and must survive for the next send.
       setPendingModes((prev) => {
         if (!(branchId in prev)) return prev;
+        if (!hadPending || prev[branchId] !== pending) return prev;
         const next = { ...prev };
         delete next[branchId];
         return next;
