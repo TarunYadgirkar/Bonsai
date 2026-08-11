@@ -91,6 +91,18 @@ describe('parseManifestV1', () => {
     expect(() => parseManifestV1(input)).toThrow(PersistenceSchemaError);
     expect(input).toEqual(before);
   });
+
+  it('rejects more than 10,000 conversations without mutating input', () => {
+    const input = manifest();
+    const conversationOrder = Array.from({ length: 10_001 }, (_, index) => `root-${index}`);
+    input.conversations = Object.fromEntries(conversationOrder.map((id) => [id, 1]));
+    input.conversationOrder = conversationOrder;
+    input.rootId = conversationOrder[0];
+    const before = structuredClone(input);
+
+    expect(() => parseManifestV1(input)).toThrow(PersistenceSchemaError);
+    expect(input).toEqual(before);
+  });
 });
 
 describe('parseConversationEnvelopeV1', () => {

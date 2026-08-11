@@ -5,6 +5,7 @@ import {
   lstat,
   mkdir,
   open,
+  opendir,
   readdir,
   rename,
   unlink,
@@ -22,6 +23,7 @@ export interface AtomicFileSystem {
   lstat: typeof lstat;
   mkdir: typeof mkdir;
   open: typeof open;
+  opendir: typeof opendir;
   readdir: typeof readdir;
   rename: typeof rename;
   unlink: typeof unlink;
@@ -32,6 +34,7 @@ export const nodeAtomicFileSystem: AtomicFileSystem = {
   lstat,
   mkdir,
   open,
+  opendir,
   readdir,
   rename,
   unlink,
@@ -58,6 +61,13 @@ export class AtomicFileTruncatedError extends Error {
   }
 }
 
+export class AtomicDirectoryTooLargeError extends Error {
+  constructor(path: string) {
+    super(`persistence directory has too many entries: ${basename(path)}`);
+    this.name = 'AtomicDirectoryTooLargeError';
+  }
+}
+
 export class AtomicUnsafePathError extends Error {
   constructor(path: string) {
     super(`persistence path is unsafe: ${basename(path)}`);
@@ -65,12 +75,27 @@ export class AtomicUnsafePathError extends Error {
   }
 }
 
+export interface FileIdentity {
+  dev: number;
+  ino: number;
+  mode: number;
+  mtimeMs: number;
+  nlink: number;
+  size: number;
+  uid: number;
+}
+
+export interface BoundedFile {
+  bytes: Buffer;
+  identity: FileIdentity;
+}
+
 export async function ensurePrivateDirectory(
   fileSystem: AtomicFileSystem,
   path: string,
 ): Promise<void> {
   await fileSystem.mkdir(path, { recursive: true, mode: PRIVATE_DIRECTORY_MODE });
-  const handle = await openDirectoryNoFollow(fileSystem, path);
+  const handle = await openDirectoryNoFollow(fileSystem, path, false);
   try {
     await handle.chmod(PRIVATE_DIRECTORY_MODE);
   } finally {
@@ -81,17 +106,35 @@ export async function ensurePrivateDirectory(
 export async function assertDirectoryNoFollow(
   fileSystem: AtomicFileSystem,
   path: string,
+  requirePrivate = true,
 ): Promise<void> {
-  const handle = await openDirectoryNoFollow(fileSystem, path);
+  const handle = await openDirectoryNoFollow(fileSystem, path, requirePrivate);
   await handle.close();
 }
 
 export async function listDirectoryNoFollow(
   fileSystem: AtomicFileSystem,
   path: string,
+  requirePrivate = true,
+  maximumEntries = Number.MAX_SAFE_INTEGER,
 ): Promise<string[]> {
-  await assertDirectoryNoFollow(fileSystem, path);
-  return fileSystem.readdir(path);
+  await assertDirectoryNoFollow(fileSystem, path, requirePrivate);
+  const directory = await fileSystem.opendir(path);
+  const entries: string[] = [];
+  try {
+    for (;;) {
+      const entry = await directory.read();
+      if (!entry) return entries;
+      if (entries.length === maximumEntries) {
+        throw new AtomicDirectoryTooLargeError(path);
+      }
+      entries.push(entry.name);
+    }
+  } finally {
+    await directory.close().catch((error: unknown) => {
+      if (!isDirectoryAlreadyClosed(error)) throw error;
+    });
+  }
 }
 
 export async function writeAtomicFile(
@@ -157,7 +200,7 @@ export async function syncDirectory(
   fileSystem: AtomicFileSystem,
   path: string,
 ): Promise<void> {
-  const handle = await openDirectoryNoFollow(fileSystem, path);
+  const handle = await openDirectoryNoFollow(fileSystem, path, true);
   try {
     await handle.sync();
   } finally {
@@ -221,6 +264,14 @@ export async function readBoundedFile(
   path: string,
   maximumBytes: number,
 ): Promise<Buffer> {
+  return (await readBoundedFileWithIdentity(fileSystem, path, maximumBytes)).bytes;
+}
+
+export async function readBoundedFileWithIdentity(
+  fileSystem: AtomicFileSystem,
+  path: string,
+  maximumBytes: number,
+): Promise<BoundedFile> {
   const handle = await openRegularFileNoFollow(
     fileSystem,
     path,
@@ -231,10 +282,60 @@ export async function readBoundedFile(
     if (!Number.isSafeInteger(file.size) || file.size > maximumBytes) {
       throw new AtomicFileTooLargeError(path);
     }
-    return readExact(handle, path, 0, file.size);
+    return {
+      bytes: await readExact(handle, path, 0, file.size),
+      identity: fileIdentity(file),
+    };
   } finally {
     await handle.close();
   }
+}
+
+export async function unlinkFileIfIdentity(
+  fileSystem: AtomicFileSystem,
+  path: string,
+  expected: FileIdentity,
+): Promise<boolean> {
+  let entry;
+  try {
+    entry = await fileSystem.lstat(path);
+  } catch (error: unknown) {
+    if (isNotFound(error)) return false;
+    throw error;
+  }
+  if (
+    !entry.isFile() ||
+    entry.isSymbolicLink() ||
+    entry.nlink !== 1 ||
+    entry.dev !== expected.dev ||
+    entry.ino !== expected.ino ||
+    entry.mode !== expected.mode ||
+    entry.mtimeMs !== expected.mtimeMs ||
+    entry.size !== expected.size ||
+    entry.uid !== expected.uid
+  ) {
+    return false;
+  }
+  await fileSystem.unlink(path);
+  return true;
+}
+
+export async function inspectPrivateRegularFile(
+  fileSystem: AtomicFileSystem,
+  path: string,
+): Promise<FileIdentity | null> {
+  const entry = await fileSystem.lstat(path);
+  const currentUid = process.getuid?.();
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isFile() ||
+    entry.nlink !== 1 ||
+    (entry.mode & 0o077) !== 0 ||
+    (currentUid !== undefined && entry.uid !== currentUid)
+  ) {
+    return null;
+  }
+  return fileIdentity(entry);
 }
 
 export async function visitFileRange(
@@ -295,6 +396,10 @@ function isAlreadyExists(error: unknown): boolean {
   return isNodeError(error) && error.code === 'EEXIST';
 }
 
+function isDirectoryAlreadyClosed(error: unknown): boolean {
+  return isNodeError(error) && error.code === 'ERR_DIR_CLOSED';
+}
+
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
 }
@@ -302,13 +407,21 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 async function openDirectoryNoFollow(
   fileSystem: AtomicFileSystem,
   path: string,
+  requirePrivate: boolean,
 ): Promise<FileHandle> {
   const entry = await fileSystem.lstat(path);
   if (entry.isSymbolicLink() || !entry.isDirectory()) throw new AtomicUnsafePathError(path);
   const handle = await fileSystem.open(path, READ_DIRECTORY_FLAGS);
   try {
     const opened = await handle.stat();
-    if (!opened.isDirectory()) throw new AtomicUnsafePathError(path);
+    const currentUid = process.getuid?.();
+    if (
+      !opened.isDirectory() ||
+      (currentUid !== undefined && opened.uid !== currentUid) ||
+      (requirePrivate && (opened.mode & 0o077) !== 0)
+    ) {
+      throw new AtomicUnsafePathError(path);
+    }
     return handle;
   } catch (error: unknown) {
     await handle.close();
@@ -325,9 +438,14 @@ async function openRegularFileNoFollow(
   const handle = await fileSystem.open(path, flags, mode);
   try {
     const opened = await handle.stat();
-    const mutating =
-      (flags & (fileConstants.O_WRONLY | fileConstants.O_RDWR)) !== 0;
-    if (!opened.isFile() || (mutating && opened.nlink !== 1)) {
+    const currentUid = process.getuid?.();
+    const mutating = (flags & (fileConstants.O_WRONLY | fileConstants.O_RDWR)) !== 0;
+    if (
+      !opened.isFile() ||
+      opened.nlink !== 1 ||
+      (currentUid !== undefined && opened.uid !== currentUid) ||
+      (!mutating && (opened.mode & 0o077) !== 0)
+    ) {
       throw new AtomicUnsafePathError(path);
     }
     return handle;
@@ -335,6 +453,18 @@ async function openRegularFileNoFollow(
     await handle.close();
     throw error;
   }
+}
+
+function fileIdentity(file: Awaited<ReturnType<FileHandle['stat']>>): FileIdentity {
+  return {
+    dev: Number(file.dev),
+    ino: Number(file.ino),
+    mode: Number(file.mode),
+    mtimeMs: Number(file.mtimeMs),
+    nlink: Number(file.nlink),
+    size: Number(file.size),
+    uid: Number(file.uid),
+  };
 }
 
 async function readExact(

@@ -231,7 +231,7 @@ describe('FilePersistenceBackend', () => {
     expect((await stat(join(dataDir, 'conversations', 'root.r2.json'))).nlink).toBe(1);
   });
 
-  it('replaces a hard-linked manifest and reads hard-linked immutable nodes safely', async () => {
+  it('rejects hard-linked authoritative files before a commit', async () => {
     const { root, dataDir } = await tempDataDirectory();
     const store = backend(dataDir);
     const initial = snapshot([rootConversation('root')]);
@@ -245,13 +245,16 @@ describe('FilePersistenceBackend', () => {
     await link(manifestPath, linkedManifest);
     await link(nodePath, linkedNode);
 
-    await store.commit(initial, snapshot([rootConversation('root', 'Changed')]));
+    await expect(
+      store.commit(initial, snapshot([rootConversation('root', 'Changed')])),
+    ).rejects.toBeInstanceOf(PersistenceCommitError);
 
     expect(await readFile(linkedManifest, 'utf8')).toBe(originalManifest);
     expect(await readFile(linkedNode, 'utf8')).toBe(originalNode);
-    expect(await readFile(manifestPath, 'utf8')).not.toBe(originalManifest);
-    expect((await stat(manifestPath)).nlink).toBe(1);
-    expect((await stat(join(dataDir, 'conversations', 'root.r2.json'))).nlink).toBe(1);
+    expect(await readFile(manifestPath, 'utf8')).toBe(originalManifest);
+    expect(await readFile(nodePath, 'utf8')).toBe(originalNode);
+    expect((await stat(manifestPath)).nlink).toBe(2);
+    expect((await stat(nodePath)).nlink).toBe(2);
   });
 
   it('removes reset conversations from the manifest but preserves old revisions', async () => {

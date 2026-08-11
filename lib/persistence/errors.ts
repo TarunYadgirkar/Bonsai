@@ -12,6 +12,13 @@ export class PersistenceSchemaError extends PersistenceError {
   }
 }
 
+export class PersistenceUnsupportedSchemaError extends PersistenceSchemaError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PersistenceUnsupportedSchemaError';
+  }
+}
+
 export class PersistenceConfigurationError extends PersistenceError {
   constructor(message: string) {
     super(message);
@@ -23,6 +30,27 @@ export class PersistenceLoadError extends PersistenceError {
   constructor(message: string) {
     super(message);
     this.name = 'PersistenceLoadError';
+  }
+}
+
+export class PersistenceCorruptionError extends PersistenceLoadError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PersistenceCorruptionError';
+  }
+}
+
+export class PersistenceUnsafePathError extends PersistenceLoadError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PersistenceUnsafePathError';
+  }
+}
+
+export class PersistenceRecoveryError extends PersistenceLoadError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'PersistenceRecoveryError';
   }
 }
 

@@ -1,6 +1,11 @@
 import { isSafePersistedId, parseStoredConversation } from '../store-schema';
 import type { Conversation } from '../types';
-import { PersistenceSchemaError } from './errors';
+import {
+  PersistenceSchemaError,
+  PersistenceUnsupportedSchemaError,
+} from './errors';
+
+const MAX_MANIFEST_CONVERSATIONS = 10_000;
 
 export interface ManifestV1 {
   schemaVersion: 1;
@@ -24,6 +29,9 @@ export function parseManifestV1(value: unknown): ManifestV1 {
   const record = requireRecord(value, 'manifest');
   requireSchemaVersion(record.schemaVersion, 'manifest');
   const conversationsRecord = requireRecord(record.conversations, 'manifest conversations');
+  if (Object.keys(conversationsRecord).length > MAX_MANIFEST_CONVERSATIONS) {
+    fail('manifest conversation count exceeds safe bounds');
+  }
   const conversationEntries: Array<[string, number]> = [];
   for (const [conversationId, revisionValue] of Object.entries(conversationsRecord)) {
     if (!isSafePersistedId(conversationId)) fail('manifest contains an unsafe conversation ID');
@@ -101,7 +109,10 @@ function parseConversationFilename(filename: string): {
 }
 
 function requireSchemaVersion(value: unknown, label: string): void {
-  if (value !== 1) fail(`${label} schemaVersion is unsupported`);
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 1) {
+    throw new PersistenceUnsupportedSchemaError(`${label} schemaVersion is unsupported`);
+  }
+  if (value !== 1) fail(`${label} schemaVersion must be 1`);
 }
 
 function requireRecord(value: unknown, label: string): Record<string, unknown> {
