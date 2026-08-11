@@ -26,6 +26,20 @@ consumer session is exactly what Anthropic's terms forbid, so Bonsai doesn't do 
 The side panel keeps the cross-conversation tree (claude.ai has no fork-to-new-chat primitive, so
 Bonsai stores the parent→branch links itself) in `chrome.storage.local`.
 
+### On brief fidelity (an honest tradeoff)
+
+The brief is compiled **locally and extractively** — keyword-ranked sentences from the
+conversation, no model call. This is deliberate: the extension must never run inference on your
+claude.ai session (that would be automated access to your subscription, which Anthropic's terms
+forbid). Two consequences you should know:
+
+- The draft brief is lower-fidelity than a brief Claude would compile. That's why you **see and
+  can edit it** before anything is sent, and why the highlighted selection is always pinned into
+  it. Claude then does the actual reasoning when you send the branch — on your subscription.
+- If you want Claude-quality brief compilation, the **Claude Code plugin** and the **claude.ai
+  MCP connector** compile the brief with Claude in-conversation. The extension trades that
+  fidelity for working directly inside the claude.ai web app.
+
 ## Install (developer / unpacked)
 
 ```

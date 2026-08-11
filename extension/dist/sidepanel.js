@@ -736,6 +736,14 @@ Question: ${params.question}`
       question: params.question || params.selection,
       availableTokens
     });
+    if (params.selection && !brief.facts.some((f) => f.includes(params.selection))) {
+      brief.facts = [`In focus: ${params.selection}.`, ...brief.facts].slice(0, 8);
+      brief.markdown = brief.markdown.replace(
+        "## Relevant facts",
+        `## Relevant facts
+- In focus: ${params.selection}.`
+      );
+    }
     const routing = await route({
       question: params.question || params.selection,
       brief,

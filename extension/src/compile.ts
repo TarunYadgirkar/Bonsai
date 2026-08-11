@@ -46,6 +46,18 @@ export async function compileBranch(params: {
     availableTokens,
   });
 
+  // The local compiler is extractive (no model call — the extension never runs inference on the
+  // user's session). A guardrail: the highlighted selection is the one thing the user explicitly
+  // pointed at, so make sure it survives into the brief even if keyword ranking missed it. The
+  // user reviews the whole brief before sending, and Claude answers it on their subscription.
+  if (params.selection && !brief.facts.some((f) => f.includes(params.selection))) {
+    brief.facts = [`In focus: ${params.selection}.`, ...brief.facts].slice(0, 8);
+    brief.markdown = brief.markdown.replace(
+      '## Relevant facts',
+      `## Relevant facts\n- In focus: ${params.selection}.`,
+    );
+  }
+
   const routing = await route({
     question: params.question || params.selection,
     brief,
