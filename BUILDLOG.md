@@ -3,6 +3,20 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Segment 7: web demo truth pass + docs made honest
+
+- UI: after-load errors now visible (dismissible banner) and a failed send restores the draft
+  instead of destroying it; mode pins are server-truth (survive reload via
+  `conversation.pinnedMode`); assistant messages render markdown (react-markdown, HTML stays
+  escaped); merged insights shown as a collapsible "Learned from branches" strip (they
+  genuinely enter model context now); RoutingChip hover shows "widened" / "brief flagged
+  insufficient" truth badges and no longer caches a failed catalog fetch forever; economics
+  baseline explicitly labeled a modeled counterfactual.
+- Docs: PRODUCT.md rewritten as spec + honest roadmap (fictional learning-router/memory claims
+  moved to "not built yet"; positioning: the loop, not the tree). README reflects the real
+  layout. AGENTS.md stack/traps updated (engine package, relational store, plugin, param
+  rules, effort-per-branch cache rule). Every dangling DEMO.md/"Beat" comment swept.
+
 ## 2026-08-11 — Segment 6: the Claude Code plugin (primary surface, working)
 
 - `plugin/` + repo-root marketplace.json: skills `bonsai:branch` (the loop: Claude compiles the

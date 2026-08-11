@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import type { Conversation, ModeSelection } from '@/lib/types';
 import { RoutingChip } from './RoutingChip';
 import { conversationTokens, formatTokens } from './tokens';
@@ -20,7 +21,8 @@ export function ChatPane({
   highlightInsightId,
 }: {
   conversation: Conversation;
-  onSend: (content: string) => void;
+  /** Resolves false when the send failed, so the composer can restore the draft. */
+  onSend: (content: string) => Promise<boolean>;
   onBranch: (selection: string) => void;
   onSelectMode: (mode: ModeSelection | null) => void;
   /** Takes the button's viewport centre so the merge animation starts where it was clicked. */
@@ -51,7 +53,7 @@ export function ChatPane({
    *
    * Also runs on scroll, and that is load-bearing: dragging a selection near the bottom edge
    * auto-scrolls the container, and clearing the selection on scroll instead of re-anchoring
-   * it made the Branch button silently never appear — which is Beats 2 and 3.
+   * it made the Branch button silently never appear — killing selection-to-branch.
    */
   const captureSelection = () => {
     const sel = window.getSelection();
@@ -70,11 +72,14 @@ export function ChatPane({
     setSelection({ text, x: rect.left + rect.width / 2, y: rect.top });
   };
 
-  const submit = () => {
+  const submit = async () => {
     const content = draft.trim();
     if (!content || sending) return;
-    onSend(content);
     setDraft('');
+    const sent = await onSend(content);
+    // Failed send: put the text back rather than destroy it — unless the user already
+    // started typing something new while the request was in flight.
+    if (!sent) setDraft((current) => current || content);
   };
 
   return (
@@ -85,7 +90,6 @@ export function ChatPane({
             {conversation.title}
           </h2>
           {brief ? (
-            // DEMO.md Beat 2 reads this line off the screen.
             <p className="truncate text-[11px] tabular-nums text-neutral-500">
               <span className="text-neutral-400">{brief.availableTokens.toLocaleString()}</span>{' '}
               available →{' '}
@@ -103,7 +107,7 @@ export function ChatPane({
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-4">
-          {/* Merge insight — DEMO.md Beat 4. Only branches have a parent to merge into. */}
+          {/* Merge insight — only branches have a parent to merge into. */}
           {conversation.parentId &&
             (conversation.archived ? (
               <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
@@ -122,7 +126,6 @@ export function ChatPane({
               </button>
             ))}
 
-          {/* Running input-token counter — DEMO.md Beat 1 points straight at this. */}
           <div className="text-right">
             <div className="font-mono text-lg leading-none tabular-nums text-white">
               {formatTokens(tokens)}
@@ -135,15 +138,21 @@ export function ChatPane({
       </header>
 
       {/*
-        Merged insights live outside the scroll area on purpose: the root is 72 messages
-        deep, and DEMO.md Beat 4 has to show the distilled line landing without scrolling.
+        Merged insights live outside the scroll area on purpose: the thread can be dozens of
+        messages deep, and a landing insight must be visible without scrolling. These lines
+        genuinely enter the model's context on every turn here, so showing them is truth.
+        Collapsible like the brief disclosure below; open by default so a fresh merge glows —
+        the per-branch remount reopens it on every branch switch.
       */}
       {conversation.insights.length > 0 && (
-        <div className="max-h-32 shrink-0 overflow-y-auto border-b border-emerald-400/20 bg-emerald-400/[0.06] px-6 py-2.5">
+        <details
+          open
+          className="max-h-40 shrink-0 overflow-y-auto border-b border-emerald-400/20 bg-emerald-400/[0.06] px-6 py-2.5"
+        >
+          <summary className="mx-auto max-w-3xl cursor-pointer text-[10px] uppercase tracking-wide text-emerald-300/70">
+            Learned from branches · {conversation.insights.length}
+          </summary>
           <div className="mx-auto max-w-3xl">
-            <div className="text-[10px] uppercase tracking-wide text-emerald-300/70">
-              Merged insights · {conversation.insights.length}
-            </div>
             {conversation.insights.map((insight) => (
               <p
                 key={insight.id}
@@ -158,7 +167,7 @@ export function ChatPane({
               </p>
             ))}
           </div>
-        </div>
+        </details>
       )}
 
       <div
@@ -194,13 +203,21 @@ export function ChatPane({
               }
             >
               <div
-                className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
+                className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                   message.role === 'user'
-                    ? 'bg-white/10 text-white'
+                    ? 'whitespace-pre-wrap bg-white/10 text-white'
                     : 'bg-white/[0.04] text-neutral-200'
                 }`}
               >
-                {message.content}
+                {message.role === 'user' ? (
+                  message.content
+                ) : (
+                  // Assistant turns are markdown. react-markdown escapes raw HTML by default —
+                  // no rehype-raw, on purpose. User turns stay plain text above.
+                  <div className="[&>*+*]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-white [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_blockquote]:text-neutral-400 [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-white [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
+                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                  </div>
+                )}
                 {message.routing && (
                   <span className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
                     <RoutingChip
@@ -221,7 +238,7 @@ export function ChatPane({
         </div>
       </div>
 
-      {/* Floating Branch affordance — DEMO.md Beat 2: highlight, then click Branch. */}
+      {/* Floating Branch affordance: highlight text in the thread, then click Branch. */}
       {selection && (
         <button
           onClick={() => {

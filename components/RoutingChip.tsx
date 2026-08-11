@@ -18,21 +18,25 @@ interface Catalog {
 
 /**
  * Fetched once per page, not per chip — the catalog is static config and every assistant
- * message renders one of these. A failure leaves the menu closed to manual picks and Auto
- * still works, which is the mode that matters on stage.
+ * message renders one of these. Only a success is cached: a failure clears the promise so
+ * the next menu open retries instead of showing "Loading modes…" until a full reload.
  */
 let catalogPromise: Promise<Catalog | null> | null = null;
 
 function loadCatalog(): Promise<Catalog | null> {
   catalogPromise ??= fetch('/api/modes')
     .then((res) => (res.ok ? res.json() : null))
-    .catch(() => null);
+    .catch(() => null)
+    .then((catalog: Catalog | null) => {
+      if (!catalog) catalogPromise = null;
+      return catalog;
+    });
   return catalogPromise;
 }
 
 /**
- * DEMO.md Beats 2-3: the chip is the whole routing story. Hover explains the decision,
- * click overrides it — and the override pins the branch, which is the router's teacher.
+ * The chip is the whole routing story: hover explains the decision, click overrides it —
+ * and the override pins the branch, which is the router's teacher.
  */
 export function RoutingChip({
   routing,
@@ -107,6 +111,21 @@ export function RoutingChip({
             <span className="border-t border-white/10 pt-1.5 text-[11px] leading-snug text-neutral-300">
               {routing.reason}
             </span>
+            {/* Escalation truth: what the router actually did to the context before answering. */}
+            {(routing.coveredByBrief === false || routing.widened) && (
+              <span className="flex flex-wrap gap-1">
+                {routing.coveredByBrief === false && (
+                  <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                    brief flagged insufficient
+                  </span>
+                )}
+                {routing.widened && (
+                  <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[10px] text-sky-200">
+                    widened with parent turns
+                  </span>
+                )}
+              </span>
+            )}
             <span className="text-[10px] text-neutral-600">Click to override</span>
           </span>
         )}

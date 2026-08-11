@@ -1,26 +1,48 @@
 # Bonsai
 
-**Grow conversations as trees. Prune context automatically.**
+**Branch the thought, not the transcript.**
 
-Bonsai replaces the linear chat log with a tree: branch off side questions with a *compiled minimal context* instead of the full history, route each request to the right model + reasoning effort automatically (with manual override), and cherry-pick durable insights back into the parent.
-
-Linear chat forces premature commitment. You ask one thing, the thread goes one way, and exploring the alternative means losing what you had. Bonsai makes the alternative a branch.
+Tree-structured AI conversation: fork side questions with a *compiled minimal context brief*
+instead of the full history, auto-route each branch to the right model + reasoning effort,
+and merge exactly one distilled insight back into the parent. Read `PRODUCT.md` for the why.
 
 ## Status
 
-Originally a one-day hackathon build; now being rebuilt into something people can actually use. The Next.js app in this repo is the reference implementation and hosted demo — the surface Bonsai ships on (browser extension, CLI plugin, something else) is an open question being explored on the `copy-a` and `copy-b` branches.
+Post-hackathon rebuild, active. The engine is a standalone package with unit tests and an eval
+harness proving referent resolution through composed briefs; the primary surface is a Claude
+Code plugin that runs the whole loop on your existing Claude subscription. The Next.js app is
+the hosted demo and engine testbed.
 
 ## Repo map
 
 | Path | What it is |
 |---|---|
-| `PRODUCT.md` | The product idea. The "why." |
+| `PRODUCT.md` | The idea, what exists, and the honest roadmap. |
 | `AGENTS.md` | Rules and conventions for coding agents. Source of truth. |
-| `lib/` | The engine — tree store, context compiler, router, providers. |
-| `app/` | Next.js App Router pages and API routes. |
-| `components/` | Tree sidebar, chat pane, economics panel. |
-| `fixtures/` | Seeded conversation + generated demo tree. |
+| `packages/engine/` | `@bonsai/engine` — tree model, path assembly, brief compiler, router, providers. Zero runtime deps. |
+| `plugin/` | Claude Code plugin: branch/tree skills, tier agents, bundled MCP tree server. |
+| `evals/` | Eval harness (`npm run eval`) — referent resolution, routing, distillation. |
+| `app/` · `components/` | Next.js demo: API routes over the engine, tree sidebar, chat pane, economics panel. |
+| `migrations/` | Relational schema for the Neon store. |
 
-## Stack
+## Run it
 
-Next.js (App Router) + TypeScript + Tailwind, deployed on Vercel. Inference goes through `lib/provider.ts` — set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` and it is live; set none and a mock with realistic token math takes over, so the app runs with zero configuration. Store persistence is Neon Postgres via `lib/kv.ts`. Every external dependency degrades to a working local path when its key is absent.
+```
+npm install
+npm run dev        # zero keys: extractive mock inference, in-memory store
+npm run test       # engine unit tests
+npm run eval       # engine evals (mock mode; live grading with a provider key)
+```
+
+Set `DATABASE_URL` (Neon) for durable storage — schema in `migrations/`. Set one of
+`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` for live inference; every dependency
+degrades to a working local path when its key is absent.
+
+## Plugin
+
+```
+/plugin marketplace add TarunYadgirkar/Bonsai
+/plugin install bonsai@bonsai
+```
+
+Then: "branch this: <side question>" in any Claude Code session. See `plugin/README.md`.

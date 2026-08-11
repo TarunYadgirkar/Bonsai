@@ -28,9 +28,9 @@ function arcPath(from: { x: number; y: number }, to: { x: number; y: number }): 
 }
 
 /**
- * DEMO.md Beat 4: the distilled line visibly flows from the branch into the parent node.
- * Viewport-fixed overlay so it can cross from the chat pane into the sidebar; purely
- * decorative (pointer-events-none) — the state change already landed before it starts.
+ * The distilled line visibly flows from the branch into the parent node. Viewport-fixed
+ * overlay so it can cross from the chat pane into the sidebar; purely decorative
+ * (pointer-events-none) — the state change already landed before it starts.
  */
 export function MergeFlight({ flight, onDone }: { flight: Flight; onDone: () => void }) {
   const [landed, setLanded] = useState(false);

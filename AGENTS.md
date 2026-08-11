@@ -31,8 +31,18 @@ That is the interesting problem and the thing worth getting right. Surfaces are 
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind. Vercel deploys `main` only (`vercel.json` → `git.deploymentEnabled`).
-- Inference: `lib/provider.ts`. One of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` makes it live; none means the mock in `lib/llm.ts`.
-- Store persistence: Neon Postgres via `lib/kv.ts`, table `store_snapshot`.
+- The engine is an npm-workspace package: `packages/engine` (`@bonsai/engine`) — tree model,
+  path assembly, brief compiler, router, providers. Zero runtime deps; ships as TS source
+  (`transpilePackages` in next.config.ts). Unit tests in `packages/engine/test`, evals in
+  `evals/` (`npm run eval`).
+- Inference: `packages/engine/src/provider.ts`. One of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` /
+  `XAI_API_KEY` makes it live; none means the extractive mock in `packages/engine/src/llm.ts`.
+  Request bodies come from per-model capability records — never hand-build one.
+- Store: relational Neon Postgres (conversations/messages/insights/inference_logs — schema in
+  `migrations/`) via the working-set API in `lib/store.ts`; in-memory fallback with fixture
+  seeding when `DATABASE_URL` is unset.
+- The Claude Code plugin lives in `plugin/` (skills + tier agents + bundled stdio MCP tree
+  server); repo root carries the marketplace manifest.
 
 There is deliberately **no durable-memory layer** right now. The hackathon one was a sponsor integration and was removed; whether cross-conversation memory is needed at all, and what should provide it, is an open question. Do not add one back without deciding that first.
 
@@ -50,13 +60,17 @@ Connection strings come from the Neon console. Put the one for your lane in `.en
 
 ## Mock-first rule
 
-Every external dependency sits behind an interface with a mock that activates automatically when its env vars are missing. `lib/llm.ts` returns canned-but-realistic responses with real token math; `lib/kv.ts` falls back to in-memory. The app must fully run with zero keys configured.
+Every external dependency sits behind an interface with a mock that activates automatically when its env vars are missing. The engine's mock answers extractively with real token math; the store falls back to in-memory with fixture seeding. The app must fully run with zero keys configured.
 
-**`lib/kv.ts` swallows errors by design.** A wrong `DATABASE_URL` degrades to in-memory *silently* and looks identical to no config. Confirm persistence with a restart-survival test, never by assuming.
+**Persistence honesty:** a wrong `DATABASE_URL` still degrades reads to memory silently (a
+load failure must not take the demo down), but writes no longer lie — `commit()` reports
+failure and mutating routes return 503. Confirm persistence with a restart-survival test all
+the same.
 
 ## Working rules
 
-1. Build clean before committing: `npm run build`. Fix every error.
+1. Build clean before committing: `npm run build`, plus `npm run typecheck && npm run test`
+   (and `npm run eval` when engine semantics changed). Fix every error.
 2. Commit messages: conventional prefix, short imperative subject, nothing else. **No `Co-Authored-By:` trailers, no generated-with footers, no bulleted change lists.**
 3. No refactors outside the current task.
 4. Keep it boring: fetch + JSON, plain React state. No exotic dependencies without a reason.
@@ -69,6 +83,12 @@ Every external dependency sits behind an interface with a mock that activates au
 - `components/TreeSidebar.tsx` geometry: card heights are fixed per variant and `components/treeLayout.ts` must agree with them. Change one, change both.
 - A node's chip shows the **last** turn's decision, so adding a cheap follow-up turn to a fixture branch overwrites its chip.
 - `fixtures/seed-tree.json` is generated, never hand-edited. Regenerate with `DATABASE_URL= npx next dev -p 3111` then `npx tsx scripts/build-seed-tree.ts`.
+- `plugin/mcp/server.mjs` deliberately mirrors a small engine subset (tokens, classifier,
+  coverage) because Node can't import the TS engine directly — the engine is the source of
+  truth; change both when touching that logic.
+- Never send sampling params to 4.6+/5 Claude models, and route effort per BRANCH, not per
+  message — resolved effort is rendered into the prompt, so per-turn changes invalidate the
+  provider prompt cache.
 
 ## Ongoing
 

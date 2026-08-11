@@ -1,12 +1,8 @@
 import type { Message } from '@/lib/types';
 
 /**
- * Display-only token estimate: ~4 chars per token.
- *
- * This is the same heuristic the seed fixture was sized against — the 72-message
- * fixture measures 74,505 chars → 18,626 tokens, which is the "19,000 tokens" in
- * DEMO.md Beat 1 and the "19,240 available" in Beat 2. Keep them in sync: if this
- * divisor changes, the demo's headline number moves.
+ * Display-only token estimate: ~4 chars per token — the same heuristic the seed fixture was
+ * sized against, so the fixture's "~19k available" headline moves if this divisor changes.
  *
  * Authoritative counts come from the engine (RoutingDecision.contextTokens,
  * ContextBrief.availableTokens) and always win where present. This only exists so
@@ -28,7 +24,7 @@ export function formatTokens(n: number): string {
 
 /**
  * Demo-scale money: a single quick-tier call costs ~$0.0002, so two decimals would
- * render the whole session as "$0.00" and kill Beat 5. Four decimals under a dollar.
+ * render the whole session as "$0.00". Four decimals under a dollar.
  */
 export function formatUsd(n: number): string {
   return n < 1 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`;

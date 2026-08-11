@@ -1,5 +1,5 @@
 /**
- * Confirms a live LLM key works before the demo depends on it.
+ * Confirms a live LLM key works and names the upstream model behind each rung.
  *
  *   npx tsx --env-file=.env.local scripts/try-provider.ts
  *
@@ -7,7 +7,7 @@
  * real call per rung. A rung that fails prints the API's own error — the usual cause is a model id
  * this account cannot use, which is an env override away (BONSAI_MODEL_OPENAI_QUICK=…), not a code
  * change. Any failure at runtime degrades to the mock, so a red line here means "that rung will be
- * mock on stage", not "the app is broken".
+ * mock", not "the app is broken".
  */
 import { MODELS, providerComplete, providerSummary } from '@bonsai/engine';
 

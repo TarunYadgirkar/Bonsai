@@ -29,6 +29,7 @@ function SavingsCard({
   baseline,
   actualNote,
   baselineNote,
+  baselineCaption,
 }: {
   label: string;
   savedPct: number;
@@ -36,6 +37,8 @@ function SavingsCard({
   baseline: string;
   actualNote: string;
   baselineNote: string;
+  /** Names the struck-through figure a modeled counterfactual, never measured billing. */
+  baselineCaption: string;
 }) {
   return (
     <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] p-4">
@@ -52,13 +55,14 @@ function SavingsCard({
           {baseline}
         </dd>
       </dl>
+      <p className="mt-2 text-[10px] leading-snug text-neutral-600">{baselineCaption}</p>
     </div>
   );
 }
 
 /**
- * DEMO.md Beat 5. Every number here comes from GET /api/economics — the same
- * InferenceLog rows the engine wrote while the demo was being given. No slides.
+ * Every number here comes from GET /api/economics — the same InferenceLog rows the engine
+ * wrote during this session. Actuals are what ran; baselines are modeled counterfactuals.
  */
 export function EconomicsPanel({
   branchTitles,
@@ -139,6 +143,7 @@ export function EconomicsPanel({
                   actualNote="Bonsai (compiled)"
                   baseline={data.baseline.inputTokens.toLocaleString()}
                   baselineNote="Full-history baseline"
+                  baselineCaption="vs sending the full parent history every turn (modeled, not measured)"
                 />
                 <SavingsCard
                   label="Spend"
@@ -147,6 +152,7 @@ export function EconomicsPanel({
                   actualNote="Routed spend"
                   baseline={formatUsd(data.baseline.costUsd)}
                   baselineNote="Strong model always"
+                  baselineCaption="vs full history on the strongest model (modeled at list rates)"
                 />
                 <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="text-[10px] uppercase tracking-wide text-neutral-500">
@@ -187,7 +193,7 @@ export function EconomicsPanel({
                         <th className="px-3 py-2 text-right font-medium">Context in</th>
                         <th className="px-3 py-2 text-right font-medium">Out</th>
                         <th className="px-3 py-2 text-right font-medium">Cost</th>
-                        <th className="px-3 py-2 text-right font-medium">Baseline</th>
+                        <th className="px-3 py-2 text-right font-medium">Baseline (modeled)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -236,9 +242,10 @@ export function EconomicsPanel({
               )}
 
               <p className="mt-3 text-[11px] leading-snug text-neutral-500">
-                Baseline = the same requests carrying the full parent history, answered on the
-                strongest model every time. That is what a flat chat log costs. Cost is modeled
-                at published per-token rates.
+                Baseline is a modeled counterfactual, not measured billing: the same requests
+                carrying the full parent history, answered on the strongest model every time,
+                priced at published per-token list rates. That is what a flat chat log would
+                have cost.
               </p>
             </>
           )}

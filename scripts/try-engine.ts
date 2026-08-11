@@ -1,5 +1,6 @@
 /**
- * Engine smoke test — compiles briefs and routes the two DEMO.md questions in isolation.
+ * Engine smoke test — compiles briefs and routes two fixture questions in isolation.
+ * Superseded by evals/ for correctness gating; kept as a quick manual poke.
  *
  * Run:  npx tsx --env-file=.env.local scripts/try-engine.ts
  * With no provider keys this exercises mock mode, which is a valid pass.

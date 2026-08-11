@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type {
   BranchResponse,
   ChatResponse,
+  Conversation,
   EconomicsResponse,
   MergeResponse,
   ModeSelection,
@@ -97,11 +98,11 @@ export function Workspace() {
   const [sending, setSending] = useState(false);
   const [branching, setBranching] = useState(false);
   /*
-   * Mode picks live here, keyed by branch, because /api/chat reads the selection off the
-   * request and does not persist it onto the Conversation. Sending it on every message is
-   * what makes the override stick for the whole branch. Absent means Auto.
+   * The server owns pins now (Conversation.pinnedMode). This map holds only the picks made
+   * since a branch's last send — each is sent once on the next message, then dropped in favour
+   * of the refetched pinnedMode. null means an explicit switch back to Auto, which unpins.
    */
-  const [modes, setModes] = useState<Record<string, ModeSelection | null>>({});
+  const [pendingModes, setPendingModes] = useState<Record<string, ModeSelection | null>>({});
   const [merging, setMerging] = useState(false);
   const [flight, setFlight] = useState<Flight | null>(null);
   /** The insight that just landed, so the parent node and the line itself can glow. */
@@ -167,21 +168,41 @@ export function Workspace() {
     };
   }, [applyState]);
 
-  const send = async (content: string) => {
-    if (!activeId) return;
+  /** Pin as the user currently sees it: an unsent pick wins, else the server's persisted pin. */
+  const modeFor = (conversation: Conversation): ModeSelection | null =>
+    conversation.id in pendingModes
+      ? (pendingModes[conversation.id] ?? null)
+      : (conversation.pinnedMode ?? null);
+
+  /** Resolves false on failure so the composer can put the user's text back. */
+  const send = async (content: string): Promise<boolean> => {
+    if (!activeId) return false;
+    const branchId = activeId;
     setSending(true);
     try {
+      // Mode rides along only when the user changed it since the last send: a manual pick
+      // pins the branch server-side, an explicit Auto unpins it. Every other message relies
+      // on the persisted pin.
+      const pending = pendingModes[branchId];
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          branchId: activeId,
+          branchId,
           content,
-          mode: modes[activeId] ?? undefined,
+          mode: branchId in pendingModes ? (pending ?? { mode: 'auto' as const }) : undefined,
         }),
       });
       if (!res.ok) throw new Error(`POST /api/chat → ${res.status}`);
       const data: ChatResponse = await res.json();
+
+      // The server persisted the pick — pinnedMode is the truth from here on.
+      setPendingModes((prev) => {
+        if (!(branchId in prev)) return prev;
+        const next = { ...prev };
+        delete next[branchId];
+        return next;
+      });
 
       // Optimistically append so the thread updates without a full refetch;
       // loadState() then reconciles with whatever the engine actually stored.
@@ -198,8 +219,10 @@ export function Workspace() {
           : prev,
       );
       await loadState();
+      return true;
     } catch (err) {
       setError(describe(err));
+      return false;
     } finally {
       setSending(false);
     }
@@ -209,6 +232,7 @@ export function Workspace() {
     if (!activeId) return;
     setBranching(true);
     try {
+      const parent = state?.conversations.find((c) => c.id === activeId);
       const res = await fetch('/api/branch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -218,7 +242,7 @@ export function Workspace() {
           title: titleFromSelection(selection),
           // A pinned parent hands its pick down: branching off a deliberate choice should
           // not silently fall back to Auto for the branch's first answer.
-          mode: modes[activeId] ?? undefined,
+          mode: (parent && modeFor(parent)) ?? undefined,
         }),
       });
       if (!res.ok) throw new Error(`POST /api/branch → ${res.status}`);
@@ -232,7 +256,7 @@ export function Workspace() {
     }
   };
 
-  /** DEMO.md Beat 4: distil the branch into one line, fly it to the parent, archive the branch. */
+  /** Distil the branch into one line, fly it to the parent, archive the branch. */
   const merge = async (origin: { x: number; y: number }) => {
     if (!activeId || merging) return;
     setMerging(true);
@@ -280,13 +304,13 @@ export function Workspace() {
 
   const selectMode = (mode: ModeSelection | null) => {
     if (!activeId) return;
-    setModes((prev) => ({ ...prev, [activeId]: mode }));
+    setPendingModes((prev) => ({ ...prev, [activeId]: mode }));
   };
 
   /**
-   * Beat 4 is destructive on purpose — the branch archives and the insight lands on the parent.
+   * Merging is destructive on purpose — the branch archives and the insight lands on the parent.
    * This puts the tree back so the merge can be shown again, or so a rehearsal doesn't ship its
-   * leftovers into the real run. Local pins go too: they belong to the run being discarded.
+   * leftovers into the real run. Unsent mode picks go too: they belong to the run being discarded.
    */
   const reset = async () => {
     try {
@@ -294,7 +318,7 @@ export function Workspace() {
       if (!res.ok) throw new Error(`POST /api/reset → ${res.status}`);
       const data: StateResponse = await res.json();
       setState(data);
-      setModes({});
+      setPendingModes({});
       setFlight(null);
       setMerged(null);
       setEconomicsOpen(false);
@@ -380,7 +404,23 @@ export function Workspace() {
   );
 
   return (
-    <main className="flex min-h-0 flex-1">
+    <main className="relative flex min-h-0 flex-1">
+      {/*
+        Failures after first load (send, branch, merge, reset) surface here. An overlay rather
+        than a swap: the workspace stays interactive underneath, nothing blanks. A later
+        successful refetch clears it via applyState; the button clears it by hand.
+      */}
+      {error && (
+        <div className="absolute left-1/2 top-3 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg border border-red-400/30 bg-neutral-950/95 px-4 py-2.5 shadow-xl shadow-black/40">
+          <p className="text-xs leading-snug text-red-200">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="shrink-0 rounded border border-white/15 px-2 py-0.5 text-[11px] text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       <TreeSidebar
         nodes={state.tree}
         activeId={active?.id ?? null}
@@ -409,7 +449,7 @@ export function Workspace() {
           onBranch={branch}
           onSelectMode={selectMode}
           onMerge={merge}
-          mode={modes[active.id] ?? null}
+          mode={modeFor(active)}
           sending={sending}
           branching={branching}
           merging={merging}

@@ -12,7 +12,7 @@
  * auto-routed deep ranking, a nested branch off a branch, a manual Opus/max override, and an
  * off-brief question the compiled brief declines.
  *
- * Nothing is pre-merged. Beat 4 merges on stage, and POST /api/reset has to return the tree to
+ * Nothing is pre-merged. The demo merges one branch live, and POST /api/reset has to return the tree to
  * a state where that merge has not happened yet, so it can be shown again.
  */
 import { promises as fs } from 'fs';
@@ -38,7 +38,7 @@ interface Scenario {
 
 const SCENARIOS: Scenario[] = [
   {
-    // NOT pre-merged: Beat 4 merges this live on stage, and Reset has to put it back to
+    // NOT pre-merged: the demo merges this one live, and Reset has to put it back to
     // unmerged so the merge can be shown again. A pre-merged fixture would also mean merging
     // an already-merged branch during the demo.
     note: 'auto → cheapest model: single fact straight out of the brief',

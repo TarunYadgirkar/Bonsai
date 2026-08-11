@@ -246,7 +246,6 @@ export function TreeSidebar({
         <span>Kicker = available → inherited</span>
       </div>
 
-      {/* DEMO.md Beat 5 opens from here. */}
       <div className="border-t border-white/10 p-2">
         <button
           onClick={onOpenEconomics}

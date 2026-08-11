@@ -87,8 +87,8 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
 /* ---------- mock ---------- */
 
 /**
- * Mock mode must still produce the ⚡-vs-🔬 contrast on the two DEMO.md questions — that
- * contrast is on the never-cut list, so a constant here would break the demo with no keys.
+ * Deliberately heuristic, never a constant: the cheap-vs-deep routing contrast is the product,
+ * and zero-key mode must still demonstrate it.
  */
 function mockComplexity(prompt: string): 1 | 2 | 3 {
   const question = /Question:\s*(.*)$/m.exec(prompt)?.[1] ?? prompt;
@@ -209,7 +209,7 @@ function mockComplete(
   };
 }
 
-/** The two DEMO.md questions keep their rehearsed answers; everything else is grounded below. */
+/** Two fixture questions keep rehearsed answers for demo polish; everything else is extractive. */
 const DEADLINE_QUESTION = /\b(when|what date|deadline|due)\b.*\b(close|closes|due|deadline|apply|application)\b/i;
 const RANKING_QUESTION = /\b(rank|top \d|opportunity cost|compare)\b/i;
 
