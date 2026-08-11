@@ -1,5 +1,7 @@
 # AGENTS.md — rules for coding agents in this repo
 
+> **This checkout is the `copy-b` lane. Read `LANE.md` first — it is your mission brief.**
+
 ## What this is
 
 Bonsai: tree-structured AI chat. Branch a side question off a parent conversation with a *compiled minimal context brief* instead of the full history; route each request to a model + effort level automatically, with manual override; cherry-pick insights back into the parent. Read `PRODUCT.md` for the idea.
