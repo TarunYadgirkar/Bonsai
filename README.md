@@ -23,4 +23,4 @@ Originally a one-day hackathon build; now being rebuilt into something people ca
 
 ## Stack
 
-Next.js (App Router) + TypeScript + Tailwind, deployed on Vercel. Inference goes through `lib/provider.ts` — set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` and it is live; set none and a mock with realistic token math takes over, so the app runs with zero configuration. Store persistence is Neon Postgres via `lib/kv.ts`; durable memory is EverMind EverOS via `lib/memory.ts`. Every external dependency degrades to a working local path when its key is absent.
+Next.js (App Router) + TypeScript + Tailwind, deployed on Vercel. Inference goes through `lib/provider.ts` — set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` and it is live; set none and a mock with realistic token math takes over, so the app runs with zero configuration. Store persistence is Neon Postgres via `lib/kv.ts`. Every external dependency degrades to a working local path when its key is absent.

@@ -1,5 +1,4 @@
 import { compileBrief } from '@/lib/compiler';
-import { MEMORY_USER_ID, searchMemories } from '@/lib/memory';
 import { buildLog } from '@/lib/mock';
 import { INTERNAL_TIER } from '@/lib/models';
 import { completeWithEscalation, route } from '@/lib/router';
@@ -48,12 +47,6 @@ export async function POST(request: Request) {
   const question = body.question ?? '';
   const availableTokens = availableTokensFor(parent.id) + estimateTokens(body.selection);
 
-  // Per-branch retrieval: what the branch is FOR decides which memories it deserves.
-  const memories = await searchMemories({
-    query: question || body.selection,
-    userId: MEMORY_USER_ID,
-  });
-
   const brief = await compileBrief({
     briefId: nextId('brief'),
     branchId,
@@ -61,7 +54,6 @@ export async function POST(request: Request) {
     profile: profileFor(parent),
     selection: body.selection,
     question,
-    memories,
     availableTokens,
   });
 

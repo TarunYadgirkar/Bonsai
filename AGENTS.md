@@ -33,7 +33,8 @@ That is the interesting problem and the thing worth getting right. Surfaces are 
 - Next.js (App Router) + TypeScript + Tailwind. Vercel deploys `main` only (`vercel.json` → `git.deploymentEnabled`).
 - Inference: `lib/provider.ts`. One of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` makes it live; none means the mock in `lib/llm.ts`.
 - Store persistence: Neon Postgres via `lib/kv.ts`, table `store_snapshot`.
-- Durable memory: EverMind EverOS via `lib/memory.ts`.
+
+There is deliberately **no durable-memory layer** right now. The hackathon one was a sponsor integration and was removed; whether cross-conversation memory is needed at all, and what should provide it, is an open question. Do not add one back without deciding that first.
 
 ### Neon — one database branch per git branch
 
@@ -49,7 +50,7 @@ Connection strings come from the Neon console. Put the one for your lane in `.en
 
 ## Mock-first rule
 
-Every external dependency sits behind an interface with a mock that activates automatically when its env vars are missing. `lib/llm.ts` returns canned-but-realistic responses with real token math; `lib/memory.ts` falls back to `data/memory.json`; `lib/kv.ts` falls back to in-memory. The app must fully run with zero keys configured.
+Every external dependency sits behind an interface with a mock that activates automatically when its env vars are missing. `lib/llm.ts` returns canned-but-realistic responses with real token math; `lib/kv.ts` falls back to in-memory. The app must fully run with zero keys configured.
 
 **`lib/kv.ts` swallows errors by design.** A wrong `DATABASE_URL` degrades to in-memory *silently* and looks identical to no config. Confirm persistence with a restart-survival test, never by assuming.
 
@@ -79,9 +80,11 @@ Updated: 2026-08-10
 - The dead sponsor integration was removed (`98e91d0`) — barred on the trial account and inert behind an unset flag, so it was entirely dead code. Do not reintroduce it. The local JSON log writer it contained survives as `lib/inference-log.ts`; the integration itself remains only in `hackathon-copy`.
 - Vercel restricted to deploying `main` (`b3ddd26`).
 - New Neon project `bonsai` (`wild-feather-67393800`) with per-lane branches.
-- Hackathon-only docs (`PLAN.md`, `PROMPTS.md`, `DEMO.md`, `docs/README.md`) deleted here; they remain in `hackathon-copy`.
+- Hackathon-only docs (`PLAN.md`, `PROMPTS.md`, `DEMO.md`, `docs/`) deleted here; they remain in `hackathon-copy`.
+- The durable-memory sponsor integration removed along with its types (`ContextBrief.memoryIds`, `Insight.memoryId`) and the "· durable memory" tag.
 
 **Open:**
 - Surface direction undecided — extension vs CLI plugin vs something else. `copy-a` and `copy-b` exist to explore it.
 - Provider strategy unresolved. The goal is to draw on a user's existing monthly subscription rather than requiring an API key, which pulls toward surfaces that ride an already-authenticated session.
+- Whether Bonsai needs durable cross-conversation memory, and what should provide it, is undecided.
 - `PRODUCT.md` still carries the hackathon framing and needs a rewrite.

@@ -63,7 +63,6 @@ export interface ContextBrief {
   briefTokens: number;
   /** 0-100, rounded to one decimal. Rendered on the tree edge. */
   prunedPct: number;
-  memoryIds: string[];
 }
 
 export interface RoutingDecision {
@@ -99,8 +98,6 @@ export interface Insight {
   /** The single distilled line that merges into the parent. */
   text: string;
   createdAt: string;
-  /** Set when the durable memory write succeeded; absent on local-fallback writes. */
-  memoryId?: string;
 }
 
 /** One conversation node. The root has parentId === null and no brief. */

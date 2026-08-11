@@ -7,7 +7,6 @@
  * pronoun, a small model cannot answer it and the cheap route becomes unsafe.
  */
 import { complete } from './llm';
-import type { MemoryHit } from './memory';
 import { INTERNAL_TIER } from './models';
 import { estimateTokens, prunedPct } from './tokens';
 import type { ContextBrief, Message, UserProfile } from './types';
@@ -21,7 +20,6 @@ export interface CompileParams {
   profile?: UserProfile;
   selection: string;
   question: string;
-  memories?: MemoryHit[];
   availableTokens: number;
 }
 
@@ -32,11 +30,10 @@ interface CompilerOutput {
 
 export async function compileBrief(params: CompileParams): Promise<ContextBrief> {
   const { briefId, branchId, selection, question, availableTokens } = params;
-  const memories = params.memories ?? [];
 
   const parsed = await runCompiler(params);
   const facts = parsed.facts.slice(0, MAX_FACTS);
-  const markdown = renderBrief({ selection, question, facts, memories, profile: params.profile });
+  const markdown = renderBrief({ selection, question, facts, profile: params.profile });
   const briefTokens = estimateTokens(markdown);
 
   return {
@@ -49,7 +46,6 @@ export async function compileBrief(params: CompileParams): Promise<ContextBrief>
     availableTokens,
     briefTokens,
     prunedPct: prunedPct(availableTokens, briefTokens),
-    memoryIds: memories.map((m) => m.id),
   };
 }
 
@@ -119,7 +115,6 @@ function renderBrief(params: {
   selection: string;
   question: string;
   facts: string[];
-  memories: MemoryHit[];
   profile?: UserProfile;
 }): string {
   const lines = [`# Branch brief — ${params.selection}`, ''];
@@ -129,10 +124,6 @@ function renderBrief(params: {
   }
 
   lines.push('## Relevant facts', ...params.facts.map((f) => `- ${f}`));
-
-  if (params.memories.length) {
-    lines.push('', '## Recalled memory', ...params.memories.map((m) => `- ${m.text}`));
-  }
 
   lines.push('', `## Question`, params.question || params.selection);
   return lines.join('\n');

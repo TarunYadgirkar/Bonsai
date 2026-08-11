@@ -1,5 +1,4 @@
 import { complete } from '@/lib/llm';
-import { MEMORY_USER_ID, writeInsight } from '@/lib/memory';
 import { INTERNAL_TIER, buildLog, mockInsight } from '@/lib/mock';
 import {
   appendInsight,
@@ -41,20 +40,12 @@ export async function POST(request: Request) {
 
   const text = await distill(branch);
 
-  // Durable write is best-effort: it never blocks the merge, and always mirrors locally.
-  const memory = await writeInsight({
-    userId: MEMORY_USER_ID,
-    branchId: branch.id,
-    text,
-  });
-
   const insight: Insight = {
     id: nextId('insight'),
     branchId: branch.id,
     parentId: branch.parentId,
     text,
     createdAt: new Date().toISOString(),
-    ...(memory.remote ? { memoryId: branch.id } : {}),
   };
 
   appendInsight(branch.parentId, insight);

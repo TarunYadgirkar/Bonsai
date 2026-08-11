@@ -155,9 +155,6 @@ export function ChatPane({
                 }`}
               >
                 {insight.text}
-                {insight.memoryId && (
-                  <span className="ml-1.5 text-[10px] text-emerald-300/60">· durable memory</span>
-                )}
               </p>
             ))}
           </div>

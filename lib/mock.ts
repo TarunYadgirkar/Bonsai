@@ -96,7 +96,6 @@ export function mockBrief(
     availableTokens: available,
     briefTokens,
     prunedPct: prunedPct(available, briefTokens),
-    memoryIds: [],
   };
 }
 
