@@ -1,3 +1,9 @@
+import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
+import type { Dirent } from 'node:fs';
+import { lstat, open, opendir } from 'node:fs/promises';
+import { dirname, isAbsolute, join } from 'node:path';
+import { isDeepStrictEqual } from 'node:util';
 import { POST as branchPost } from '@/app/api/branch/route';
 import { POST as chatPost } from '@/app/api/chat/route';
 import { POST as conversationPost } from '@/app/api/conversation/route';
@@ -38,7 +44,14 @@ const MANUAL_MODE = {
 };
 
 type Phase = 'write' | 'read';
-type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
+const MAX_CHECKPOINT_BYTES = 1024 * 1024;
+const MAX_FINGERPRINT_BYTES = 4 * 1024 * 1024;
+const MAX_FINGERPRINT_ENTRIES = 512;
+
+interface ExpectedCheckpoint {
+  checkpoint: unknown;
+  fingerprint: string;
+}
 
 class WorkerFailure extends Error {}
 
@@ -81,21 +94,7 @@ function publishedSnapshot(): { state: StateResponse; logs: EconomicsResponse['l
   };
 }
 
-function normalizeTimestamps(value: unknown): JsonValue {
-  if (value === null || typeof value === 'boolean' || typeof value === 'number') return value;
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value)) return value.map(normalizeTimestamps);
-  if (typeof value !== 'object') throw new WorkerFailure('unsupported checkpoint value');
-
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [
-      key,
-      key === 'createdAt' || key === 'ts' ? '<timestamp>' : normalizeTimestamps(entry),
-    ]),
-  );
-}
-
-async function writePhase(): Promise<JsonValue> {
+async function writePhase(): Promise<unknown> {
   const independentRoot = await responseBody<NewConversationResponse>(
     'conversation write',
     await conversationPost(postRequest('/api/conversation', { title: INDEPENDENT_ROOT_TITLE })),
@@ -138,10 +137,12 @@ async function writePhase(): Promise<JsonValue> {
   );
   const published = publishedSnapshot();
   const checkpoint = await readCheckpoint();
+  const fingerprint = await persistenceFingerprint();
 
-  return normalizeTimestamps({
+  return {
     phase: 'write',
     checkpoint,
+    fingerprint,
     accepted: {
       independentRoot,
       rootChat,
@@ -154,11 +155,17 @@ async function writePhase(): Promise<JsonValue> {
         branchQuestion: BRANCH_QUESTION,
       },
     },
-  });
+  };
 }
 
-async function readPhase(): Promise<JsonValue> {
+async function readPhase(): Promise<unknown> {
+  const expected = await readExpectedCheckpoint();
+  const fingerprint = await persistenceFingerprint();
+  if (fingerprint !== expected.fingerprint) throw new WorkerFailure('checkpoint mismatch');
   const before = await readCheckpoint();
+  if (!isDeepStrictEqual(before, expected.checkpoint)) {
+    throw new WorkerFailure('checkpoint mismatch');
+  }
   const nested = before.state.conversations.find(
     (conversation) => conversation.title === NESTED_TITLE,
   );
@@ -177,14 +184,166 @@ async function readPhase(): Promise<JsonValue> {
   const published = publishedSnapshot();
   const after = await readCheckpoint();
 
-  return normalizeTimestamps({
+  return {
     phase: 'read',
     before,
     nestedChat,
     published,
     requests: { nestedChatContent: NESTED_CHAT_CONTENT },
     after,
-  });
+  };
+}
+
+async function readExpectedCheckpoint(): Promise<ExpectedCheckpoint> {
+  const checkpointPath = process.env.BONSAI_RESTART_CHECKPOINT_PATH;
+  const dataDirectory = process.env.BONSAI_DATA_DIR;
+  if (
+    !checkpointPath ||
+    !dataDirectory ||
+    !isAbsolute(checkpointPath) ||
+    !isAbsolute(dataDirectory) ||
+    dirname(checkpointPath) !== dirname(dataDirectory)
+  ) {
+    throw new WorkerFailure('checkpoint unavailable');
+  }
+
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(checkpointPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const initial = await handle.stat();
+    if (
+      !initial.isFile() ||
+      initial.nlink !== 1 ||
+      initial.size <= 0 ||
+      initial.size > MAX_CHECKPOINT_BYTES ||
+      (initial.mode & 0o077) !== 0
+    ) {
+      throw new WorkerFailure('checkpoint unavailable');
+    }
+
+    const bytes = Buffer.alloc(initial.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const read = await handle.read(bytes, offset, bytes.length - offset, offset);
+      if (read.bytesRead === 0) throw new WorkerFailure('checkpoint unavailable');
+      offset += read.bytesRead;
+    }
+    const final = await handle.stat();
+    if (final.size !== initial.size) throw new WorkerFailure('checkpoint unavailable');
+
+    try {
+      const parsed = JSON.parse(bytes.toString('utf8')) as unknown;
+      if (
+        typeof parsed !== 'object' ||
+        parsed === null ||
+        !('checkpoint' in parsed) ||
+        !('fingerprint' in parsed) ||
+        typeof parsed.fingerprint !== 'string' ||
+        !/^[a-f0-9]{64}$/.test(parsed.fingerprint)
+      ) {
+        throw new WorkerFailure('checkpoint unavailable');
+      }
+      return { checkpoint: parsed.checkpoint, fingerprint: parsed.fingerprint };
+    } catch {
+      throw new WorkerFailure('checkpoint unavailable');
+    }
+  } catch (error: unknown) {
+    if (error instanceof WorkerFailure) throw error;
+    throw new WorkerFailure('checkpoint unavailable');
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
+}
+
+async function persistenceFingerprint(): Promise<string> {
+  const dataDirectory = process.env.BONSAI_DATA_DIR;
+  if (!dataDirectory || !isAbsolute(dataDirectory)) {
+    throw new WorkerFailure('checkpoint mismatch');
+  }
+
+  const hash = createHash('sha256');
+  const budget = { bytes: 0, entries: 0 };
+  try {
+    const root = await lstat(dataDirectory);
+    if (!root.isDirectory() || root.isSymbolicLink()) {
+      throw new WorkerFailure('checkpoint mismatch');
+    }
+    await fingerprintDirectory(dataDirectory, '', hash, budget);
+    return hash.digest('hex');
+  } catch (error: unknown) {
+    if (error instanceof WorkerFailure) throw error;
+    throw new WorkerFailure('checkpoint mismatch');
+  }
+}
+
+async function fingerprintDirectory(
+  directory: string,
+  relativeDirectory: string,
+  hash: ReturnType<typeof createHash>,
+  budget: { bytes: number; entries: number },
+): Promise<void> {
+  const entries: Dirent[] = [];
+  const directoryHandle = await opendir(directory);
+  try {
+    for await (const entry of directoryHandle) {
+      budget.entries += 1;
+      if (budget.entries > MAX_FINGERPRINT_ENTRIES) {
+        throw new WorkerFailure('checkpoint mismatch');
+      }
+      entries.push(entry);
+    }
+  } finally {
+    await directoryHandle.close().catch(() => undefined);
+  }
+  entries.sort((left, right) => left.name.localeCompare(right.name));
+  for (const entry of entries) {
+    const relativePath = relativeDirectory
+      ? `${relativeDirectory}/${entry.name}`
+      : entry.name;
+    const absolutePath = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      hash.update(`directory\0${relativePath}\0`);
+      await fingerprintDirectory(absolutePath, relativePath, hash, budget);
+      continue;
+    }
+    if (!entry.isFile()) throw new WorkerFailure('checkpoint mismatch');
+    await fingerprintFile(absolutePath, relativePath, hash, budget);
+  }
+}
+
+async function fingerprintFile(
+  path: string,
+  relativePath: string,
+  hash: ReturnType<typeof createHash>,
+  budget: { bytes: number; entries: number },
+): Promise<void> {
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    const initial = await handle.stat();
+    budget.bytes += initial.size;
+    if (
+      !initial.isFile() ||
+      initial.nlink !== 1 ||
+      initial.size < 0 ||
+      budget.bytes > MAX_FINGERPRINT_BYTES
+    ) {
+      throw new WorkerFailure('checkpoint mismatch');
+    }
+    const bytes = Buffer.alloc(initial.size);
+    let offset = 0;
+    while (offset < bytes.length) {
+      const read = await handle.read(bytes, offset, bytes.length - offset, offset);
+      if (read.bytesRead === 0) throw new WorkerFailure('checkpoint mismatch');
+      offset += read.bytesRead;
+    }
+    const final = await handle.stat();
+    if (final.size !== initial.size) throw new WorkerFailure('checkpoint mismatch');
+    hash.update(`file\0${relativePath}\0${initial.size}\0`);
+    hash.update(bytes);
+  } finally {
+    await handle?.close().catch(() => undefined);
+  }
 }
 
 async function main(): Promise<void> {

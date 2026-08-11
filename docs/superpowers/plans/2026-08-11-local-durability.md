@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 Lane: copy-b
-Status: in progress — Tasks 1–5 complete
+Status: complete — Tasks 1–7 complete
 Design: `docs/superpowers/specs/2026-08-11-bonsai-local-runtime-design.md`
 
 ## Outcome
@@ -325,7 +325,7 @@ Commit:
 feat: expose persistence status
 ```
 
-## Task 6: Enforce and prove fixture isolation
+## Task 6: Enforce and prove fixture isolation — complete (`0e91985`, `909a6e0`)
 
 The supported shell script clears provider variables, but the selector at current HEAD does not force mock inference when callers set the root-only flag directly. Update the provider selector itself so non-production root-only mode chooses mock before inspecting API-provider variables. Keep production behavior unchanged.
 
@@ -350,14 +350,14 @@ chore: keep fixtures memory-only
 
 ## Task 7: Prove real restart survival
 
-Status: complete. The focused process-boundary test first failed because its worker was absent, then passed with independent write/read Node processes. The file backend reports ready durable revision 5 after the write phase and revision 6 after the post-restart nested chat while preserving the fixture and independent forest exactly apart from normalized timestamps.
+Status: complete. The focused process-boundary test first failed because its worker was absent, then passed with independent write/read Node processes. The file backend reports ready durable revision 5 after the write phase and revision 6 after the post-restart nested chat while preserving raw timestamps, the fixture, and every unrelated entry exactly.
 
 Create:
 
 - `lib/persistence/restart.test.ts`
 - `scripts/persistence-restart-worker.ts`
 
-Process A uses a temporary `BONSAI_DATA_DIR`, creates an independent root, chats, branches, merges, creates a nested branch, records routing and inference events, then exits. Process B launches independently against the same directory and prints normalized state and persistence status.
+Process A uses a temporary `BONSAI_DATA_DIR`, creates an independent root, chats, branches, merges, creates a nested branch, records routing and inference events, then exits. Process B launches independently against the same directory, verifies the complete expected checkpoint before mutation, chats on the nested branch, and prints exact raw state and persistence status.
 
 Assert exact tree state, immutable briefs, merged evidence, sequence continuity, inference events, and ready file-backend status. Assert that no seed fixture overwrote persisted data.
 

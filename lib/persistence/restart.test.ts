@@ -1,8 +1,9 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
+import { isDeepStrictEqual } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import seedConversation from '@/fixtures/seed-conversation.json';
 import seedTree from '@/fixtures/seed-tree.json';
@@ -21,6 +22,7 @@ const workerPath = resolve('scripts/persistence-restart-worker.ts');
 const dataDirectories: string[] = [];
 const EXPECTED_WRITE_PURPOSES = ['chat', 'compile', 'chat', 'merge', 'compile'];
 const EXPECTED_READ_PURPOSES = [...EXPECTED_WRITE_PURPOSES, 'chat'];
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
 interface Checkpoint {
   state: StateResponse;
@@ -31,6 +33,7 @@ interface Checkpoint {
 interface WriteOutput {
   phase: 'write';
   checkpoint: Checkpoint;
+  fingerprint: string;
   accepted: {
     independentRoot: NewConversationResponse;
     rootChat: ChatResponse;
@@ -51,7 +54,11 @@ interface ReadOutput {
   after: Checkpoint;
 }
 
-async function runWorker<T>(phase: 'write' | 'read', dataDirectory: string): Promise<T> {
+async function runWorker<T>(
+  phase: 'write' | 'read',
+  dataDirectory: string,
+  checkpointPath?: string,
+): Promise<T> {
   const result = await execFileAsync(process.execPath, ['--import', 'tsx', workerPath, phase], {
     cwd: process.cwd(),
     env: {
@@ -83,6 +90,7 @@ async function runWorker<T>(phase: 'write' | 'read', dataDirectory: string): Pro
       BONSAI_MODEL_XAI_DEEP: '',
       BONSAI_MODEL_XAI_CEILING: '',
       NO_COLOR: '1',
+      ...(checkpointPath ? { BONSAI_RESTART_CHECKPOINT_PATH: checkpointPath } : {}),
     },
     timeout: 30_000,
     maxBuffer: 1024 * 1024,
@@ -95,12 +103,93 @@ afterEach(async () => {
 });
 
 describe('file persistence restart survival', () => {
+  it('preserves raw persisted timestamps', async () => {
+    const { dataDirectory } = await restartWorkspace();
+    const written = await runWorker<WriteOutput>('write', dataDirectory);
+    const timestamps = persistedTimestamps(written.checkpoint);
+
+    expect(timestamps.length).toBeGreaterThan(0);
+    expect(timestamps.every((timestamp) => ISO_TIMESTAMP.test(timestamp))).toBe(true);
+  });
+
+  it('rejects a mismatched preflight checkpoint without advancing the revision', async () => {
+    const { dataDirectory, tempDirectory } = await restartWorkspace();
+    const written = await runWorker<WriteOutput>('write', dataDirectory);
+    const expectedPath = join(tempDirectory, 'expected-checkpoint.json');
+    const mismatchedPath = join(tempDirectory, 'mismatched-checkpoint.json');
+    await writeExpectedCheckpoint(expectedPath, written);
+    await writePrivateJson(mismatchedPath, {
+      checkpoint: {
+        ...written.checkpoint,
+        persistence: { ...written.checkpoint.persistence, revision: 4 },
+      },
+      fingerprint: written.fingerprint,
+    });
+
+    expect(await workerOutcome(dataDirectory, mismatchedPath)).toBe('checkpoint mismatch\n');
+
+    const read = await runWorker<ReadOutput>('read', dataDirectory, expectedPath);
+    expect(read.before).toEqual(written.checkpoint);
+    expect(read.before.persistence.revision).toBe(5);
+  });
+
+  it('rejects a missing store without recreating it during preflight', async () => {
+    const { dataDirectory, tempDirectory } = await restartWorkspace();
+    const written = await runWorker<WriteOutput>('write', dataDirectory);
+    const expectedPath = join(tempDirectory, 'expected-checkpoint.json');
+    await writeExpectedCheckpoint(expectedPath, written);
+    await rm(dataDirectory, { recursive: true });
+
+    expect(await workerOutcome(dataDirectory, expectedPath)).toBe('checkpoint mismatch\n');
+    await expect(stat(dataDirectory)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('rejects an unexpected stale file without cleaning it during preflight', async () => {
+    const { dataDirectory, tempDirectory } = await restartWorkspace();
+    const written = await runWorker<WriteOutput>('write', dataDirectory);
+    const expectedPath = join(tempDirectory, 'expected-checkpoint.json');
+    const stalePath = join(
+      dataDirectory,
+      '.manifest.json.1.00000000-0000-4000-8000-000000000000.tmp',
+    );
+    await writeExpectedCheckpoint(expectedPath, written);
+    await writeFile(stalePath, '{}', { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+    const staleTime = new Date(Date.now() - 48 * 60 * 60 * 1000);
+    await utimes(stalePath, staleTime, staleTime);
+
+    expect(await workerOutcome(dataDirectory, expectedPath)).toBe('checkpoint mismatch\n');
+    await expect(stat(stalePath)).resolves.toMatchObject({ size: 2 });
+  });
+
+  it('detects an unrelated entry changed alongside the nested chat', () => {
+    const before = [
+      { id: 'fixture', value: 'preserved' },
+      { id: 'nested', value: 'before' },
+    ];
+    const after = [
+      { id: 'fixture', value: 'changed' },
+      { id: 'nested', value: 'after' },
+    ];
+
+    expect(() => assertUnchangedById(before, after, new Set(['nested']), 'conversation')).toThrow(
+      'unrelated conversation changed',
+    );
+  });
+
+  it('streams persistence entries before enforcing the directory bound', async () => {
+    const source = await readFile(workerPath, 'utf8');
+
+    expect(source).toContain('await opendir(directory)');
+    expect(source).not.toContain('await readdir(directory');
+  });
+
   it('survives an independent process restart without fixture overwrite or semantic loss', async () => {
-    const dataDirectory = await mkdtemp(join(tmpdir(), 'bonsai-restart-'));
-    dataDirectories.push(dataDirectory);
+    const { dataDirectory, tempDirectory } = await restartWorkspace();
 
     const written = await runWorker<WriteOutput>('write', dataDirectory);
-    const read = await runWorker<ReadOutput>('read', dataDirectory);
+    const checkpointPath = join(tempDirectory, 'expected-checkpoint.json');
+    await writeExpectedCheckpoint(checkpointPath, written);
+    const read = await runWorker<ReadOutput>('read', dataDirectory, checkpointPath);
 
     expect(written.phase).toBe('write');
     expect(read.phase).toBe('read');
@@ -127,7 +216,7 @@ describe('file persistence restart survival', () => {
       'Restart survival nested branch',
     ]);
     expect(conversationById(written.checkpoint.state, seedConversation.id)).toEqual(
-      normalizeTimestamps({
+      {
         id: seedConversation.id,
         title: seedConversation.title,
         parentId: null,
@@ -136,12 +225,10 @@ describe('file persistence restart survival', () => {
         insights: seedTree.rootInsights,
         pinnedTier: null,
         archived: false,
-      }),
+      },
     );
     for (const fixtureBranch of seedTree.branches) {
-      expect(conversationById(written.checkpoint.state, fixtureBranch.id)).toEqual(
-        normalizeTimestamps(fixtureBranch),
-      );
+      expect(conversationById(written.checkpoint.state, fixtureBranch.id)).toEqual(fixtureBranch);
     }
     expect(persistedRoot).toEqual({
       ...independentRoot.conversation,
@@ -150,7 +237,7 @@ describe('file persistence restart survival', () => {
           id: precedingSequenceId(rootChat.message.id),
           role: 'user',
           content: requests.rootChatContent,
-          createdAt: '<timestamp>',
+          createdAt: expect.stringMatching(ISO_TIMESTAMP),
         },
         rootChat.message,
       ],
@@ -259,22 +346,82 @@ describe('file persistence restart survival', () => {
     });
     expect(read.after.state.persistence).toEqual(read.after.persistence);
 
+    const nestedBefore = conversationById(read.before.state, nested.conversation.id);
     const nestedAfter = conversationById(read.after.state, nested.conversation.id);
     expect(conversationById(read.after.state, branch.conversation.id).brief).toEqual(branch.brief);
     expect(
       conversationById(read.after.state, independentRoot.conversation.id).insights,
     ).toEqual([merge.insight]);
     expect(nestedAfter.brief).toEqual(nested.brief);
-    expect(nestedAfter.messages).toEqual([
-      ...nested.conversation.messages,
-      {
-        id: precedingSequenceId(read.nestedChat.message.id),
-        role: 'user',
-        content: read.requests.nestedChatContent,
-        createdAt: '<timestamp>',
-      },
-      read.nestedChat.message,
+    const expectedNested = {
+      ...nestedBefore,
+      messages: [
+        ...nestedBefore.messages,
+        {
+          id: precedingSequenceId(read.nestedChat.message.id),
+          role: 'user' as const,
+          content: read.requests.nestedChatContent,
+          createdAt: expect.stringMatching(ISO_TIMESTAMP),
+        },
+        read.nestedChat.message,
+      ],
+    };
+    expect(nestedAfter).toEqual(expectedNested);
+
+    const nestedTreeBefore = treeNode(read.before.state, nested.conversation.id);
+    const expectedNestedTree = {
+      ...nestedTreeBefore,
+      messageCount: nestedTreeBefore.messageCount + 2,
+      lastTier: read.nestedChat.routing.tier,
+    };
+    expect(read.after.state.rootId).toBe(read.before.state.rootId);
+    expect(read.after.state.conversations).toEqual(
+      read.before.state.conversations.map((conversation) =>
+        conversation.id === nested.conversation.id ? expectedNested : conversation,
+      ),
+    );
+    expect(read.after.state.tree).toEqual(
+      read.before.state.tree.map((node) =>
+        node.id === nested.conversation.id ? expectedNestedTree : node,
+      ),
+    );
+    assertUnchangedById(
+      read.before.state.conversations,
+      read.after.state.conversations,
+      new Set([nested.conversation.id]),
+      'conversation',
+    );
+    assertUnchangedById(
+      read.before.state.tree,
+      read.after.state.tree,
+      new Set([nested.conversation.id]),
+      'tree node',
+    );
+    expect(read.after.economics.logs).toEqual([
+      ...read.before.economics.logs,
+      read.nestedChat.log,
     ]);
+    expect(read.after.economics.totals).toEqual({
+      inferenceCount: read.before.economics.totals.inferenceCount + 1,
+      inputTokens: read.before.economics.totals.inputTokens + read.nestedChat.log.inputTokens,
+      outputTokens: read.before.economics.totals.outputTokens + read.nestedChat.log.outputTokens,
+      costUsd: roundUsd(
+        read.before.economics.totals.costUsd + read.nestedChat.log.estCostUsd,
+      ),
+    });
+    const baselineInputTokens =
+      read.before.economics.baseline.inputTokens + read.nestedChat.log.baselineInputTokens;
+    const baselineCostUsd = roundUsd(
+      read.before.economics.baseline.costUsd + read.nestedChat.log.baselineCostUsd,
+    );
+    expect(read.after.economics.baseline).toEqual({
+      inputTokens: baselineInputTokens,
+      costUsd: baselineCostUsd,
+      tokensSavedPct: pctSaved(baselineInputTokens, read.after.economics.totals.inputTokens),
+      costSavedPct: pctSaved(baselineCostUsd, read.after.economics.totals.costUsd),
+    });
+    expect(read.after.persistence.revision).toBe((read.before.persistence.revision ?? 0) + 1);
+    expect(read.after.state.persistence).toEqual(read.after.persistence);
     expect(read.after.state.conversations.filter((conversation) => conversation.parentId === null)).toHaveLength(2);
 
     expectSequenceContinuation(written.checkpoint, seedTree.seq + 1);
@@ -312,19 +459,70 @@ function expectSequenceContinuation(checkpoint: Checkpoint, firstSuffix: number)
   );
 }
 
-function normalizeTimestamps(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(normalizeTimestamps);
-  if (typeof value !== 'object' || value === null) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, entry]) => [
-      key,
-      key === 'createdAt' || key === 'ts' ? '<timestamp>' : normalizeTimestamps(entry),
-    ]),
-  );
-}
-
 function precedingSequenceId(id: string): string {
   const separator = id.lastIndexOf('_');
   const suffix = Number(id.slice(separator + 1));
   return `${id.slice(0, separator)}_${suffix - 1}`;
+}
+
+async function restartWorkspace(): Promise<{
+  dataDirectory: string;
+  tempDirectory: string;
+}> {
+  const tempDirectory = await mkdtemp(join(tmpdir(), 'bonsai-restart-'));
+  dataDirectories.push(tempDirectory);
+  return { dataDirectory: join(tempDirectory, 'data'), tempDirectory };
+}
+
+async function writePrivateJson(path: string, value: unknown): Promise<void> {
+  await writeFile(path, JSON.stringify(value), { encoding: 'utf8', flag: 'wx', mode: 0o600 });
+}
+
+async function writeExpectedCheckpoint(path: string, written: WriteOutput): Promise<void> {
+  await writePrivateJson(path, {
+    checkpoint: written.checkpoint,
+    fingerprint: written.fingerprint,
+  });
+}
+
+async function workerOutcome(dataDirectory: string, checkpointPath: string): Promise<string> {
+  try {
+    await runWorker('read', dataDirectory, checkpointPath);
+    return 'resolved';
+  } catch (error: unknown) {
+    if (typeof error !== 'object' || error === null || !('stderr' in error)) return 'rejected';
+    return String(error.stderr);
+  }
+}
+
+function persistedTimestamps(checkpoint: Checkpoint): string[] {
+  return [
+    ...checkpoint.state.conversations.flatMap((conversation) => [
+      ...conversation.messages.flatMap((message) => message.createdAt ?? []),
+      ...conversation.insights.map((insight) => insight.createdAt),
+    ]),
+    ...checkpoint.economics.logs.map((log) => log.ts),
+  ];
+}
+
+function assertUnchangedById<T extends { id: string }>(
+  before: T[],
+  after: T[],
+  affectedIds: ReadonlySet<string>,
+  label: string,
+): void {
+  const beforeUnchanged = before.filter((entry) => !affectedIds.has(entry.id));
+  const afterUnchanged = after.filter((entry) => !affectedIds.has(entry.id));
+  if (!isDeepStrictEqual(afterUnchanged, beforeUnchanged)) {
+    throw new Error(`unrelated ${label} changed`);
+  }
+}
+
+function roundUsd(value: number): number {
+  return Math.round(value * 1_000_000) / 1_000_000;
+}
+
+function pctSaved(baseline: number, actual: number): number {
+  if (baseline <= 0) return 0;
+  return Math.round(((baseline - actual) / baseline) * 1000) / 10;
 }

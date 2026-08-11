@@ -242,7 +242,7 @@ Next:
 Completed:
 
 - added a bounded two-process harness that invokes the exported conversation, chat, branch, merge, state, persistence, and economics route handlers with real `Request` objects;
-- process A persisted an independent root and root chat, an answered branch, an active merged insight with archival, and a nested branch; process B loaded the exact normalized checkpoint, chatted on the nested branch, and reread authoritative state;
+- process A persisted an independent root and root chat, an answered branch, an active merged insight with archival, and a nested branch; process B validated the exact raw checkpoint before mutation, chatted on the nested branch, and reread authoritative state;
 - isolated child processes with an explicit environment allowlist, an absolute temporary data directory, explicit file selection, cleared fixture, hosting, KV, and inference-provider variables, safe worker failures, bounded execution, and exact cleanup;
 - proved immutable parent and nested briefs, nested source references, merged evidence and source-message IDs, independent tree depth and archive state, fixture preservation, exact completion-purpose order, manual Fable/max routing, contiguous global sequence allocation, and ready durable revisions 5 then 6.
 
@@ -250,5 +250,15 @@ Verification evidence:
 
 - the initial focused RED failed only because `scripts/persistence-restart-worker.ts` did not exist;
 - review-strengthened RED proved the test rejected missing complete published-state capture after the post-restart chat;
-- the focused restart test passed across two actual Node processes; full Vitest passed 248 tests, and strict TypeScript, full ESLint, the webpack production build, fixture contract, diff check, and focused secret/debug scans passed;
+- the focused restart test passed seven tests across actual Node processes; full Vitest passed 254 tests, and strict TypeScript, full ESLint, the webpack production build, fixture contract, diff check, and focused secret/debug scans passed;
 - code and TypeScript review findings about incomplete accepted-state comparisons and selector documentation were fixed, then both re-reviews approved with no remaining Critical or Important findings; security review also approved with no Critical or Important findings.
+
+Spec-review follow-up:
+
+- preserved every raw message, insight, and inference timestamp instead of replacing accepted values with placeholders;
+- added a bounded raw-disk fingerprint plus private-checkpoint handshake that rejects missing, altered, or stale-file Process A state before public reads and rejects semantic mismatch before mutation;
+- proved a rejected preflight leaves revision 5 intact, then allowed the matching preflight to produce revision 6;
+- compared every unaffected conversation, tree node, and prior inference event exactly across the post-restart chat, with exact nested message, tree, log, economics, sequence, and revision deltas;
+- corrected the durability plan milestone status and Task 6 completion heading.
+- streamed fingerprint directory entries so the 512-entry bound applies before allocation, not after an unbounded directory read.
+- fresh code, TypeScript, and security re-reviews approved the final follow-up with no Critical or Important findings.
