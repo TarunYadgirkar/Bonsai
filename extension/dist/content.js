@@ -12,9 +12,13 @@
     if (!res.ok) throw new Error(`claude.ai ${res.status} on ${path}`);
     return await res.json();
   }
+  var UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   async function orgId() {
     const cookie = document.cookie.match(/lastActiveOrg=([^;]+)/)?.[1];
-    if (cookie) return decodeURIComponent(cookie);
+    if (cookie) {
+      const decoded = decodeURIComponent(cookie);
+      if (UUID_RE.test(decoded)) return decoded;
+    }
     const orgs = await get("/api/organizations");
     const id = orgs[0]?.uuid;
     if (!id) throw new Error("bonsai: no organization found");
@@ -142,9 +146,10 @@
     let last = location.href;
     const check = () => {
       if (location.href === last) return;
+      const cameFromNew = conversationIdFromUrl(last) === null;
       last = location.href;
       const convId = conversationIdFromUrl(location.href);
-      if (convId && linkedNodeId) {
+      if (convId && linkedNodeId && cameFromNew) {
         chrome.runtime.sendMessage({ type: "LINK_NODE", nodeId: linkedNodeId, conversationId: convId });
         linkedNodeId = null;
       }

@@ -60,6 +60,8 @@ export function ChatPane({
   branching,
   merging,
   highlightInsightId,
+  initialDraft,
+  onDraftRestored,
 }: {
   conversation: Conversation;
   /** Resolves false when the send failed, so the composer can restore the draft. */
@@ -73,10 +75,22 @@ export function ChatPane({
   branching: boolean;
   merging: boolean;
   highlightInsightId: string | null;
+  /** A draft recovered from a send that failed while this branch was unmounted (branch switch). */
+  initialDraft?: string;
+  /** Called once this branch's recovered draft has been seeded, so the parent can drop it. */
+  onDraftRestored?: () => void;
 }) {
-  const [draft, setDraft] = useState('');
+  // Seed from a recovered failed-send draft: ChatPane remounts per branch, so a plain local
+  // restore is lost if the user switched branches mid-send. The parent hands it back here.
+  const [draft, setDraft] = useState(initialDraft ?? '');
   const [selection, setSelection] = useState<Selection | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialDraft) onDraftRestored?.();
+    // Mount-only: initialDraft is a one-shot hand-off consumed when this branch mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Keep the newest message in view as the thread grows.
   useEffect(() => {

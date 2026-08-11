@@ -1,9 +1,22 @@
 import * as esbuild from 'esbuild';
 import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 
 // Resolve entry points relative to this file, not the caller's cwd — CI runs it from the repo root.
 const root = dirname(fileURLToPath(import.meta.url));
+
+// Structural never-send: redirect the engine's './provider' import to a stub, so the real
+// fetch-to-model POST code is physically absent from the extension bundle (not merely dead because
+// no keys are set). Scoped to imports originating inside packages/engine so nothing else is hit.
+const stubProviderPlugin = {
+  name: 'stub-engine-provider',
+  setup(build) {
+    build.onResolve({ filter: /(^|\/)provider$/ }, (args) => {
+      if (!args.importer.includes('packages/engine')) return undefined;
+      return { path: join(root, 'src/provider-stub.ts') };
+    });
+  },
+};
 
 // The engine reads process.env for provider keys; in the browser there are none, so define them
 // as undefined — providerName() resolves to 'mock' and the extractive compiler runs locally with
@@ -22,6 +35,7 @@ const common = {
   absWorkingDir: root,
   sourcemap: true,
   define,
+  plugins: [stubProviderPlugin],
   logLevel: 'info',
 };
 

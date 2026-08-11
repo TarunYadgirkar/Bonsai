@@ -110,145 +110,9 @@
     deep: routingLabel(TIER_DEFAULTS.deep.model, TIER_DEFAULTS.deep.effort)
   };
 
-  // ../packages/engine/src/logger.ts
-  var active = console;
-  var logger = {
-    warn: (...args) => active.warn(...args),
-    error: (...args) => active.error(...args)
-  };
-
-  // ../packages/engine/src/provider.ts
-  function providerName() {
-    if (void 0) return "anthropic";
-    if (void 0) return "openai";
-    if (void 0) return "xai";
-    return "mock";
-  }
-  function upstreamModel(bonsaiModelId) {
-    const rung = RUNG_BY_MODEL[bonsaiModelId] ?? "QUICK";
-    const provider = providerName();
-    const override = process.env[`BONSAI_MODEL_${provider.toUpperCase()}_${rung}`];
-    if (override) return override;
-    return DEFAULT_UPSTREAM[provider]?.[rung] ?? bonsaiModelId;
-  }
-  var RUNG_BY_MODEL = {
-    "claude-haiku-4-5": "QUICK",
-    "claude-sonnet-5": "MID",
-    "claude-opus-5": "DEEP",
-    "claude-fable-5": "CEILING"
-  };
-  var DEFAULT_UPSTREAM = {
-    anthropic: {
-      QUICK: "claude-haiku-4-5-20251001",
-      MID: "claude-sonnet-5",
-      DEEP: "claude-opus-5",
-      CEILING: "claude-fable-5"
-    },
-    openai: {
-      QUICK: "gpt-5.4-mini",
-      MID: "gpt-5.4",
-      DEEP: "gpt-5.5",
-      CEILING: "gpt-5.5"
-    },
-    xai: {
-      QUICK: "grok-4.3",
-      MID: "grok-4.3",
-      DEEP: "grok-4.5",
-      CEILING: "grok-4.5"
-    }
-  };
-  function anthropicCaps(upstream) {
-    if (upstream.startsWith("claude-haiku-4-5")) return { sampling: true, effort: false };
-    return { sampling: false, effort: true };
-  }
-  var TOTAL_CAP_BY_EFFORT = {
-    low: 4e3,
-    medium: 6e3,
-    high: 12e3,
-    max: 16e3
-  };
-  var TIMEOUT_BY_EFFORT = {
-    low: 3e4,
-    medium: 45e3,
-    high: 9e4,
-    max: 12e4
-  };
-  async function providerComplete(params) {
-    const provider = providerName();
-    if (provider === "mock") return null;
-    const upstream = upstreamModel(params.model);
-    try {
-      const result = provider === "anthropic" ? await callAnthropic(upstream, params) : await callOpenAiCompatible(provider, upstream, params);
-      if (!result?.text.trim()) {
-        logger.warn(`[llm] ${provider} returned no content on ${upstream} \u2014 falling back to mock`);
-        return null;
-      }
-      return result;
-    } catch (err) {
-      logger.warn(`[llm] ${provider} failed (${err.message}) \u2014 falling back to mock`);
-      return null;
-    }
-  }
-  function anthropicBody(upstream, params) {
-    const caps = anthropicCaps(upstream);
-    const system = params.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
-    const turns = params.messages.filter((m) => m.role !== "system");
-    const effort = params.effort ?? "medium";
-    return {
-      model: upstream,
-      // On adaptive-thinking models the cap covers thinking + text; the caller's answer-sized
-      // ceiling would truncate mid-thought, so the effort-keyed total wins when larger.
-      max_tokens: caps.effort ? Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort]) : params.maxTokens,
-      ...caps.sampling ? { temperature: params.temperature ?? 0.2 } : {},
-      ...caps.effort ? { output_config: { effort } } : {},
-      ...system ? { system } : {},
-      messages: turns.map((m) => ({ role: m.role, content: m.content }))
-    };
-  }
-  async function callAnthropic(upstream, params) {
-    const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "x-api-key": void 0,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(anthropicBody(upstream, params)),
-      signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
-    });
-    if (!res.ok) throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
-    const body = await res.json();
-    if (body.stop_reason === "refusal") throw new Error(`anthropic refusal on ${upstream}`);
-    return {
-      text: (body.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join(""),
-      inputTokens: body.usage?.input_tokens ?? 0,
-      outputTokens: body.usage?.output_tokens ?? 0,
-      servedBy: upstream
-    };
-  }
-  async function callOpenAiCompatible(provider, upstream, params) {
-    const base = provider === "openai" ? "https://api.openai.com/v1" : "https://api.x.ai/v1";
-    const key = provider === "openai" ? void 0 : void 0;
-    const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
-    const res = await fetch(`${base}/chat/completions`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: upstream,
-        messages: params.messages,
-        max_completion_tokens: params.maxTokens
-      }),
-      signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
-    });
-    if (!res.ok) throw new Error(`${provider} ${res.status} ${(await res.text()).slice(0, 160)}`);
-    const body = await res.json();
-    return {
-      text: body.choices?.[0]?.message?.content ?? "",
-      inputTokens: body.usage?.prompt_tokens ?? 0,
-      outputTokens: body.usage?.completion_tokens ?? 0,
-      servedBy: upstream
-    };
+  // src/provider-stub.ts
+  async function providerComplete(_params) {
+    return null;
   }
 
   // ../packages/engine/src/llm.ts
@@ -317,14 +181,6 @@
     }
     return { kind: "other", confidence: UNCLEAR_CONFIDENCE };
   }
-  var MOCK_FACTS = [
-    "Free Ventures is a student-run startup accelerator at Berkeley; you apply with your own startup.",
-    "Free Ventures applications close September 11, with an info session on September 3.",
-    "Tarun is an incoming Berkeley freshman in applied math, CS-focused, already building a startup with a cofounder.",
-    "Tarun wants at most two clubs, builder-first and startup-adjacent over resume-padding.",
-    "Tarun has a hard cap of 8-10 hours per week across all clubs.",
-    "Berkeley Consulting was ruled out because of its case-interview recruiting process."
-  ];
   var MOCK_FACT_COUNT = 6;
   var STOPWORDS = new Set(
     "the a an and or but if of to in on for with about from into over after is are was were be been do does did what when where which who whom how why my your our their this that these those i you he she it we they me him her us them can could should would will shall may might must not have has had all any some more most other than then them there here also just only very much".split(" ")
@@ -401,11 +257,15 @@
     const selection = /Branch topic \(highlighted text\):\s*(.*)$/m.exec(prompt)?.[1] ?? "";
     const question = /Branch question:\s*(.*)$/m.exec(prompt)?.[1] ?? "";
     const transcript = prompt.split(/^Parent conversation:$/m)[1] ?? "";
+    const sentences = sentencesWithRole(transcript);
     const terms = keywords(`${selection} ${question}`);
-    const facts = rankBySalience(sentencesWithRole(transcript), terms, MOCK_FACT_COUNT, selection);
+    let facts = rankBySalience(sentences, terms, MOCK_FACT_COUNT, selection);
+    if (!facts.length) {
+      facts = sentences.filter((s) => !s.text.endsWith("?")).slice(0, MOCK_FACT_COUNT).map((s) => s.text);
+    }
     return JSON.stringify({
-      facts: facts.length ? facts : MOCK_FACTS,
-      excludedNote: facts.length ? `Excluded: the rest of the parent thread \u2014 everything not bearing on ${selection || "this branch"}.` : "Excluded: the club-by-club comparison, workload math, decision tree, and interview prep from the parent thread."
+      facts: facts.length ? facts : [`Topic in focus: ${selection || question || "this branch"}.`],
+      excludedNote: `Excluded: the rest of the parent thread \u2014 everything not bearing on ${selection || "this branch"}.`
     });
   }
   function mockComplete(tier, model, messages, inputTokens, purpose) {
@@ -438,15 +298,20 @@
     const question = prompt.split(/\n---\n/).pop()?.trim() ?? "";
     if (DEADLINE_QUESTION.test(question)) return DEMO_ANSWERS.deadline;
     if (RANKING_QUESTION.test(question)) return DEMO_ANSWERS.ranking;
+    const facts = factsFromBrief(prompt);
+    const onBrief = facts.length > 0;
+    const body = prompt.split(/\n---\n/).slice(0, -1).join("\n---\n");
+    const widened = /## Pulled from the parent thread[^\n]*\n([\s\S]*)$/.exec(body)?.[1] ?? "";
+    const candidates = onBrief ? [...facts, ...sentencesOf(widened).filter((s) => !s.endsWith("?"))] : sentencesOf(body).filter((s) => !s.endsWith("?"));
     const hits = rankByRelevance(
-      factsFromBrief(prompt),
+      candidates,
       keywords(question),
       FACTS_PER_TIER[tier],
       void 0,
       ANSWER_MIN_SCORE
     );
     if (!hits.length) {
-      return "The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does.";
+      return onBrief ? "The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does." : "The context here does not cover that yet \u2014 add what matters to the conversation and ask again.";
     }
     if (tier === "quick") return hits[0];
     return `${hits.map((h) => `- ${h}`).join("\n")}
@@ -503,6 +368,13 @@ That is what this branch's brief supports; anything beyond it would need more of
     if (/single durable conclusion/i.test(prompt)) return mockDistill(prompt);
     return mockAnswer(tier, prompt);
   }
+
+  // ../packages/engine/src/logger.ts
+  var active = console;
+  var logger = {
+    warn: (...args) => active.warn(...args),
+    error: (...args) => active.error(...args)
+  };
 
   // ../packages/engine/src/compiler.ts
   var MAX_FACTS = 8;
@@ -576,9 +448,10 @@ That is what this branch's brief supports; anything beyond it would need more of
     if (start !== -1 && end > start) {
       try {
         const json = JSON.parse(text.slice(start, end + 1));
-        if (Array.isArray(json.facts) && json.facts.length) {
+        const facts = Array.isArray(json.facts) ? json.facts.filter((f) => typeof f === "string") : [];
+        if (facts.length) {
           return {
-            facts: json.facts.filter((f) => typeof f === "string"),
+            facts,
             excludedNote: typeof json.excludedNote === "string" ? json.excludedNote : "Excluded: the rest of the parent conversation."
           };
         }
@@ -802,6 +675,7 @@ That is what this branch's brief supports; anything beyond it would need more of
       overridden: false,
       coveredByBrief: covered,
       learned: adjusted.learned,
+      classifiedTier,
       kind,
       confidence
     });
@@ -875,6 +749,7 @@ Question: ${params.question}`
       overridden: params.overridden,
       ...params.coveredByBrief === void 0 ? {} : { coveredByBrief: params.coveredByBrief },
       ...params.learned ? { learned: true } : {},
+      ...params.classifiedTier ? { classifiedTier: params.classifiedTier } : {},
       ...params.kind ? { kind: params.kind } : {},
       ...params.confidence === void 0 ? {} : { confidence: params.confidence }
     };
@@ -1008,6 +883,7 @@ Question: ${params.question}`
     }
   }
   var lastCompiled = null;
+  var selectionConversationId = null;
   async function compile() {
     const selection = $("selection").value.trim();
     const question = $("question").value.trim();
@@ -1020,6 +896,11 @@ Question: ${params.question}`
     const active2 = await toContent({ type: "GET_ACTIVE" });
     if (!active2?.conversationId) {
       status.textContent = "Open a Claude chat first, then compile.";
+      return;
+    }
+    if (selectionConversationId && selectionConversationId !== active2.conversationId) {
+      status.textContent = "That selection was from a different chat \u2014 reselect text in this one.";
+      selectionConversationId = null;
       return;
     }
     const treeRes = await toContent({ type: "GET_TREE", conversationId: active2.conversationId });
@@ -1083,7 +964,14 @@ Question: ${params.question}`
   async function openBranch(brief, routing, chosenTier, recommendedTier, parentConversationId, parentName) {
     if (chosenTier !== recommendedTier) {
       const profile = await loadProfile();
-      await saveProfile(recordFeedback(profile, { kind: "override", classifiedTier: recommendedTier, chosenTier }));
+      await saveProfile(
+        recordFeedback(profile, {
+          kind: "override",
+          classifiedTier: routing.classifiedTier ?? recommendedTier,
+          chosenTier,
+          questionKind: routing.kind
+        })
+      );
     }
     const model = TIER_DEFAULTS[chosenTier].model;
     const effort = TIER_DEFAULTS[chosenTier].effort;
@@ -1166,6 +1054,7 @@ Question: ${params.question}`
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "SELECTION") {
       $("selection").value = msg.text;
+      selectionConversationId = msg.conversationId ?? null;
       $("question").focus();
     }
   });

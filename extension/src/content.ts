@@ -124,9 +124,13 @@ function watchForConversationId(): void {
   let last = location.href;
   const check = () => {
     if (location.href === last) return;
+    // Link ONLY on the transition from a conversation-less page (the fresh /new chat the branch
+    // opened) to one with a real id. Without this guard, navigating to any existing chat later
+    // would wrongly bind the draft node to whatever conversation the user happened to open.
+    const cameFromNew = conversationIdFromUrl(last) === null;
     last = location.href;
     const convId = conversationIdFromUrl(location.href);
-    if (convId && linkedNodeId) {
+    if (convId && linkedNodeId && cameFromNew) {
       chrome.runtime.sendMessage({ type: 'LINK_NODE', nodeId: linkedNodeId, conversationId: convId });
       linkedNodeId = null;
     }

@@ -17,6 +17,8 @@ async function updateNode(id, patch) {
 // src/sw.ts
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {
 });
+chrome.storage.session.setAccessLevel({ accessLevel: "TRUSTED_AND_UNTRUSTED_CONTEXTS" }).catch(() => {
+});
 chrome.tabs.onUpdated.addListener((tabId, _info, tab) => {
   if (!tab.url) return;
   const onClaude = new URL(tab.url).origin === "https://claude.ai";

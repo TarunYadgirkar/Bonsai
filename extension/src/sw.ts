@@ -8,6 +8,12 @@ import { updateNode } from './store';
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
+// session storage defaults to TRUSTED_CONTEXTS only, so the content script (an untrusted context)
+// cannot read the pending-branch hand-off — the prefill would silently no-op. Open it to both.
+chrome.storage.session
+  .setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' })
+  .catch(() => {});
+
 chrome.tabs.onUpdated.addListener((tabId, _info, tab) => {
   if (!tab.url) return;
   const onClaude = new URL(tab.url).origin === 'https://claude.ai';

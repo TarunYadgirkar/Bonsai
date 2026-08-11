@@ -4,7 +4,7 @@
   "description": "Branch side questions off any Claude chat with a compiled minimal brief, auto-routed model + effort, and one-insight merge-back. Human-in-the-loop: you always press send.",
   "version": "0.1.0",
   "minimum_chrome_version": "116",
-  "permissions": ["sidePanel", "storage", "unlimitedStorage", "tabs"],
+  "permissions": ["sidePanel", "storage", "unlimitedStorage"],
   "host_permissions": ["https://claude.ai/*"],
   "background": { "service_worker": "dist/sw.js", "type": "module" },
   "content_scripts": [

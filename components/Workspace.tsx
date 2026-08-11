@@ -104,6 +104,8 @@ export function Workspace() {
    */
   const [pendingModes, setPendingModes] = useState<Record<string, ModeSelection | null>>({});
   const [merging, setMerging] = useState(false);
+  /** A draft from a send that failed while its branch was unmounted — handed back on remount. */
+  const [failedDraft, setFailedDraft] = useState<{ branchId: string; content: string } | null>(null);
   const [flight, setFlight] = useState<Flight | null>(null);
   /** The insight that just landed, so the parent node and the line itself can glow. */
   const [merged, setMerged] = useState<{ parentId: string; insightId: string } | null>(null);
@@ -215,23 +217,34 @@ export function Workspace() {
       });
 
       // Optimistically append so the thread updates without a full refetch;
-      // loadState() then reconciles with whatever the engine actually stored.
+      // loadState() then reconciles with whatever the engine actually stored. Also carry the
+      // just-sent pin onto the conversation so the chip doesn't flicker to Auto during the
+      // refetch window (the server has the pin; our local copy shouldn't briefly disagree).
+      const sentPin = hadPending ? (pending ?? null) : undefined;
       setState((prev) =>
         prev
           ? {
               ...prev,
               conversations: prev.conversations.map((c) =>
                 c.id === data.branchId
-                  ? { ...c, messages: [...c.messages, data.message] }
+                  ? {
+                      ...c,
+                      messages: [...c.messages, data.message],
+                      ...(sentPin !== undefined ? { pinnedMode: sentPin } : {}),
+                    }
                   : c,
               ),
             }
           : prev,
       );
+      // A prior failed draft for this branch succeeded now — drop it.
+      setFailedDraft((fd) => (fd?.branchId === branchId ? null : fd));
       await loadState();
       return true;
     } catch (err) {
       setError(describe(err));
+      // Preserve the draft even if the user has since switched branches (ChatPane unmounted).
+      setFailedDraft({ branchId, content });
       return false;
     } finally {
       setSending(false);
@@ -496,6 +509,8 @@ export function Workspace() {
           highlightInsightId={
             merged && merged.parentId === active.id ? merged.insightId : null
           }
+          initialDraft={failedDraft?.branchId === active.id ? failedDraft.content : undefined}
+          onDraftRestored={() => setFailedDraft(null)}
         />
       ) : (
         <section className="flex flex-1 items-center justify-center bg-paper">

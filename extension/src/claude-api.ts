@@ -25,10 +25,18 @@ interface Org {
   uuid: string;
 }
 
+/** A UUID, the shape of a real org id. The cookie is page-writable, so validate before trusting. */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Active org id: the non-HttpOnly cookie first, the org list as a fallback for multi-org users. */
 export async function orgId(): Promise<string> {
   const cookie = document.cookie.match(/lastActiveOrg=([^;]+)/)?.[1];
-  if (cookie) return decodeURIComponent(cookie);
+  // The cookie is writable by any script on the page — only trust it if it is a well-formed UUID,
+  // so a poisoned value can't be interpolated into the org-scoped fetch paths built from it.
+  if (cookie) {
+    const decoded = decodeURIComponent(cookie);
+    if (UUID_RE.test(decoded)) return decoded;
+  }
   const orgs = await get<Org[]>('/api/organizations');
   const id = orgs[0]?.uuid;
   if (!id) throw new Error('bonsai: no organization found');

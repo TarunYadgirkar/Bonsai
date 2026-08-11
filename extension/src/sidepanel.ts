@@ -38,6 +38,8 @@ async function toContent<T>(msg: unknown): Promise<T | undefined> {
 /* ---------- branch flow ---------- */
 
 let lastCompiled: { brief: import('@bonsai/engine').ContextBrief; routing: RoutingDecision } | null = null;
+/** The conversation the current selection was made in, so compiling can't target the wrong chat. */
+let selectionConversationId: string | null = null;
 
 async function compile(): Promise<void> {
   const selection = $<HTMLTextAreaElement>('selection').value.trim();
@@ -52,6 +54,13 @@ async function compile(): Promise<void> {
   const active = await toContent<ActiveInfo>({ type: 'GET_ACTIVE' });
   if (!active?.conversationId) {
     status.textContent = 'Open a Claude chat first, then compile.';
+    return;
+  }
+  // The selection came from a specific chat; if the active tab has since moved to a different one,
+  // compiling would read the wrong conversation. Stop and make the user reselect here.
+  if (selectionConversationId && selectionConversationId !== active.conversationId) {
+    status.textContent = 'That selection was from a different chat — reselect text in this one.';
+    selectionConversationId = null;
     return;
   }
   const treeRes = await toContent<TreeResult>({ type: 'GET_TREE', conversationId: active.conversationId });
@@ -130,10 +139,18 @@ async function openBranch(
   parentConversationId: string,
   parentName: string,
 ): Promise<void> {
-  // A changed pick is a labeled correction — teach the local router.
+  // A changed pick is a labeled correction — teach the local router. Attribute it to the
+  // classifier's PRE-adjustment tier and carry the question kind, so per-kind learning trains.
   if (chosenTier !== recommendedTier) {
     const profile = await loadProfile();
-    await saveProfile(recordFeedback(profile, { kind: 'override', classifiedTier: recommendedTier, chosenTier }));
+    await saveProfile(
+      recordFeedback(profile, {
+        kind: 'override',
+        classifiedTier: routing.classifiedTier ?? recommendedTier,
+        chosenTier,
+        questionKind: routing.kind,
+      }),
+    );
   }
   const model = TIER_DEFAULTS[chosenTier].model;
   const effort = TIER_DEFAULTS[chosenTier].effort;
@@ -228,6 +245,8 @@ function mergeControls(node: TreeNode): HTMLElement {
 chrome.runtime.onMessage.addListener((msg: ContentToPanel) => {
   if (msg.type === 'SELECTION') {
     $<HTMLTextAreaElement>('selection').value = msg.text;
+    // Remember which chat the text was selected in, so compile() can refuse a mismatched tab.
+    selectionConversationId = msg.conversationId ?? null;
     $<HTMLTextAreaElement>('question').focus();
   }
 });
