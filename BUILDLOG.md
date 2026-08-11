@@ -3,6 +3,18 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Segment 5: eval harness (the moat, measured)
+
+- `evals/` runs the engine in-process against scenario cases: referent resolution at depth 1
+  (two scenarios, one sharing zero vocabulary with the demo fixture), the **depth-2 proof**
+  (fork → sub-conversation that never names the entity → fork again asking "when is the
+  deadline?" — only brief composition can resolve it, and it does), routing thresholds
+  (lookup→quick, ranking→deep), coverage flagging (uncovered question → covered:false), and
+  merge distillation (one line, ≤20 words, referents resolved). 7/7 in mock mode.
+- `npm run eval` exits nonzero on failure. GitHub Actions CI added: typecheck + tests + evals +
+  build on every push to main/copy-a/copy-b. Same assertions grade live compiler output when a
+  key is present — entity-presence checks hold for mock and live alike.
+
 ## 2026-08-11 — Segment 4: relational persistence + hardened API boundary
 
 - One-blob `store_snapshot` replaced by relational rows (conversations / messages / insights /

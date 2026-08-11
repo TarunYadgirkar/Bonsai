@@ -1,0 +1,22 @@
+name: ci
+
+on:
+  push:
+    branches: [main, copy-a, copy-b]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      # No keys in CI: evals run against the mock, gating plumbing + routing thresholds.
+      - run: npm run eval
+      - run: npm run build
