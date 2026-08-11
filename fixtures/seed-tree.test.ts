@@ -19,6 +19,7 @@ describe('generated seed tree contract', () => {
       'Law school tuition inquiry (off-brief)',
     ]);
     expect(tree.logs).toHaveLength(18);
+    expect(tree.seq).toBe(44);
     expect(
       tree.logs.reduce<Record<string, number>>(
         (counts, log) => ({ ...counts, [log.purpose]: (counts[log.purpose] ?? 0) + 1 }),

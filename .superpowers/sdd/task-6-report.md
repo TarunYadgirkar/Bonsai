@@ -54,3 +54,12 @@ Base: `7b55d4c7366c70396e55f2dfe194b344cc94c0c5`
 ## Concerns
 
 - None. The generated fixture was already semantically correct and did not change.
+
+## Exact sequence follow-up
+
+- Spec review found that the fixture contract did not assert the generated `seq` value.
+- Live-assertion RED: temporarily expected sequence 45 without changing `fixtures/seed-tree.json`; `VITE_CONFIG_NATIVE_IGNORE_WARNING=true npx vitest run fixtures/seed-tree.test.ts` failed 1 of 5 tests with actual sequence 44.
+- GREEN: corrected the expectation to the exact contract value 44; the fixture test passed 5 of 5.
+- Task 6 focused suite passed 3 files and 17 tests.
+- `npx tsc --noEmit -p tsconfig.json`, `git diff --exit-code -- fixtures/seed-tree.json`, and `git diff --check` passed.
+- Fresh code and TypeScript delta reviews approved with no Critical or Important findings; both confirmed the fixture remained byte-for-byte unchanged.
