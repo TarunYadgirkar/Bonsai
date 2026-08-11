@@ -179,7 +179,15 @@ describe('route context flow', () => {
     const mergeCall = llmMocks.complete.mock.calls.find(([params]) =>
       params.messages[0]?.content.startsWith('Extract the single durable conclusion'),
     );
-    expect(mergeCall?.[0].messages[1]?.content).toContain(storedChildBrief.markdown);
+    if (!mergeCall) throw new Error('merge completion was not called');
+    const mergeUsage = completion(mergeCall[0], INSIGHT_TEXT);
+    expect(mergeBody.log).toMatchObject({
+      inputTokens: mergeUsage.inputTokens,
+      outputTokens: mergeUsage.outputTokens,
+    });
+    expect(mergeCall[0].messages[1]?.content).toContain(
+      JSON.stringify(storedChildBrief.markdown),
+    );
     expect(mergeCall?.[0].messages[1]?.content).toContain(CHILD_CONCLUSION);
 
     const parentQuestion = 'How should the runtime behave?';
@@ -252,5 +260,44 @@ describe('route context flow', () => {
       getConversation(ROOT_ID)?.messages.filter((message) => message.content === question),
     ).toHaveLength(1);
     expect(inferenceLogMocks.appendInferenceLogs).toHaveBeenCalled();
+  });
+
+  it('estimates fallback output when merge completion has no usable line', async () => {
+    const root: Conversation = {
+      id: ROOT_ID,
+      title: 'Context flow root',
+      parentId: null,
+      messages: [],
+      insights: [],
+      pinnedTier: null,
+      archived: false,
+    };
+    const storedChildBrief = childBrief();
+    const child: Conversation = {
+      id: CHILD_ID,
+      title: 'Runtime transport',
+      parentId: ROOT_ID,
+      messages: [{ id: 'child-conclusion', role: 'assistant', content: CHILD_CONCLUSION }],
+      brief: storedChildBrief,
+      insights: [],
+      pinnedTier: null,
+      archived: false,
+    };
+    putConversation(root);
+    putConversation(child);
+    llmMocks.complete.mockImplementationOnce(async (params) => ({
+      ...completion(params, '"   "'),
+      inputTokens: 321,
+      outputTokens: 99,
+    }));
+
+    const response = await mergePost(request('/api/merge', { branchId: CHILD_ID }));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+
+    expect(body.insight.text).toContain('Free Ventures apps close Sept 11');
+    expect(body.log.inputTokens).toBe(321);
+    expect(body.log.outputTokens).toBe(estimateTokens(body.insight.text));
+    expect(body.log.outputTokens).not.toBe(99);
   });
 });

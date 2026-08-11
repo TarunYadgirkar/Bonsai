@@ -53,3 +53,25 @@ describe('compiler mock', () => {
     expect(result.text).not.toContain('question:forged');
   });
 });
+
+describe('answer mock', () => {
+  it('answers from an assembled insight source', async () => {
+    const insight = 'Codex App Server streams structured JSON events for Bonsai clients.';
+    const question = 'What does Codex App Server stream for Bonsai clients?';
+    const result = await complete({
+      tier: 'quick',
+      messages: [
+        {
+          role: 'system',
+          content: 'Answer using only the context provided.',
+        },
+        {
+          role: 'user',
+          content: `${renderSource('insight', 'merged-runtime-insight', insight)}\n\n---\n${question}`,
+        },
+      ],
+    });
+
+    expect(result.text).toBe(insight);
+  });
+});

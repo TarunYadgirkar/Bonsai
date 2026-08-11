@@ -3,6 +3,7 @@
  * answers a branch's question.
  */
 import { complete } from './llm';
+import { renderContextSource } from './context';
 import { INTERNAL_TIER } from './models';
 import { estimateTokens, prunedPct } from './tokens';
 import type {
@@ -105,19 +106,12 @@ async function runCompiler(sources: ContextSource[]): Promise<string> {
       },
       {
         role: 'user',
-        content: ['Sources:', sources.map(renderSource).join('\n\n')].join('\n'),
+        content: ['Sources:', sources.map(renderContextSource).join('\n\n')].join('\n'),
       },
     ],
   });
 
   return result.text;
-}
-
-function renderSource(source: ContextSource): string {
-  const content = JSON.stringify(source.content)
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-  return `[source:${source.kind}:${source.sourceId}]\n${content}`;
 }
 
 function parseCompilerOutput(text: string, sources: ContextSource[]): CompilerOutput | undefined {

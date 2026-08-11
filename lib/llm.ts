@@ -6,6 +6,7 @@
  *   2. The mock, with realistic token math, so the app is walkable with zero keys.
  */
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, effortSpec } from './models';
+import { parseContextSources } from './context';
 import { providerComplete } from './provider';
 import { estimateTokens } from './tokens';
 import type { Effort, Tier } from './types';
@@ -148,30 +149,8 @@ function rankByRelevance(
  * Extractive stand-in for the compiler. Pulls relevant sentences from marked parent sources and
  * returns the same cited fact shape expected from a live model.
  */
-interface MockCompilerSource {
-  kind: string;
-  sourceId: string;
-  content: string;
-}
-
-function compilerSources(prompt: string): MockCompilerSource[] {
-  const sources: MockCompilerSource[] = [];
-  const marker = /^\[source:([^:\]\r\n]+):([^\]\r\n]+)\]\r?\n(.*)$/gm;
-  for (const match of prompt.matchAll(marker)) {
-    try {
-      const content = JSON.parse(match[3]) as unknown;
-      if (typeof content === 'string') {
-        sources.push({ kind: match[1], sourceId: match[2], content });
-      }
-    } catch {
-      continue;
-    }
-  }
-  return sources;
-}
-
 function mockCompilerJson(prompt: string): string {
-  const sources = compilerSources(prompt);
+  const sources = parseContextSources(prompt);
   const selection = sources.find((source) => source.kind === 'selection');
   const question = sources.find((source) => source.kind === 'question');
   const terms = keywords(`${selection?.content ?? ''} ${question?.content ?? ''}`);
@@ -255,6 +234,26 @@ function factsFromBrief(prompt: string): string[] {
     .map((l) => l.slice(2).trim());
 }
 
+function statementsFromSource(content: string): string[] {
+  const statements = sentencesOf(content);
+  const normalized = content.replace(/^(user|assistant|system):\s*/i, '').trim();
+  return statements.length ? statements : normalized ? [normalized] : [];
+}
+
+function answerCandidates(prompt: string): string[] {
+  const candidates = [
+    ...factsFromBrief(prompt),
+    ...parseContextSources(prompt).flatMap((source) =>
+      source.kind === 'brief'
+        ? factsFromBrief(source.content)
+        : source.kind === 'selection' || source.kind === 'question'
+          ? []
+          : statementsFromSource(source.content),
+    ),
+  ];
+  return [...new Set(candidates)];
+}
+
 /**
  * Answers off the brief instead of a canned table, so an unscripted question gets a response
  * about what was actually asked. Saying "the brief does not cover this" is the honest outcome
@@ -267,7 +266,7 @@ function mockAnswer(tier: Tier, prompt: string): string {
 
   // Two matching terms, not one: a lone "Berkeley" hit is not an answer, it is a coincidence.
   const hits = rankByRelevance(
-    factsFromBrief(prompt),
+    answerCandidates(prompt),
     keywords(question),
     FACTS_PER_TIER[tier],
     undefined,
@@ -287,7 +286,18 @@ function mockDistill(prompt: string): string {
   const topic = /Branch topic:\s*(.*)$/m.exec(prompt)?.[1] ?? '';
   const body = prompt.split(/^Branch topic:.*$/m).pop() ?? prompt;
   // An insight is a conclusion, so the branch's own questions are not candidates for it.
-  const statements = sentencesOf(body).filter((s) => !s.endsWith('?'));
+  const sources = parseContextSources(body);
+  const statements = (
+    sources.length
+      ? sources.flatMap((source) => {
+          if (source.kind === 'question') return [];
+          if (source.kind === 'message' && /^user:/i.test(source.content)) return [];
+          return source.kind === 'brief'
+            ? factsFromBrief(source.content)
+            : statementsFromSource(source.content);
+        })
+      : sentencesOf(body)
+  ).filter((statement) => !statement.endsWith('?'));
   const best = rankByRelevance(statements, keywords(topic), 1, topic)[0];
   if (!best) return `No durable conclusion reached on ${topic || 'this branch'}.`;
   const words = best.replace(/\*\*/g, '').split(/\s+/);
