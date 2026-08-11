@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { emptyProfile, recordFeedback } from '../src/learning';
 import { CEILING_MODEL, costForModel, effortNote, modelSpec, routingLabel } from '../src/models';
 import { answerFailsSanityCheck, completeWithEscalation, route } from '../src/router';
 import type { ContextBrief, Effort, RoutingDecision, Tier } from '../src/types';
@@ -214,6 +215,31 @@ describe('route — auto mode', () => {
     expect(d.confidence).toBe(1);
     expect(d.reason).toBe('weighs trade-offs. A other question, complexity 3/3, against a 400-token brief.');
     expect(d.estCostUsd).toBe(costForModel('claude-opus-5', 400, 750));
+    // Feedback must attribute to the classifier's own tier; unshifted, it equals the final tier.
+    expect(d.classifiedTier).toBe('deep');
+  });
+
+  it('reports the pre-adjustment tier in classifiedTier when a learned prior shifts the decision', async () => {
+    // Enough consistent upgrades on quick lookups that the router pre-empts the classifier.
+    let profile = emptyProfile();
+    for (let i = 0; i < 5; i += 1) {
+      profile = recordFeedback(profile, {
+        kind: 'override',
+        classifiedTier: 'quick',
+        chosenTier: 'thoughtful',
+        questionKind: 'lookup',
+      });
+    }
+    const { complete } = fakeComplete([
+      llmResult('{"complexity": 1, "kind": "lookup", "covered": true, "confidence": 0.9, "reason": "fact lookup"}'),
+    ]);
+    const d = await route(
+      { question: 'When does it close?', contextTokens: 120, profile },
+      { complete },
+    );
+    expect(d.learned).toBe(true);
+    expect(d.tier).toBe('thoughtful'); // shifted up by the learned prior
+    expect(d.classifiedTier).toBe('quick'); // but feedback attributes to the classifier's choice
   });
 
   it('includes the brief facts block in the classifier prompt', async () => {

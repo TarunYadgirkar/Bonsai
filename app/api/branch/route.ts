@@ -132,6 +132,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
         effort: routing.effort,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
+        estCostUsd: routing.estCostUsd,
         baselineInputTokens: brief.availableTokens,
         escalated: routing.escalated,
         measured: Boolean(routing.servedBy),

@@ -26,6 +26,13 @@ export function buildLog(params: {
   /** From the routing decision when there is one, so a manual pick is what the panel shows. */
   model?: string;
   effort?: Effort;
+  /**
+   * The engine's own cost for this inference, summed across every escalation attempt and priced
+   * at the model that actually served each (costForServedBy — a gpt/grok upstream bills at its own
+   * rate, not Bonsai's tier catalog). Pass `routing.estCostUsd` here. Absent for the internal
+   * compile/merge calls, which are a single Haiku pass and reprice correctly from the catalog.
+   */
+  estCostUsd?: number;
   /** True when token counts are live provider usage (CompleteResult.mock === false). Absent = estimated. */
   measured?: boolean;
 }): InferenceLog & { measured?: boolean } {
@@ -41,7 +48,7 @@ export function buildLog(params: {
     effort: params.effort ?? TIER_DEFAULTS[tier].effort,
     inputTokens,
     outputTokens,
-    estCostUsd: costForModel(model, inputTokens, outputTokens),
+    estCostUsd: params.estCostUsd ?? costForModel(model, inputTokens, outputTokens),
     escalated: params.escalated ?? false,
     overridden: params.overridden ?? false,
     baselineInputTokens,

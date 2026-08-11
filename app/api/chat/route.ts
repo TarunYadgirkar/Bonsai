@@ -108,6 +108,7 @@ export const POST = apiRoute(ChatRequestSchema, async (body, request) => {
       effort: result.routing.effort,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
+      estCostUsd: result.routing.estCostUsd,
       baselineInputTokens: conversation.brief
         ? conversation.brief.availableTokens + contextTokens
         : contextTokens + availableTokensFor(ws, conversation.parentId),
