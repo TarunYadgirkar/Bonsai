@@ -2,6 +2,7 @@ import { complete } from '@/lib/llm';
 import { INTERNAL_TIER, buildLog, mockInsight } from '@/lib/mock';
 import {
   appendInsight,
+  availableTokensFor,
   flushLogs,
   getConversation,
   loadStore,
@@ -9,8 +10,9 @@ import {
   nextId,
   saveStore,
   updateConversation,
+  visibleContextFor,
 } from '@/lib/store';
-import { estimateTokens, messagesTokens } from '@/lib/tokens';
+import { estimateTokens } from '@/lib/tokens';
 import type {
   ApiError,
   Conversation,
@@ -38,7 +40,15 @@ export async function POST(request: Request) {
     });
   }
 
-  const text = await distill(branch);
+  const context = visibleContextFor(branch.id);
+  if (!context) {
+    return Response.json({ error: 'branch context unavailable' } satisfies ApiError, {
+      status: 500,
+    });
+  }
+
+  const baselineInputTokens = availableTokensFor(branch.id);
+  const text = await distill(branch, context.markdown);
 
   const insight: Insight = {
     id: nextId('insight'),
@@ -46,6 +56,8 @@ export async function POST(request: Request) {
     parentId: branch.parentId,
     text,
     createdAt: new Date().toISOString(),
+    sourceMessageIds: branch.messages.map((message) => message.id),
+    active: true,
   };
 
   appendInsight(branch.parentId, insight);
@@ -54,7 +66,7 @@ export async function POST(request: Request) {
   if (archive) updateConversation(branch.id, (c) => ({ ...c, archived: true }));
 
   // The distiller reads the branch, not the parent — cheapest tier, per AGENTS.md rule 7.
-  const inputTokens = messagesTokens(branch.messages);
+  const inputTokens = context.tokens;
   const log = logInference(
     buildLog({
       branchId: branch.id,
@@ -62,7 +74,7 @@ export async function POST(request: Request) {
       tier: INTERNAL_TIER,
       inputTokens,
       outputTokens: estimateTokens(text),
-      baselineInputTokens: branch.brief?.availableTokens ?? inputTokens,
+      baselineInputTokens,
     }),
   );
 
@@ -82,9 +94,7 @@ export async function POST(request: Request) {
  * The whole point of cherry-picking: one durable line, not a summary of the excursion.
  * Cheapest tier, per AGENTS.md rule 7 — we are demoing cost discipline.
  */
-async function distill(branch: Conversation): Promise<string> {
-  if (!branch.messages.length) return mockInsight(branch.brief?.selection ?? branch.title);
-
+async function distill(branch: Conversation, contextMarkdown: string): Promise<string> {
   const result = await complete({
     tier: INTERNAL_TIER,
     maxTokens: 120,
@@ -96,9 +106,7 @@ async function distill(branch: Conversation): Promise<string> {
       },
       {
         role: 'user',
-        content: `Branch topic: ${branch.brief?.selection ?? branch.title}\n\n${branch.messages
-          .map((m) => `${m.role}: ${m.content}`)
-          .join('\n\n')}`,
+        content: `Branch topic: ${branch.brief?.selection ?? branch.title}\n\n${contextMarkdown}`,
       },
     ],
   });

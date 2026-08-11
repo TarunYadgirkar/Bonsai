@@ -9,8 +9,9 @@ import {
   logInference,
   nextId,
   saveStore,
+  visibleContextFor,
 } from '@/lib/store';
-import { messagesTokens } from '@/lib/tokens';
+import { estimateTokens } from '@/lib/tokens';
 import type { ApiError, ChatRequest, ChatResponse } from '@/lib/types';
 
 const ANSWER_SYSTEM_PROMPT =
@@ -32,22 +33,23 @@ export async function POST(request: Request) {
     });
   }
 
-  appendMessage(conversation.id, {
+  const context = visibleContextFor(conversation.id);
+  if (!context) {
+    return Response.json({ error: 'conversation context unavailable' } satisfies ApiError, {
+      status: 500,
+    });
+  }
+
+  const questionTokens = estimateTokens(body.content);
+  const contextTokens = context.tokens + questionTokens;
+  const baselineInputTokens = availableTokensFor(conversation.id) + questionTokens;
+  const userMessage = {
     id: nextId('msg'),
-    role: 'user',
+    role: 'user' as const,
     content: body.content,
     createdAt: new Date().toISOString(),
-  });
-
-  // A branch answers off its compiled brief plus its own turns; the root carries full history.
-  const priorTurns = messagesTokens(conversation.messages);
-  const contextTokens = conversation.brief
-    ? conversation.brief.briefTokens + priorTurns
-    : priorTurns + availableTokensFor(conversation.parentId);
-
-  const context = conversation.brief
-    ? `${conversation.brief.markdown}\n\n---\n## This branch so far\n${renderTurns(conversation.messages)}`
-    : renderTurns(conversation.messages);
+  };
+  appendMessage(conversation.id, userMessage);
 
   const pinnedTier = body.pinnedTier ?? conversation.pinnedTier;
   const initial = await route({
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
   const result = await completeWithEscalation({
     routing: initial,
     systemPrompt: ANSWER_SYSTEM_PROMPT,
-    userPrompt: `${context}\n\n---\n${body.content}`,
+    userPrompt: `${context.markdown}\n\n---\n${body.content}`,
   });
 
   const message = {
@@ -82,9 +84,7 @@ export async function POST(request: Request) {
       effort: result.routing.effort,
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
-      baselineInputTokens: conversation.brief
-        ? conversation.brief.availableTokens + priorTurns
-        : contextTokens,
+      baselineInputTokens,
       escalated: result.routing.escalated,
       overridden: result.routing.overridden,
     }),
@@ -100,8 +100,4 @@ export async function POST(request: Request) {
     log,
   };
   return Response.json(response);
-}
-
-function renderTurns(messages: { role: string; content: string }[]): string {
-  return messages.map((m) => `${m.role}: ${m.content}`).join('\n\n');
 }

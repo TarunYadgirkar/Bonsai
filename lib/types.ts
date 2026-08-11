@@ -124,8 +124,8 @@ export interface Insight {
   /** The single distilled line that merges into the parent. */
   text: string;
   createdAt: string;
-  sourceMessageIds?: string[];
-  active?: boolean;
+  sourceMessageIds: string[];
+  active: boolean;
 }
 
 /** One conversation node. The root has parentId === null and no brief. */
