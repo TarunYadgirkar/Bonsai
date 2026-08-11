@@ -3,6 +3,24 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Segment 6: the Claude Code plugin (primary surface, working)
+
+- `plugin/` + repo-root marketplace.json: skills `bonsai:branch` (the loop: Claude compiles the
+  brief under the skill's referent-resolution contract — the reasoning rides the user's
+  subscription; `bonsai_fork` registers + routes; tier-mapped subagent executes; `bonsai_merge`
+  records the one-insight return) and `bonsai:tree`; agents `bonsai-branch-{quick,thoughtful,
+  deep}` (Haiku/Sonnet/Opus executors with the INSIGHT-line contract); stdio MCP server
+  (`plugin/mcp/server.mjs`, @modelcontextprotocol/sdk 1.30) persisting trees per-cwd to
+  `CLAUDE_PLUGIN_DATA` with deterministic routing/coverage/economics mirrored from the engine.
+  Server smoke: 12/12.
+- **End-to-end verified headless** (`claude -p --plugin-dir`): real run compiled a brief,
+  forked, spawned the quick-tier branch, the branch honestly PUNTED on an under-specified
+  brief, the skill widened by re-forking with more facts, answered, merged one distilled
+  insight, rendered the tree — 97.6% pruned on the merged edge. The whole loop, subscription
+  auth, zero API keys.
+- Security review of segment 4 (security-reviewer): no HIGH/CRITICAL; applied its two LOW fixes
+  (timing-safe reset-token compare, 40-turn cap on the distill prompt).
+
 ## 2026-08-11 — Segment 5: eval harness (the moat, measured)
 
 - `evals/` runs the engine in-process against scenario cases: referent resolution at depth 1

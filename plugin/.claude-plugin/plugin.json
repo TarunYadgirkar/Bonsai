@@ -1,0 +1,6 @@
+{
+  "name": "bonsai",
+  "description": "Tree-structured side questions for Claude Code: branch with a compiled minimal brief instead of full history, auto-route the branch to the right model + effort, merge one distilled insight back. Runs entirely on your Claude subscription.",
+  "version": "0.1.0",
+  "author": { "name": "Tarun Yadgirkar" }
+}

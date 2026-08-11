@@ -62,8 +62,12 @@ export const POST = apiRoute(MergeRequestSchema, async (body) => {
  * The whole point of cherry-picking: one durable line, not a summary of the excursion.
  * Cheapest tier, per AGENTS.md rule 7 — we are demoing cost discipline.
  */
+/** A long-lived branch must not grow the distill prompt without bound. */
+const DISTILL_MAX_TURNS = 40;
+
 async function distill(branch: Conversation): Promise<string> {
   if (!branch.messages.length) return fallbackInsight(branch.brief?.selection ?? branch.title);
+  const turns = branch.messages.slice(-DISTILL_MAX_TURNS);
 
   const result = await complete({
     tier: INTERNAL_TIER,
@@ -77,7 +81,7 @@ async function distill(branch: Conversation): Promise<string> {
       },
       {
         role: 'user',
-        content: `Branch topic: ${branch.brief?.selection ?? branch.title}\n\n${branch.messages
+        content: `Branch topic: ${branch.brief?.selection ?? branch.title}\n\n${turns
           .map((m) => `${m.role}: ${m.content}`)
           .join('\n\n')}`,
       },

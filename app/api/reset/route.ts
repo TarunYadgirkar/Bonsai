@@ -1,6 +1,14 @@
+import { timingSafeEqual } from 'crypto';
 import { apiError, apiRoute } from '@/lib/api';
 import { resetStore } from '@/lib/store';
 import type { StateResponse } from '@/lib/types';
+
+function tokenMatches(provided: string | null, required: string): boolean {
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(required);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +20,7 @@ export const dynamic = 'force-dynamic';
  */
 export const POST = apiRoute(null, async (_body, request) => {
   const required = process.env.BONSAI_RESET_TOKEN;
-  if (required && request.headers.get('x-reset-token') !== required) {
+  if (required && !tokenMatches(request.headers.get('x-reset-token'), required)) {
     return apiError('reset requires a valid x-reset-token header', 403);
   }
   const state = await resetStore();

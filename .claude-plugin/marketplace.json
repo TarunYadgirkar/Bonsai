@@ -1,0 +1,11 @@
+{
+  "name": "bonsai",
+  "owner": { "name": "Tarun Yadgirkar" },
+  "plugins": [
+    {
+      "name": "bonsai",
+      "source": "./plugin",
+      "description": "Branch side questions with compiled minimal briefs, auto-routed model + effort, and one-insight merge-back — on your existing Claude subscription."
+    }
+  ]
+}
