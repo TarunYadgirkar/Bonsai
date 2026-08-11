@@ -1,0 +1,16 @@
+{
+  "name": "@bonsai/extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch"
+  },
+  "dependencies": {
+    "@bonsai/engine": "*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

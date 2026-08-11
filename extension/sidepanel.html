@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bonsai</title>
+    <style>
+      :root { color-scheme: dark; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font: 13px/1.5 system-ui, sans-serif;
+        background: #0a0a0a;
+        color: #e5e5e5;
+      }
+      header { padding: 12px 14px; border-bottom: 1px solid #1f1f1f; }
+      header h1 { margin: 0; font-size: 14px; }
+      header p { margin: 2px 0 0; font-size: 11px; color: #737373; }
+      main { padding: 12px 14px; }
+      section { margin-bottom: 16px; }
+      h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #737373; margin: 0 0 8px; }
+      label { display: block; font-size: 11px; color: #a3a3a3; margin: 8px 0 3px; }
+      textarea, input, select {
+        width: 100%; background: #141414; color: #e5e5e5; border: 1px solid #2a2a2a;
+        border-radius: 8px; padding: 7px 9px; font: inherit; resize: vertical;
+      }
+      button {
+        background: #1f6f43; color: #fff; border: 1px solid #2e9e60; border-radius: 8px;
+        padding: 7px 12px; font: 600 12px system-ui; cursor: pointer;
+      }
+      button.ghost { background: transparent; border-color: #2a2a2a; color: #d4d4d4; }
+      button:disabled { opacity: 0.4; cursor: default; }
+      .row { display: flex; gap: 8px; align-items: center; }
+      .brief { background: #101410; border: 1px solid #1e2a1e; border-radius: 10px; padding: 10px; margin-top: 8px; }
+      .brief ul { margin: 6px 0; padding-left: 16px; }
+      .brief li { margin: 2px 0; }
+      .econ { font-size: 11px; color: #7bbf95; margin-top: 6px; }
+      .excluded { font-size: 11px; color: #737373; border-top: 1px solid #1e2a1e; margin-top: 6px; padding-top: 6px; }
+      .node { border: 1px solid #2a2a2a; border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; }
+      .node .title { font-weight: 600; }
+      .node .meta { font-size: 11px; color: #8a8a8a; margin-top: 2px; }
+      .node .insight { font-size: 12px; color: #7bbf95; margin-top: 6px; border-top: 1px solid #1e2a1e; padding-top: 6px; }
+      .glyph-open { color: #d4d4d4; }
+      .glyph-merged { color: #4ade80; }
+      .glyph-abandoned { color: #737373; }
+      .empty { color: #737373; font-size: 12px; }
+      .chip { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid #2a2a2a; color: #a3a3a3; }
+      .warn { color: #f59e0b; font-size: 11px; margin-top: 4px; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>🌱 Bonsai</h1>
+      <p>Branch side questions with a compiled brief. You always press send.</p>
+    </header>
+    <main>
+      <section id="branch-section">
+        <h2>New branch</h2>
+        <label>Selected from the chat (highlight text, click 🌱 Branch)</label>
+        <textarea id="selection" rows="2" placeholder="Highlight text in the conversation…"></textarea>
+        <label>Your side question</label>
+        <textarea id="question" rows="2" placeholder="What do you want to ask about it?"></textarea>
+        <div class="row" style="margin-top: 8px">
+          <button id="compile">Compile brief</button>
+          <span id="compile-status" class="empty"></span>
+        </div>
+        <div id="preview"></div>
+      </section>
+
+      <section>
+        <h2>Tree</h2>
+        <div id="tree"><p class="empty">No branches yet.</p></div>
+      </section>
+    </main>
+    <script src="dist/sidepanel.js"></script>
+  </body>
+</html>
