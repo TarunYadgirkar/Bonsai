@@ -162,3 +162,25 @@ Known boundary:
 Next:
 
 - execute durability Task 3 with injected failures, corrupt-revision quarantine, prior-revision recovery, committed-log corruption checks, and stale-temp cleanup.
+
+## 2026-08-11 — Local durability recovery
+
+Completed:
+
+- `d1c455e` (`fix: recover interrupted persistence writes`): added deterministic semantic fault injection, committed-log corruption detection, strict authoritative-file checks, corrupt-revision quarantine, lower-revision recovery, manifest repair, stale writer-temp cleanup, and resource-bound enforcement;
+- made recovery eligible only for bounded malformed current-schema conversation data; future schemas, missing files, unsafe paths, permissions, oversize, and other I/O failures remain non-mutating hard failures;
+- preserved corrupt bytes in a private synced quarantine file, byte-compared the observed manifest, published the repaired manifest atomically, then inode-verified cleanup of the now-orphan corrupt revision;
+- added commit-side preflight so Bonsai cannot accept logs, envelopes, or directory growth that its own restart loader would reject;
+- replaced recursive and repeated recovery scans with a bounded iterative search over one indexed revision directory.
+
+Verification evidence:
+
+- `lib/persistence/file-faults.test.ts` and related persistence suites: 90 tests passed;
+- full `npm test`: 192 tests passed;
+- strict TypeScript, ESLint, webpack production build, diff check, and changed-file secret/debug scan passed;
+- code, TypeScript, and security reviews approved the final diff with no Critical or Important findings;
+- `copy-b` was clean and synchronized with `origin/copy-b` after the commit.
+
+Next:
+
+- execute durability Task 4: explicit backend selection, typed KV failure behavior, serialized store transactions, atomic state/log commits, concurrency preservation, and rollback.

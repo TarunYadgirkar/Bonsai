@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 Lane: copy-b
-Status: in progress — Tasks 1 and 2 complete
+Status: in progress — Tasks 1–3 complete
 Design: `docs/superpowers/specs/2026-08-11-bonsai-local-runtime-design.md`
 
 ## Outcome
@@ -194,7 +194,7 @@ Commit:
 feat: add local file persistence
 ```
 
-## Task 3: Recover interrupted and corrupt writes
+## Task 3: Recover interrupted and corrupt writes — complete (`d1c455e`)
 
 Create:
 
