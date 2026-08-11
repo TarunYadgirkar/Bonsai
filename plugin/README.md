@@ -15,8 +15,10 @@ immune to context poisoning — and unlike anything native, the branch's conclus
 ```
 /plugin marketplace add TarunYadgirkar/Bonsai
 /plugin install bonsai@bonsai
-cd plugin/mcp && npm install   # once, for the tree server
 ```
+
+The tree server ships pre-bundled (`mcp/dist/server.mjs`, self-contained) — no install
+step. Contributors editing `mcp/server.mjs` must rebuild it: `node mcp/build.mjs`.
 
 ## Use
 

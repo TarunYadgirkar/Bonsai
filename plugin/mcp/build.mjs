@@ -1,0 +1,25 @@
+import * as esbuild from 'esbuild';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Bundle the stdio MCP server and its deps (@modelcontextprotocol/sdk, zod) into ONE committed
+// file, so a marketplace install (which clones the repo without node_modules) can run it with a
+// bare `node dist/server.mjs` — no install step. Re-run after editing server.mjs; CI checks it.
+const root = dirname(fileURLToPath(import.meta.url));
+
+await esbuild.build({
+  entryPoints: ['server.mjs'],
+  absWorkingDir: root,
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node18',
+  // ESM bundles that pull in CJS deps need require() shimmed at the top of the output.
+  banner: {
+    js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",
+  },
+  outfile: 'dist/server.mjs',
+  logLevel: 'info',
+});
+
+console.log('[bonsai-mcp] bundled dist/server.mjs');
