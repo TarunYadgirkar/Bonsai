@@ -12,7 +12,7 @@
 
   <div class="stage">
     <figure class="garden" aria-label="A conversation grown as a bonsai. Select a bud to read its brief.">
-      <svg id="tree" viewBox="0 0 620 560" role="img" aria-hidden="true"></svg>
+      <svg id="tree" viewBox="0 0 660 440" role="img" aria-hidden="true" preserveAspectRatio="xMidYMid meet"></svg>
       <figcaption class="hint" id="hint">Select a bud &mdash; each one branched from the trunk with only what it needed.</figcaption>
     </figure>
 
@@ -220,7 +220,7 @@
   const BRANCHES = [
     {
       id: "fv", label: "Free Ventures", q: "when do apps close?",
-      x: 250, y: 118, season: "young", model: "Haiku 4.5", effort: "Low",
+      season: "young", model: "Haiku 4.5", effort: "Low",
       available: 19013, kept: 417, pruned: 97.8, cost: "$0.0218",
       title: "Free Ventures — the deadline",
       facts: [
@@ -289,34 +289,50 @@
   const NS = "http://www.w3.org/2000/svg";
   const el = (n, a = {}) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
 
-  const trunkTop = { x: 250, y: 470 };
-  const trunkBase = { x: 250, y: 540 };
+  // A left-to-right tree: the trunk is the root node on the left, each branch a leaf stacked evenly
+  // on the right, joined by a smooth non-crossing bough. Reads unmistakably as a branch diagram.
+  const VIEW = { w: 660, h: 440 };
+  const trunk = { x: 118, y: VIEW.h / 2 };
+  const branchX = 398;
+  const topPad = 46;
+  const step = (VIEW.h - topPad * 2) / (BRANCHES.length - 1);
 
-  // Trunk
-  svg.appendChild(el("path", { class: "bough", d: `M${trunkBase.x} ${trunkBase.y} C 246 512, 250 496, ${trunkTop.x} ${trunkTop.y}`, "stroke-width": 6 }));
-  const tl = el("g", { class: "trunk-label", transform: `translate(${trunkTop.x + 16}, ${trunkTop.y + 8})` });
-  const tlt = el("text"); tlt.textContent = "the trunk"; tl.appendChild(tlt);
-  const tls = el("text", { class: "sub", y: 15 }); tls.textContent = "72 msg · 18.7k tokens"; tl.appendChild(tls);
-  svg.appendChild(tl);
-
-  // Boughs + buds
+  // Draw boughs first so the buds sit on top of them.
   const buds = [];
   BRANCHES.forEach((b, i) => {
-    const cx = (trunkTop.x + b.x) / 2 + (b.x > trunkTop.x ? 34 : -34);
-    const cy = (trunkTop.y + b.y) / 2;
-    const path = el("path", { class: "bough", "data-branch": b.id, d: `M${trunkTop.x} ${trunkTop.y} Q ${cx} ${cy} ${b.x} ${b.y}`, "stroke-width": 2.4 });
+    b._x = branchX;
+    b._y = topPad + step * i;
+    // Cubic with vertical control handles at the midpoint x — a clean S that never crosses a sibling.
+    const midX = (trunk.x + b._x) / 2;
+    const d = `M${trunk.x + 20} ${trunk.y} C ${midX} ${trunk.y}, ${midX} ${b._y}, ${b._x - 17} ${b._y}`;
+    const path = el("path", { class: "bough", "data-branch": b.id, d, "stroke-width": 2.4, stroke: SEASON[b.season], "stroke-opacity": 0.55 });
     svg.appendChild(path);
+    buds.push({ b, path });
+  });
 
-    const g = el("g", { class: "bud", tabindex: "0", role: "button", "data-branch": b.id, transform: `translate(${b.x} ${b.y})` });
-    g.setAttribute("aria-label", `${b.label}: ${b.pruned}% pruned, ${b.model}`);
+  // Trunk node — a rooted double ring, the origin every bough grows from.
+  const troot = el("g", { class: "trunk-node", transform: `translate(${trunk.x} ${trunk.y})` });
+  troot.appendChild(el("circle", { r: 22, fill: "var(--paper-raised)", stroke: "var(--moss)", "stroke-width": 1.5, "stroke-opacity": 0.5 }));
+  troot.appendChild(el("circle", { r: 13, fill: "var(--paper-sunk)", stroke: "var(--moss)", "stroke-width": 2 }));
+  troot.appendChild(el("circle", { r: 4.5, fill: "var(--moss)" }));
+  const tl = el("g", { class: "trunk-label", transform: `translate(0 44)`, "text-anchor": "middle" });
+  const tlt = el("text"); tlt.textContent = "the trunk"; tl.appendChild(tlt);
+  const tls = el("text", { class: "sub", y: 15 }); tls.textContent = "72 msg · 18.7k tokens"; tl.appendChild(tls);
+  troot.appendChild(tl);
+  svg.appendChild(troot);
+
+  // Buds + labels, drawn over the boughs.
+  buds.forEach(({ b }) => {
+    const g = el("g", { class: "bud", tabindex: "0", role: "button", "data-branch": b.id, transform: `translate(${b._x} ${b._y})` });
+    g.setAttribute("aria-label", `${b.label}: ${b.pruned}% pruned, grown on ${b.model}`);
     g.appendChild(el("circle", { class: "ring", r: 15, stroke: SEASON[b.season] }));
     g.appendChild(el("circle", { class: "core", r: 5, fill: SEASON[b.season] }));
-    const lab = el("text", { x: b.x > trunkTop.x ? 22 : -22, y: -2, "text-anchor": b.x > trunkTop.x ? "start" : "end" });
+    const lab = el("text", { x: 26, y: -2, "text-anchor": "start" });
     lab.textContent = b.label; g.appendChild(lab);
-    const sub = el("text", { class: "sub", x: b.x > trunkTop.x ? 22 : -22, y: 12, "text-anchor": b.x > trunkTop.x ? "start" : "end" });
-    sub.textContent = `${b.pruned}% pruned`; g.appendChild(sub);
+    const sub = el("text", { class: "sub", x: 26, y: 12, "text-anchor": "start" });
+    sub.textContent = `${b.pruned}% pruned · ${b.model}`; g.appendChild(sub);
     svg.appendChild(g);
-    buds.push({ b, g, path });
+    buds.find((x) => x.b === b).g = g;
 
     const activate = () => select(b.id);
     g.addEventListener("click", activate);
@@ -339,8 +355,10 @@
     buds.forEach(({ b: bb, g, path }) => {
       const on = bb.id === id;
       g.classList.toggle("active", on);
-      path.classList.toggle("lit", on);
-      path.setAttribute("stroke-width", on ? 3 : 2.4);
+      // Inline stroke wins over the .lit class, so set the active colour directly.
+      path.setAttribute("stroke", on ? "var(--moss)" : SEASON[bb.season]);
+      path.setAttribute("stroke-opacity", on ? 0.95 : 0.5);
+      path.setAttribute("stroke-width", on ? 3.2 : 2.4);
     });
     document.getElementById("hint").textContent = `“${b.q}” — grown on ${b.model}, ${b.effort} effort.`;
     reader.querySelector(".eyebrow").textContent = "a branch";
