@@ -2,10 +2,32 @@
   "name": "@bonsai/engine",
   "version": "0.1.0",
   "description": "Tree-structured conversation engine: path-based context compilation, model+effort routing, cherry-pick merge.",
+  "license": "MIT",
+  "author": "Tarun Yadgirkar",
+  "homepage": "https://github.com/TarunYadgirkar/Bonsai/tree/main/packages/engine#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/TarunYadgirkar/Bonsai"
+  },
+  "keywords": [
+    "llm",
+    "conversation-tree",
+    "context-compilation",
+    "model-routing",
+    "brief-compiler",
+    "ai-chat",
+    "branching"
+  ],
   "type": "module",
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=18"
+  }
 }

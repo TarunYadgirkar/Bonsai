@@ -1,0 +1,362 @@
+<section class="wrap">
+  <header class="masthead">
+    <p class="eyebrow">the garden</p>
+    <h1>Bonsai</h1>
+    <p class="lede">
+      Chat that grows as a tree, not a scroll. Ask a side question and it buds off with a
+      <em>compiled brief</em> — only the living wood the question needs — routed to the right model,
+      then folds one distilled insight back into the trunk.
+    </p>
+    <p class="thesis">The cheapest token is the one you don&rsquo;t send.</p>
+  </header>
+
+  <div class="stage">
+    <figure class="garden" aria-label="A conversation grown as a bonsai. Select a bud to read its brief.">
+      <svg id="tree" viewBox="0 0 620 560" role="img" aria-hidden="true"></svg>
+      <figcaption class="hint" id="hint">Select a bud &mdash; each one branched from the trunk with only what it needed.</figcaption>
+    </figure>
+
+    <aside class="reader" id="reader" aria-live="polite">
+      <p class="eyebrow">the trunk</p>
+      <h2 id="r-title">Berkeley clubs &mdash; what to join</h2>
+      <p class="r-sub" id="r-sub">72 messages of context. An hour of research, held in one place.</p>
+      <div class="econ-row" id="r-econ">
+        <span class="stat"><b class="num">18.7k</b><small>tokens in the trunk</small></span>
+      </div>
+      <div id="r-body" class="r-body">
+        <p class="muted">
+          Every branch below reads from a <em>brief</em> instead of this whole trunk — a handful of
+          referent-resolved facts. Select one to see what it kept and what it pruned.
+        </p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="ledger">
+    <div class="col">
+      <p class="eyebrow">what the garden saved</p>
+      <div class="bars">
+        <div class="bar-line">
+          <span class="bar-label">context sent</span>
+          <span class="season-track"><span class="season-fill" style="width:6.8%"></span><span class="mark" style="left:6.8%"></span></span>
+          <span class="num pct">93.2%<small>less</small></span>
+        </div>
+        <div class="bar-line">
+          <span class="bar-label">spend</span>
+          <span class="season-track"><span class="season-fill" style="width:12.3%"></span><span class="mark" style="left:12.3%"></span></span>
+          <span class="num pct">87.7%<small>less</small></span>
+        </div>
+      </div>
+      <p class="foot">Against sending the whole trunk to the strongest model every turn. Modeled at list rates, not billed.</p>
+    </div>
+    <div class="col legend">
+      <p class="eyebrow">the season of each branch</p>
+      <ul class="seasons">
+        <li><span class="dot" style="background:var(--season-young)"></span> young growth &middot; a quick model, a cheap question</li>
+        <li><span class="dot" style="background:var(--season-summer)"></span> summer &middot; a balanced model, some synthesis</li>
+        <li><span class="dot" style="background:var(--season-ember)"></span> ember &middot; the strong model, real trade-offs</li>
+      </ul>
+      <p class="foot">Effort read as a stage of growth, cheap to dear &mdash; never a cost-purple ramp.</p>
+    </div>
+  </div>
+
+  <footer class="colophon">
+    <span>Bonsai &middot; tree-structured AI chat</span>
+    <span class="muted">branch with a compiled brief &middot; auto-route model &amp; effort &middot; merge one insight back</span>
+  </footer>
+</section>
+
+<style>
+  :root {
+    --paper: #eeece3;
+    --paper-raised: #f6f4ec;
+    --paper-sunk: #e7e4d8;
+    --ink: #20241e;
+    --ink-soft: #5a5f52;
+    --bark: #8a7f6a;
+    --rule: #d8d4c6;
+    --rule-strong: #c6c1b0;
+    --moss: #3e6b47;
+    --moss-bright: #5e8c55;
+    --moss-wash: #e3e8dc;
+    --ember: #b65a2e;
+    --season-young: #7fa05b;
+    --season-summer: #c8a24a;
+    --season-ember: #b65a2e;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", "IBM Plex Mono", Menlo, monospace;
+  }
+  /* A committed light world — sumi ink on rice paper. Painted explicitly so it holds on any host ground. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #1a1c17; --paper-raised: #22251f; --paper-sunk: #15170f;
+      --ink: #ece9dd; --ink-soft: #b6b3a2; --bark: #8f876f;
+      --rule: #34382d; --rule-strong: #454938;
+      --moss: #86b06a; --moss-bright: #9cc47f; --moss-wash: #23301f;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #1a1c17; --paper-raised: #22251f; --paper-sunk: #15170f;
+    --ink: #ece9dd; --ink-soft: #b6b3a2; --bark: #8f876f;
+    --rule: #34382d; --rule-strong: #454938;
+    --moss: #86b06a; --moss-bright: #9cc47f; --moss-wash: #23301f;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    background-image: radial-gradient(rgba(32, 36, 30, 0.02) 1px, transparent 1px);
+    background-size: 4px 4px;
+  }
+  .wrap { max-width: 1060px; margin: 0 auto; padding: clamp(28px, 5vw, 64px) clamp(20px, 4vw, 48px) 40px; }
+
+  .eyebrow {
+    font-size: 11px; letter-spacing: 0.16em; text-transform: lowercase;
+    color: var(--bark); font-weight: 600; margin: 0 0 6px;
+  }
+  .masthead { max-width: 40rem; }
+  .masthead h1 {
+    font-family: var(--serif);
+    font-size: clamp(52px, 9vw, 92px);
+    line-height: 0.92; margin: 0; letter-spacing: -0.02em;
+    text-wrap: balance; font-weight: 600;
+  }
+  .lede { font-size: clamp(15px, 1.6vw, 18px); color: var(--ink-soft); margin: 20px 0 0; max-width: 34rem; }
+  .lede em { font-style: italic; color: var(--ink); }
+  .thesis {
+    font-family: var(--serif); font-style: italic;
+    font-size: clamp(18px, 2.2vw, 24px); color: var(--moss);
+    margin: 16px 0 0; letter-spacing: -0.01em;
+  }
+
+  .stage {
+    display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+    gap: clamp(20px, 3vw, 40px); align-items: stretch;
+    margin-top: clamp(28px, 4vw, 44px);
+  }
+  .garden {
+    margin: 0; padding: 8px; border: 1px solid var(--rule); border-radius: 10px;
+    background: var(--paper-raised);
+    display: flex; flex-direction: column;
+  }
+  #tree { width: 100%; height: auto; flex: 1; }
+  .hint { font-size: 12px; color: var(--bark); text-align: center; padding: 6px 8px 4px; margin: 0; }
+
+  .reader {
+    border: 1px solid var(--rule); border-radius: 10px; background: var(--paper-raised);
+    padding: clamp(18px, 2.4vw, 26px); display: flex; flex-direction: column;
+  }
+  .reader h2 { font-family: var(--serif); font-size: clamp(22px, 2.6vw, 30px); margin: 0; letter-spacing: -0.01em; text-wrap: balance; line-height: 1.05; }
+  .r-sub { color: var(--ink-soft); font-size: 13px; margin: 6px 0 0; }
+  .econ-row { display: flex; flex-wrap: wrap; gap: 18px; margin: 16px 0 4px; padding-bottom: 14px; border-bottom: 1px solid var(--rule); }
+  .stat { display: flex; flex-direction: column; }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .stat .num { font-size: 22px; color: var(--ink); }
+  .stat small, .num small { font-size: 10.5px; letter-spacing: 0.04em; color: var(--bark); font-family: var(--sans); font-weight: 500; }
+  .num small { margin-left: 4px; }
+  .r-body { margin-top: 14px; font-size: 14px; }
+  .r-body .muted, .muted { color: var(--ink-soft); }
+  .r-body em { font-style: italic; color: var(--ink); }
+
+  .facts { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+  .facts li { position: relative; padding-left: 18px; color: var(--ink); font-size: 13.5px; line-height: 1.45; }
+  .facts li::before { content: ""; position: absolute; left: 2px; top: 8px; width: 6px; height: 6px; border-radius: 50%; background: var(--moss-bright); }
+  .excluded { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 12.5px; color: var(--bark); }
+  .brief-econ { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; margin-top: 14px; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+  .brief-econ b { color: var(--ink); font-weight: 500; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; margin-top: 14px; padding: 3px 10px 3px 8px; border: 1px solid var(--rule-strong); border-radius: 999px; background: var(--paper-sunk); font-family: var(--mono); font-size: 11.5px; color: var(--ink); }
+  .pill .bud { width: 8px; height: 8px; border-radius: 50%; }
+  .merged { margin-top: 16px; padding: 11px 12px; border: 1px solid color-mix(in oklab, var(--moss) 28%, var(--rule)); background: var(--moss-wash); border-radius: 8px; font-size: 13px; color: var(--ink); }
+  .merged b { display: block; font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.08em; text-transform: lowercase; color: var(--moss); margin-bottom: 3px; font-weight: 600; }
+
+  .ledger { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: clamp(20px, 3vw, 40px); margin-top: clamp(24px, 3vw, 36px); padding-top: clamp(24px, 3vw, 32px); border-top: 1px solid var(--rule); }
+  .bars { display: flex; flex-direction: column; gap: 14px; margin-top: 4px; }
+  .bar-line { display: grid; grid-template-columns: 5.5rem 1fr auto; align-items: center; gap: 12px; }
+  .bar-label { font-size: 12px; color: var(--ink-soft); }
+  .season-track { position: relative; height: 7px; border-radius: 999px; background: linear-gradient(90deg, var(--season-young), var(--season-summer), var(--season-ember)); }
+  .season-fill { position: absolute; inset: 0 auto 0 0; height: 100%; border-radius: 999px; background: color-mix(in oklab, var(--ink) 78%, var(--moss)); }
+  .season-track .mark { position: absolute; top: -3px; width: 2px; height: 13px; background: var(--ink); border-radius: 2px; transform: translateX(-1px); }
+  .pct { font-size: 15px; color: var(--moss); }
+  .foot { font-size: 11.5px; color: var(--bark); margin: 12px 0 0; }
+  .seasons { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; font-size: 12.5px; color: var(--ink-soft); }
+  .seasons .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 8px; vertical-align: baseline; }
+
+  .colophon { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--rule); font-size: 12px; color: var(--ink-soft); }
+
+  /* SVG garden */
+  .bough { fill: none; stroke: var(--rule-strong); stroke-linecap: round; }
+  .bough.lit { stroke: var(--moss); }
+  .bud { cursor: pointer; transition: transform 0.2s ease; transform-origin: center; transform-box: fill-box; }
+  .bud circle.ring { fill: var(--paper-raised); stroke-width: 1.5; transition: fill 0.2s ease; }
+  .bud circle.core { transition: r 0.2s ease; }
+  .bud:hover { transform: scale(1.14); }
+  .bud:focus-visible { outline: none; }
+  .bud:focus-visible circle.ring { stroke: var(--moss); stroke-width: 2.5; }
+  .bud.active circle.ring { fill: var(--moss-wash); stroke: var(--moss); stroke-width: 2.5; }
+  .bud text { font-family: var(--sans); font-size: 11px; fill: var(--ink); pointer-events: none; }
+  .bud .sub { font-family: var(--mono); font-size: 9px; fill: var(--bark); }
+  .trunk-label text { font-family: var(--serif); font-size: 14px; fill: var(--ink); font-weight: 600; }
+  .trunk-label .sub { font-family: var(--mono); font-size: 9.5px; fill: var(--bark); font-weight: 400; }
+
+  @media (prefers-reduced-motion: reduce) { .bud, .bud circle { transition: none; } .bud:hover { transform: none; } }
+  @media (max-width: 820px) {
+    .stage, .ledger { grid-template-columns: 1fr; }
+  }
+</style>
+
+<script>
+  const SEASON = { young: "var(--season-young)", summer: "var(--season-summer)", ember: "var(--season-ember)" };
+
+  // The real Berkeley-clubs seed garden. Each branch kept only what its question needed.
+  const TRUNK = {
+    title: "Berkeley clubs — what to join",
+    sub: "72 messages of context. An hour of research, held in one place.",
+  };
+  const BRANCHES = [
+    {
+      id: "fv", label: "Free Ventures", q: "when do apps close?",
+      x: 250, y: 118, season: "young", model: "Haiku 4.5", effort: "Low",
+      available: 19013, kept: 417, pruned: 97.8, cost: "$0.0218",
+      title: "Free Ventures — the deadline",
+      facts: [
+        "Free Ventures is a student-run startup accelerator at Berkeley; you apply with your own startup.",
+        "Applications close September 11, with an info session on September 3.",
+        "Tarun plans to apply with the startup he is already building.",
+      ],
+      excluded: "Left out: the club-by-club comparison, workload math, and interview prep from the trunk.",
+      insight: "Free Ventures applications close September 11 — draft before the Sept 3 info session.",
+    },
+    {
+      id: "mlab", label: "ML@B", q: "how many hours a week?",
+      x: 168, y: 224, season: "summer", model: "Sonnet 5", effort: "Medium",
+      available: 19010, kept: 500, pruned: 97.4, cost: "$0.0252",
+      title: "ML@B — the time commitment",
+      facts: [
+        "ML@B is Berkeley's machine-learning club, with a first-semester education track.",
+        "It runs 12–14 hours a week once the education track is counted.",
+        "Tarun's hard cap is 8–10 hours a week across all clubs.",
+      ],
+      excluded: "Left out: Free Ventures timing, Blueprint, and the ranking — only ML@B's hours were in scope.",
+      insight: "ML@B needs 12–14 hrs/week — over Tarun's 8–10 hr cap unless something else is cut.",
+    },
+    {
+      id: "rank", label: "Top 3, ranked", q: "rank them by opportunity cost",
+      x: 340, y: 250, season: "ember", model: "Opus 5", effort: "High",
+      available: 19014, kept: 531, pruned: 97.2, cost: "$0.0425",
+      title: "Rank the top three, with the cost of each",
+      facts: [
+        "Candidates: Free Ventures (own startup), ML@B (technical ceiling), Blueprint (community, fits the cap).",
+        "Hard constraint: 8–10 hours a week, at most two clubs, builder-first.",
+        "Free Ventures' September window collides with technical-org recruiting.",
+      ],
+      excluded: "Nothing load-bearing — this branch earned the strong model and a wider brief on purpose.",
+      insight: "Free Ventures first (own company); one of ML@B or Blueprint second; drop Codebase to fit the cap.",
+    },
+    {
+      id: "code", label: "Codebase", q: "is it worth a slot?",
+      x: 452, y: 168, season: "young", model: "Haiku 4.5", effort: "Low",
+      available: 19206, kept: 421, pruned: 97.8, cost: "$0.0226",
+      title: "Codebase — worth a club slot?",
+      facts: [
+        "Codebase is a project-based software club; members ship for real clients.",
+        "At Tarun's hour cap it loses to Blueprint on community and to ML@B on learning.",
+        "It is a good club, but the wrong fit given the two-club, 8–10 hr constraint.",
+      ],
+      excluded: "Left out: the full ranking rationale — just enough to judge Codebase against the cap.",
+      insight: "Codebase is dominated at the hour cap — cut it to reclaim the application slot.",
+    },
+    {
+      id: "blue", label: "Blueprint", q: "does it fit my week?",
+      x: 470, y: 322, season: "ember", model: "Fable 5", effort: "Max",
+      available: 19012, kept: 488, pruned: 97.4, cost: "$0.0584",
+      title: "Blueprint — does it fit the week?",
+      facts: [
+        "Blueprint builds software for nonprofits; strongest community of the candidates.",
+        "Fits the 8–10 hr cap at 6–8 hours a week, with low week-to-week variance.",
+        "Little technical stretch — Tarun would likely be the strongest engineer on the team.",
+      ],
+      excluded: "Left out: the other clubs' internals — this branch weighed Blueprint against the constraint alone.",
+      insight: "Blueprint fits the cap (6–8 hrs) with the best community, but the least technical stretch.",
+    },
+  ];
+
+  const svg = document.getElementById("tree");
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (n, a = {}) => { const e = document.createElementNS(NS, n); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+  const trunkTop = { x: 250, y: 470 };
+  const trunkBase = { x: 250, y: 540 };
+
+  // Trunk
+  svg.appendChild(el("path", { class: "bough", d: `M${trunkBase.x} ${trunkBase.y} C 246 512, 250 496, ${trunkTop.x} ${trunkTop.y}`, "stroke-width": 6 }));
+  const tl = el("g", { class: "trunk-label", transform: `translate(${trunkTop.x + 16}, ${trunkTop.y + 8})` });
+  const tlt = el("text"); tlt.textContent = "the trunk"; tl.appendChild(tlt);
+  const tls = el("text", { class: "sub", y: 15 }); tls.textContent = "72 msg · 18.7k tokens"; tl.appendChild(tls);
+  svg.appendChild(tl);
+
+  // Boughs + buds
+  const buds = [];
+  BRANCHES.forEach((b, i) => {
+    const cx = (trunkTop.x + b.x) / 2 + (b.x > trunkTop.x ? 34 : -34);
+    const cy = (trunkTop.y + b.y) / 2;
+    const path = el("path", { class: "bough", "data-branch": b.id, d: `M${trunkTop.x} ${trunkTop.y} Q ${cx} ${cy} ${b.x} ${b.y}`, "stroke-width": 2.4 });
+    svg.appendChild(path);
+
+    const g = el("g", { class: "bud", tabindex: "0", role: "button", "data-branch": b.id, transform: `translate(${b.x} ${b.y})` });
+    g.setAttribute("aria-label", `${b.label}: ${b.pruned}% pruned, ${b.model}`);
+    g.appendChild(el("circle", { class: "ring", r: 15, stroke: SEASON[b.season] }));
+    g.appendChild(el("circle", { class: "core", r: 5, fill: SEASON[b.season] }));
+    const lab = el("text", { x: b.x > trunkTop.x ? 22 : -22, y: -2, "text-anchor": b.x > trunkTop.x ? "start" : "end" });
+    lab.textContent = b.label; g.appendChild(lab);
+    const sub = el("text", { class: "sub", x: b.x > trunkTop.x ? 22 : -22, y: 12, "text-anchor": b.x > trunkTop.x ? "start" : "end" });
+    sub.textContent = `${b.pruned}% pruned`; g.appendChild(sub);
+    svg.appendChild(g);
+    buds.push({ b, g, path });
+
+    const activate = () => select(b.id);
+    g.addEventListener("click", activate);
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(); } });
+  });
+
+  const fmt = (n) => n.toLocaleString();
+  const reader = document.getElementById("reader");
+
+  function renderTrunk() {
+    reader.querySelector(".eyebrow").textContent = "the trunk";
+    document.getElementById("r-title").textContent = TRUNK.title;
+    document.getElementById("r-sub").textContent = TRUNK.sub;
+    document.getElementById("r-econ").innerHTML = `<span class="stat"><b class="num">18.7k</b><small>tokens in the trunk</small></span>`;
+    document.getElementById("r-body").innerHTML = `<p class="muted">Every branch reads from a <em>brief</em> instead of this whole trunk — a handful of referent-resolved facts. Select one to see what it kept and what it pruned.</p>`;
+  }
+
+  function select(id) {
+    const b = BRANCHES.find((x) => x.id === id);
+    buds.forEach(({ b: bb, g, path }) => {
+      const on = bb.id === id;
+      g.classList.toggle("active", on);
+      path.classList.toggle("lit", on);
+      path.setAttribute("stroke-width", on ? 3 : 2.4);
+    });
+    document.getElementById("hint").textContent = `“${b.q}” — grown on ${b.model}, ${b.effort} effort.`;
+    reader.querySelector(".eyebrow").textContent = "a branch";
+    document.getElementById("r-title").textContent = b.title;
+    document.getElementById("r-sub").textContent = `Branched from the trunk on “${b.q}”`;
+    document.getElementById("r-econ").innerHTML = `
+      <span class="stat"><b class="num">${fmt(b.available)}</b><small>available in the trunk</small></span>
+      <span class="stat"><b class="num">${fmt(b.kept)}</b><small>kept in the brief</small></span>
+      <span class="stat"><b class="num" style="color:${SEASON[b.season]}">${b.pruned}%</b><small>pruned away</small></span>`;
+    document.getElementById("r-body").innerHTML = `
+      <ul class="facts">${b.facts.map((f) => `<li>${f}</li>`).join("")}</ul>
+      <p class="excluded">${b.excluded}</p>
+      <span class="pill"><span class="bud" style="background:${SEASON[b.season]}"></span>${b.model} · ${b.effort} effort · ${b.cost}</span>
+      <div class="merged"><b>merged back to the trunk</b>${b.insight}</div>`;
+  }
+
+  // Bud in on load (respecting reduced motion is handled by CSS transitions being off).
+  select("rank");
+</script>

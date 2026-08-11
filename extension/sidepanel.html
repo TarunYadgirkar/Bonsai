@@ -5,47 +5,162 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Bonsai</title>
     <style>
-      :root { color-scheme: dark; }
+      /* Sumi-e ink on rice paper — committed light theme (see DESIGN.md). */
+      :root {
+        color-scheme: light;
+        --paper: #EEECE3;
+        --paper-raised: #F6F4EC;
+        --paper-sunk: #E7E4D8;
+        --ink: #20241E;
+        --ink-soft: #5A5F52;
+        --bark: #8A7F6A;
+        --rule: #D8D4C6;
+        --rule-strong: #C6C1B0;
+        --moss: #3E6B47;
+        --moss-bright: #5E8C55;
+        --moss-wash: #E3E8DC;
+        --ember: #B65A2E;
+        --season-young: #7FA05B;
+        --season-summer: #C8A24A;
+        --season-ember: #B65A2E;
+        --radius: 4px;
+        --radius-bud: 7px;
+        --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+        --serif: Georgia, 'Times New Roman', serif;
+      }
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        font: 13px/1.5 system-ui, sans-serif;
-        background: #0a0a0a;
-        color: #e5e5e5;
+        font: 13px/1.5 system-ui, -apple-system, sans-serif;
+        background: var(--paper);
+        color: var(--ink);
       }
-      header { padding: 12px 14px; border-bottom: 1px solid #1f1f1f; }
-      header h1 { margin: 0; font-size: 14px; }
-      header p { margin: 2px 0 0; font-size: 11px; color: #737373; }
+      header {
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--rule);
+        background: var(--paper-raised);
+      }
+      header h1 {
+        margin: 0;
+        font-family: var(--serif);
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+        color: var(--ink);
+      }
+      header p { margin: 3px 0 0; font-size: 11px; line-height: 1.4; color: var(--ink-soft); }
       main { padding: 12px 14px; }
-      section { margin-bottom: 16px; }
-      h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: #737373; margin: 0 0 8px; }
-      label { display: block; font-size: 11px; color: #a3a3a3; margin: 8px 0 3px; }
+      section { margin-bottom: 18px; }
+      h2 {
+        font-size: 11px;
+        text-transform: lowercase;
+        letter-spacing: 0.08em;
+        color: var(--bark);
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      label { display: block; font-size: 11px; color: var(--ink-soft); margin: 8px 0 3px; }
       textarea, input, select {
-        width: 100%; background: #141414; color: #e5e5e5; border: 1px solid #2a2a2a;
-        border-radius: 8px; padding: 7px 9px; font: inherit; resize: vertical;
+        width: 100%;
+        background: var(--paper-raised);
+        color: var(--ink);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius);
+        padding: 7px 9px;
+        font: inherit;
+        resize: vertical;
+      }
+      textarea::placeholder, input::placeholder { color: var(--bark); }
+      textarea:focus, input:focus, select:focus {
+        outline: 2px solid var(--moss-bright);
+        outline-offset: 2px;
+        border-color: var(--moss);
       }
       button {
-        background: #1f6f43; color: #fff; border: 1px solid #2e9e60; border-radius: 8px;
-        padding: 7px 12px; font: 600 12px system-ui; cursor: pointer;
+        background: var(--moss);
+        color: var(--paper);
+        border: 1px solid var(--moss);
+        border-radius: var(--radius);
+        padding: 7px 12px;
+        font: 600 12px system-ui, sans-serif;
+        cursor: pointer;
       }
-      button.ghost { background: transparent; border-color: #2a2a2a; color: #d4d4d4; }
+      button:hover { background: var(--moss-bright); border-color: var(--moss-bright); }
+      button.ghost { background: transparent; border: 1px solid var(--rule-strong); color: var(--ink-soft); }
+      button.ghost:hover { background: var(--paper-sunk); color: var(--ink); border-color: var(--rule-strong); }
+      button:focus-visible { outline: 2px solid var(--moss-bright); outline-offset: 2px; }
       button:disabled { opacity: 0.4; cursor: default; }
       .row { display: flex; gap: 8px; align-items: center; }
-      .brief { background: #101410; border: 1px solid #1e2a1e; border-radius: 10px; padding: 10px; margin-top: 8px; }
+      .brief {
+        background: var(--paper-raised);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius);
+        padding: 10px 11px;
+        margin-top: 8px;
+      }
+      .brief strong { font-weight: 600; color: var(--ink); }
       .brief ul { margin: 6px 0; padding-left: 16px; }
-      .brief li { margin: 2px 0; }
-      .econ { font-size: 11px; color: #7bbf95; margin-top: 6px; }
-      .excluded { font-size: 11px; color: #737373; border-top: 1px solid #1e2a1e; margin-top: 6px; padding-top: 6px; }
-      .node { border: 1px solid #2a2a2a; border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; }
-      .node .title { font-weight: 600; }
-      .node .meta { font-size: 11px; color: #8a8a8a; margin-top: 2px; }
-      .node .insight { font-size: 12px; color: #7bbf95; margin-top: 6px; border-top: 1px solid #1e2a1e; padding-top: 6px; }
-      .glyph-open { color: #d4d4d4; }
-      .glyph-merged { color: #4ade80; }
-      .glyph-abandoned { color: #737373; }
-      .empty { color: #737373; font-size: 12px; }
-      .chip { display: inline-block; font-size: 10px; padding: 1px 6px; border-radius: 999px; border: 1px solid #2a2a2a; color: #a3a3a3; }
-      .warn { color: #f59e0b; font-size: 11px; margin-top: 4px; }
+      .brief li { margin: 2px 0; color: var(--ink); }
+      .econ {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        color: var(--moss);
+        margin-top: 6px;
+      }
+      .excluded {
+        font-size: 11px;
+        color: var(--bark);
+        border-top: 1px solid var(--rule);
+        margin-top: 8px;
+        padding-top: 6px;
+      }
+      .node {
+        background: var(--paper-raised);
+        border: 1px solid var(--rule);
+        border-radius: var(--radius-bud);
+        padding: 9px 10px;
+        margin-bottom: 8px;
+      }
+      .node .title { font-weight: 600; color: var(--ink); }
+      .node .meta {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 11px;
+        color: var(--ink-soft);
+        margin-top: 3px;
+      }
+      .node .insight {
+        font-size: 12px;
+        color: var(--ink);
+        margin-top: 6px;
+        border-top: 1px solid var(--rule);
+        padding-top: 6px;
+      }
+      /* Status glyphs ride the season scale: dormant wood → fresh growth → mature path → pruned. */
+      .glyph-draft { color: var(--bark); }
+      .glyph-open { color: var(--moss-bright); }
+      .glyph-merged { color: var(--moss); }
+      .glyph-abandoned { color: var(--ink-soft); opacity: 0.7; }
+      .empty { color: var(--bark); font-size: 12px; }
+      .chip {
+        display: inline-block;
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: var(--radius);
+        border: 1px solid var(--rule-strong);
+        background: var(--paper-sunk);
+        color: var(--ink-soft);
+      }
+      .warn {
+        font-family: var(--mono);
+        font-variant-numeric: tabular-nums;
+        color: var(--ember);
+        font-size: 11px;
+        margin-top: 4px;
+      }
     </style>
   </head>
   <body>

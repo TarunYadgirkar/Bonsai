@@ -3,6 +3,23 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Web app redesign: "sumi-e ink on rice paper"
+
+The hackathon dark theme (and its relics — "Person B owns app/api") replaced by a genuinely
+designed, anti-vibecode UI grounded in the subject (bonsai = the art of pruning). See DESIGN.md.
+- Committed light theme: rice-paper background, sumi-ink text, bark/rule structure, ONE restrained
+  moss accent. Type: Fraunces (display serif), Instrument Sans (body — not Inter), IBM Plex Mono
+  (data readouts). No purple/indigo gradients, no shadcn `rounded-2xl shadow-lg` cards, no
+  left-border accent strip, no cardocalypse — verified against anti-vibecode checklists.
+- Cost is a horticultural **season scale** (young growth → summer → ember), never a cost-purple
+  ramp — used on the branch buds, kickers, edges, and the economics bars.
+- The **garden** (branch tree) is the signature: trunk + boughs curving to buds, active path inked
+  in moss, each branch's pruning inscribed in its season. The Economics panel reads like a ledger/
+  instrument (season savings bars + a mono per-inference log), not a debug modal.
+- Restyle split: engine of the design (fonts, tokens, globals, the garden tree, Workspace shell)
+  by hand; the chat column and economics restyled by two subagents against an exact token spec so
+  they couldn't drift generic. 124 tests green; deployed live to bonsai-connector.vercel.app.
+
 ## 2026-08-11 — Remote MCP connector for claude.ai (subscription-riding surface #3)
 
 `app/api/mcp/[key]/route.ts` — a claude.ai custom connector (mcp-handler 2.1.0, Streamable HTTP)
