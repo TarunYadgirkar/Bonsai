@@ -94,7 +94,45 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-11T11:15:00Z by claude session (lane A)
+Updated: 2026-08-11T20:10:00Z by claude session (lane A)
+
+**Session 2026-08-11 PM — audit + fixes (7 commits on copy-a, all gates green: 172 tests, 10/10
+evals, build clean). A 56-agent adversarial review surfaced 36 verified bugs; the load-bearing
+ones are fixed:**
+- **Web app is now per-session** (`lib/session.ts` cookie + `session_id` column, `migrations/004`).
+  A fresh visitor lands on an EMPTY root that answers from its own transcript; the Berkeley fixture
+  is an opt-in demo (`/api/demo`, "Load Berkeley demo" button), no longer preloaded for everyone.
+  `/api/reset` empties the caller's own garden. Store rewritten around this; a memory-fallback
+  working set now refuses to write back over a DB that only failed to READ (was clobbering rows).
+- **Connector auth fails closed**: `validateKey` rejects the repo-literal `bonsai-dev-key` whenever
+  DATABASE_URL is set and rejects (not memory-falls-back) on a DB error; the sticky `degraded` flag
+  is now a 30s cooldown. Per-key node cap + parentId ownership check on fork; path key is canonical
+  (a bearer can't mask/rewrite it). Dev-key seed removed from `migrations/003`.
+- **Learning router**: feedback attributed to the classifier's PRE-adjustment tier
+  (`RoutingDecision.classifiedTier`) so a bad learned shift self-corrects; an inherited pin no
+  longer re-logs an override every turn (was fabricating a "consistent pattern").
+- **Accounting**: `buildLog` persists the engine's real per-attempt cost (`routing.estCostUsd`,
+  which includes escalation passes + `costForServedBy`) instead of a catalog reprice.
+- **Plugin** MCP server is bundled self-contained (`plugin/mcp/dist/server.mjs`); install needs no
+  npm step. Rebuild with `node plugin/mcp/build.mjs` after editing `server.mjs`.
+- **Garden artifact** reworked into a real left-to-right tree diagram (same URL b1b44d60).
+
+**BLOCKED — deploy the above to the live connector (needs Tarun; the auto-mode classifier blocked
+me from running DDL on the live Neon branch):**
+1. Apply `migrations/004_sessions.sql` schema to the copy-a Neon branch `br-old-fog-avfznwqu`
+   (the two `ALTER TABLE … ADD COLUMN session_id` + two `CREATE INDEX`; the DELETE of `legacy`
+   rows is optional — session-scoped reads already hide them). Do it in the Neon console or a
+   psql the classifier isn't gating.
+2. `vercel --prod` from `~/TarunsCode/bonsai-copy-a` (worktree is linked to `bonsai-connector`).
+3. Re-verify: fresh web session is empty; `bonsai-dev-key` → 401; real key still inits + fork/merge.
+Migration MUST land before the deploy or new-code writes 503 (no session_id column yet).
+
+**Also flagged, not yet fixed** (need live retest or a judgment call): extension prefill uses
+`chrome.storage.session` the content script can't read (prefill no-ops) + a stale PendingBranch can
+target the wrong conversation + never-send isn't structural (POST code in the bundle) + `tabs`
+permission too broad; plugin `trees.json` cross-process race + coverage-runs-after-persist phantom
+branches; baseline savings ignore the deep model's 1.3x tokenizer (understates ~23% — left alone so
+as not to inflate the headline without your call).
 
 **Bonsai is a four-surface product with a defensible engine, a designed UI, and OSS-grade docs.**
 
@@ -125,9 +163,11 @@ smoke.
 
 **In flight:** nothing.
 
-**Blocked:** nothing.
+**Blocked:** deploy of this session's fixes to the live connector — see the PM-session block above
+(needs Tarun to run the Neon migration + `vercel --prod`; classifier gated live DDL).
 
 **Next (Tarun picks):**
+0. Land the blocked deploy (migration + `vercel --prod`) so per-session + the auth fix go live.
 1. Promote copy-a → `main`/the live demo when ready (bonsai-lac still runs the old build).
 2. Ship the population-prior aggregation pipeline server-side (the `mergeProfiles` mechanism is
    built + tested; the anonymized cross-user data plumbing is the moat's remaining work).
