@@ -3,18 +3,20 @@ import tree from '@/fixtures/seed-tree.json';
 import { assembleVisibleContext } from './context';
 import { kvEnabled, kvGet, kvSet } from './kv';
 import { appendInferenceLogs } from './inference-log';
+import {
+  normalizeInferenceLog,
+  normalizeInsight,
+  normalizeStoredConversation,
+  parseStoreSnapshot,
+} from './store-schema';
+import type { SeedTree, StoreSnapshot } from './store-schema';
 import { estimateTokens, messagesTokens, prunedPct } from './tokens';
 import type {
   AssembledContext,
   BranchNode,
   Conversation,
   ContextBrief,
-  ContextSourceKind,
-  ContextSourceRef,
-  Effort,
-  FactProvenanceStatus,
   InferenceLog,
-  InferencePurpose,
   Insight,
   Message,
   SeedConversation,
@@ -38,75 +40,18 @@ interface StoreShape {
   seq: number;
 }
 
-type LegacyContextBrief = Omit<
-  ContextBrief,
-  'sourceRefs' | 'factSourceIds' | 'factProvenance'
-> &
-  Partial<Pick<ContextBrief, 'sourceRefs' | 'factSourceIds' | 'factProvenance'>>;
-
-type LegacyInsight = Omit<Insight, 'sourceMessageIds' | 'active'> &
-  Partial<Pick<Insight, 'sourceMessageIds' | 'active'>>;
-
-type StoredConversation = Omit<Conversation, 'brief' | 'insights'> & {
-  brief?: LegacyContextBrief;
-  insights: LegacyInsight[];
-};
-
-type LegacyInferenceLog = Omit<InferenceLog, 'status'> &
-  Partial<Pick<InferenceLog, 'status'>>;
-
-/** Shape of fixtures/seed-tree.json. Generated, never hand-edited. */
-interface SeedTree {
-  rootInsights?: LegacyInsight[];
-  branches?: StoredConversation[];
-  logs?: LegacyInferenceLog[];
-  seq?: number;
-}
-
-interface StoreSnapshot {
-  conversations: StoredConversation[];
-  logs: LegacyInferenceLog[];
-  rootId: string;
-  seq: number;
-}
-
 const GLOBAL_KEY = Symbol.for('bonsai.store');
 const KV_KEY = 'bonsai:store:v1';
 
+export class StoreSequenceExhaustedError extends Error {
+  constructor() {
+    super('store sequence exhausted');
+    this.name = 'StoreSequenceExhaustedError';
+  }
+}
+
 /** Logs written this request, waiting to be flushed to the local mirror by flushLogs(). */
 const pending: InferenceLog[] = [];
-
-function normalizeBrief(brief: LegacyContextBrief): ContextBrief {
-  const factSourceIds =
-    brief.factSourceIds?.map((sourceIds) => [...sourceIds]) ?? brief.facts.map(() => []);
-  return {
-    ...brief,
-    sourceRefs: brief.sourceRefs?.map((source) => ({ ...source })) ?? [],
-    factSourceIds,
-    factProvenance:
-      brief.factProvenance?.map((status) => status) ?? brief.facts.map(() => 'legacy-unknown'),
-  };
-}
-
-function normalizeInsight(insight: LegacyInsight): Insight {
-  return {
-    ...insight,
-    sourceMessageIds: [...(insight.sourceMessageIds ?? [])],
-    active: insight.active ?? true,
-  };
-}
-
-function normalizeConversation(conversation: StoredConversation): Conversation {
-  return {
-    ...conversation,
-    brief: conversation.brief ? normalizeBrief(conversation.brief) : undefined,
-    insights: conversation.insights.map(normalizeInsight),
-  };
-}
-
-function normalizeLog(log: LegacyInferenceLog): InferenceLog {
-  return { ...log, status: log.status ?? 'succeeded' };
-}
 
 /**
  * Boots the pre-built demo tree: the root transcript from `seed-conversation.json` plus the
@@ -132,10 +77,10 @@ function build(): StoreShape {
     pinnedTier: null,
     archived: false,
   };
-  const branches = (preloaded.branches ?? []).map(normalizeConversation);
+  const branches = (preloaded.branches ?? []).map(normalizeStoredConversation);
   return {
     conversations: new Map([root, ...branches].map((c) => [c.id, c])),
-    logs: (preloaded.logs ?? []).map(normalizeLog),
+    logs: (preloaded.logs ?? []).map(normalizeInferenceLog),
     rootId: root.id,
     seq: preloaded.seq ?? 0,
   };
@@ -165,10 +110,10 @@ function toSnapshot(s: StoreShape): StoreSnapshot {
 }
 
 function fromSnapshot(snapshot: StoreSnapshot): StoreShape {
-  const conversations = snapshot.conversations.map(normalizeConversation);
+  const conversations = snapshot.conversations.map((conversation) => structuredClone(conversation));
   return {
     conversations: new Map(conversations.map((conversation) => [conversation.id, conversation])),
-    logs: snapshot.logs.map(normalizeLog),
+    logs: snapshot.logs.map((log) => ({ ...log })),
     rootId: snapshot.rootId,
     seq: snapshot.seq,
   };
@@ -192,247 +137,10 @@ export async function loadStore(): Promise<void> {
 
   try {
     const parsed = JSON.parse(read.value) as unknown;
-    if (!isStoreSnapshot(parsed)) throw new Error('invalid snapshot shape');
-    setStore(fromSnapshot(parsed));
+    setStore(fromSnapshot(parseStoreSnapshot(parsed)));
   } catch {
     console.warn('[store] unreadable KV snapshot — keeping in-memory state');
   }
-}
-
-function isStoreSnapshot(value: unknown): value is StoreSnapshot {
-  if (!isRecord(value)) return false;
-  if (!Array.isArray(value.conversations) || !value.conversations.length) return false;
-  if (!value.conversations.every(isStoredConversation)) return false;
-  if (!Array.isArray(value.logs) || !value.logs.every(isInferenceLog)) return false;
-  if (!isNonEmptyString(value.rootId) || !isNonNegativeInteger(value.seq)) return false;
-
-  const snapshot = value as unknown as StoreSnapshot;
-  const ids = snapshot.conversations.map((conversation) => conversation.id);
-  if (new Set(ids).size !== ids.length || !ids.includes(value.rootId)) return false;
-  if (!hasValidForest(snapshot.conversations, snapshot.rootId)) return false;
-  return snapshot.seq >= maxGeneratedSequence(snapshot);
-}
-
-function hasValidForest(conversations: StoredConversation[], rootId: string): boolean {
-  const byId = new Map(conversations.map((conversation) => [conversation.id, conversation]));
-  if (byId.get(rootId)?.parentId !== null) return false;
-
-  return conversations.every((conversation) => {
-    const visited = new Set<string>();
-    let cursor: StoredConversation | undefined = conversation;
-    while (cursor.parentId !== null) {
-      if (visited.has(cursor.id)) return false;
-      visited.add(cursor.id);
-      cursor = byId.get(cursor.parentId);
-      if (!cursor) return false;
-    }
-    return true;
-  });
-}
-
-function maxGeneratedSequence(snapshot: StoreSnapshot): number {
-  const ids = snapshot.conversations.flatMap((conversation) => [
-    conversation.id,
-    ...(conversation.brief ? [conversation.brief.id] : []),
-    ...conversation.messages.map((message) => message.id),
-    ...conversation.insights.map((insight) => insight.id),
-  ]);
-  ids.push(...snapshot.logs.map((log) => log.id));
-  return ids.reduce((max, id) => {
-    const sequence = /_(\d+)$/.exec(id)?.[1];
-    return sequence ? Math.max(max, Number(sequence)) : max;
-  }, 0);
-}
-
-function isStoredConversation(value: unknown): value is StoredConversation {
-  if (!isRecord(value)) return false;
-  if (!isNonEmptyString(value.id) || !isNonEmptyString(value.title)) return false;
-  if (value.parentId !== null && !isNonEmptyString(value.parentId)) return false;
-  if (!Array.isArray(value.messages) || !value.messages.every(isMessage)) return false;
-  if (!Array.isArray(value.insights) || !value.insights.every(isLegacyInsight)) return false;
-  if (value.pinnedTier !== null && !isTier(value.pinnedTier)) return false;
-  if (typeof value.archived !== 'boolean') return false;
-  if (value.profile !== undefined && !isUserProfile(value.profile)) return false;
-  return value.brief === undefined || isLegacyBrief(value.brief);
-}
-
-function isMessage(value: unknown): value is Message {
-  if (!isRecord(value)) return false;
-  if (!isNonEmptyString(value.id) || !isNonEmptyString(value.content)) return false;
-  if (value.role !== 'user' && value.role !== 'assistant') return false;
-  if (value.createdAt !== undefined && typeof value.createdAt !== 'string') return false;
-  return value.routing === undefined || isRoutingDecision(value.routing);
-}
-
-function isRoutingDecision(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return (
-    isTier(value.tier) &&
-    isNonEmptyString(value.model) &&
-    (value.effort === undefined || isEffort(value.effort)) &&
-    (value.servedBy === undefined || isNonEmptyString(value.servedBy)) &&
-    isNonEmptyString(value.effortNote) &&
-    isFiniteNumber(value.contextTokens) &&
-    isFiniteNumber(value.estCostUsd) &&
-    isNonEmptyString(value.reason) &&
-    (value.complexity === 1 || value.complexity === 2 || value.complexity === 3) &&
-    typeof value.escalated === 'boolean' &&
-    typeof value.overridden === 'boolean'
-  );
-}
-
-function isUserProfile(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return (
-    isNonEmptyString(value.name) &&
-    typeof value.context === 'string' &&
-    Array.isArray(value.goals) &&
-    value.goals.every((goal) => typeof goal === 'string')
-  );
-}
-
-function isLegacyBrief(value: unknown): value is LegacyContextBrief {
-  if (!isRecord(value)) return false;
-  if (
-    !isNonEmptyString(value.id) ||
-    !isNonEmptyString(value.branchId) ||
-    typeof value.selection !== 'string' ||
-    typeof value.markdown !== 'string' ||
-    !Array.isArray(value.facts) ||
-    !value.facts.every((fact) => typeof fact === 'string') ||
-    typeof value.excludedNote !== 'string' ||
-    !isFiniteNumber(value.availableTokens) ||
-    !isFiniteNumber(value.briefTokens) ||
-    !isFiniteNumber(value.prunedPct)
-  ) {
-    return false;
-  }
-  if (
-    value.sourceRefs !== undefined &&
-    (!Array.isArray(value.sourceRefs) || !value.sourceRefs.every(isSourceRef))
-  ) {
-    return false;
-  }
-  if (
-    value.factSourceIds !== undefined &&
-    (!Array.isArray(value.factSourceIds) ||
-      value.factSourceIds.length !== value.facts.length ||
-      !value.factSourceIds.every(
-        (sourceIds) =>
-          Array.isArray(sourceIds) && sourceIds.every((sourceId) => isNonEmptyString(sourceId)),
-      ))
-  ) {
-    return false;
-  }
-  if (value.factSourceIds !== undefined) {
-    const sourceRefs = (value.sourceRefs ?? []) as ContextSourceRef[];
-    const knownSourceIds = new Set(sourceRefs.map((source) => source.sourceId));
-    const factSourceIds = value.factSourceIds as string[][];
-    if (!factSourceIds.every((sourceIds) => sourceIds.every((id) => knownSourceIds.has(id)))) {
-      return false;
-    }
-  }
-  return (
-    value.factProvenance === undefined ||
-    (Array.isArray(value.factProvenance) &&
-      value.factProvenance.length === value.facts.length &&
-      value.factProvenance.every(isFactProvenance))
-  );
-}
-
-function isSourceRef(value: unknown): boolean {
-  if (!isRecord(value)) return false;
-  return (
-    isContextSourceKind(value.kind) &&
-    isNonEmptyString(value.conversationId) &&
-    isNonEmptyString(value.sourceId)
-  );
-}
-
-function isLegacyInsight(value: unknown): value is LegacyInsight {
-  if (!isRecord(value)) return false;
-  if (
-    !isNonEmptyString(value.id) ||
-    !isNonEmptyString(value.branchId) ||
-    !isNonEmptyString(value.parentId) ||
-    !isNonEmptyString(value.text) ||
-    !isNonEmptyString(value.createdAt)
-  ) {
-    return false;
-  }
-  if (
-    value.sourceMessageIds !== undefined &&
-    (!Array.isArray(value.sourceMessageIds) ||
-      !value.sourceMessageIds.every((sourceId) => isNonEmptyString(sourceId)))
-  ) {
-    return false;
-  }
-  return value.active === undefined || typeof value.active === 'boolean';
-}
-
-function isInferenceLog(value: unknown): value is LegacyInferenceLog {
-  if (!isRecord(value)) return false;
-  return (
-    isNonEmptyString(value.id) &&
-    isNonEmptyString(value.ts) &&
-    isNonEmptyString(value.branchId) &&
-    isInferencePurpose(value.purpose) &&
-    isTier(value.tier) &&
-    isNonEmptyString(value.model) &&
-    (value.servedBy === undefined || isNonEmptyString(value.servedBy)) &&
-    (value.effort === undefined || isEffort(value.effort)) &&
-    isFiniteNumber(value.inputTokens) &&
-    isFiniteNumber(value.outputTokens) &&
-    isFiniteNumber(value.estCostUsd) &&
-    (value.status === undefined || value.status === 'succeeded' || value.status === 'failed') &&
-    typeof value.escalated === 'boolean' &&
-    typeof value.overridden === 'boolean' &&
-    isFiniteNumber(value.baselineInputTokens) &&
-    isFiniteNumber(value.baselineCostUsd)
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
-}
-
-function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
-}
-
-function isNonNegativeInteger(value: unknown): value is number {
-  return Number.isInteger(value) && typeof value === 'number' && value >= 0;
-}
-
-function isTier(value: unknown): value is Tier {
-  return value === 'quick' || value === 'thoughtful' || value === 'deep';
-}
-
-function isEffort(value: unknown): value is Effort {
-  return value === 'low' || value === 'medium' || value === 'high' || value === 'max';
-}
-
-function isInferencePurpose(value: unknown): value is InferencePurpose {
-  return value === 'chat' || value === 'compile' || value === 'classify' || value === 'merge';
-}
-
-function isContextSourceKind(value: unknown): value is ContextSourceKind {
-  return (
-    value === 'profile' ||
-    value === 'brief' ||
-    value === 'message' ||
-    value === 'insight' ||
-    value === 'selection' ||
-    value === 'question'
-  );
-}
-
-function isFactProvenance(value: unknown): value is FactProvenanceStatus {
-  return value === 'model-cited' || value === 'extractive' || value === 'legacy-unknown';
 }
 
 /** Call before responding from any route that mutated state. Awaited: a frozen lambda drops it. */
@@ -457,6 +165,7 @@ export async function resetStore(): Promise<StateResponse> {
 
 export function nextId(prefix: string): string {
   const s = store();
+  if (s.seq === Number.MAX_SAFE_INTEGER) throw new StoreSequenceExhaustedError();
   s.seq += 1;
   return `${prefix}_${s.seq}`;
 }

@@ -15,6 +15,7 @@ vi.mock('./kv', () => ({
 }));
 
 import {
+  StoreSequenceExhaustedError,
   availableTokensFor,
   getConversation,
   listConversations,
@@ -161,6 +162,7 @@ describe('store context compatibility', () => {
     await resetStore();
     const independentRootId = nextId('conv');
     const independentChildId = nextId('branch');
+    const independentBriefId = nextId('brief');
     const independentRoot: Conversation = {
       id: independentRootId,
       title: 'Independent root',
@@ -175,6 +177,26 @@ describe('store context compatibility', () => {
       title: 'Independent child',
       parentId: independentRootId,
       messages: [],
+      brief: {
+        id: independentBriefId,
+        branchId: independentChildId,
+        selection: 'Independent topic',
+        markdown: '# Independent context',
+        facts: ['The independent topic is in focus.'],
+        excludedNote: 'Excluded: nothing else was supplied.',
+        availableTokens: 0,
+        briefTokens: 4,
+        prunedPct: 0,
+        sourceRefs: [
+          {
+            kind: 'selection',
+            conversationId: independentChildId,
+            sourceId: `selection:${independentChildId}`,
+          },
+        ],
+        factSourceIds: [[`selection:${independentChildId}`]],
+        factProvenance: ['extractive'],
+      },
       insights: [],
       pinnedTier: null,
       archived: false,
@@ -191,6 +213,36 @@ describe('store context compatibility', () => {
 
     expect(getConversation(independentRootId)).toEqual(independentRoot);
     expect(getConversation(independentChildId)).toEqual(independentChild);
+  });
+
+  it('loads a terminal sequence but refuses allocation without mutating it', async () => {
+    kvMocks.get.mockResolvedValueOnce({
+      status: 'hit',
+      value: JSON.stringify({
+        conversations: [
+          {
+            id: 'terminal-root',
+            title: 'Terminal root',
+            parentId: null,
+            messages: [],
+            insights: [],
+            pinnedTier: null,
+            archived: false,
+          },
+        ],
+        logs: [],
+        rootId: 'terminal-root',
+        seq: Number.MAX_SAFE_INTEGER,
+      }),
+    });
+
+    await loadStore();
+
+    expect(() => nextId('msg')).toThrow(StoreSequenceExhaustedError);
+    expect(() => nextId('msg')).toThrow('store sequence exhausted');
+    await saveStore();
+    const saved = JSON.parse(kvMocks.set.mock.calls.at(-1)?.[1] as string) as { seq: number };
+    expect(saved.seq).toBe(Number.MAX_SAFE_INTEGER);
   });
 
   it.each([
