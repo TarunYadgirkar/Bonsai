@@ -42,7 +42,7 @@
         {
           "id": "msg_4",
           "role": "assistant",
-          "content": "Free Ventures applications close **September 11**, with an info session on September 3. That is eight days between the session and the deadline — draft the application before September 3 rather than after.",
+          "content": "Saved state: Priority 1 = Free Ventures (apply with the startup; apps close Sept 11, info session Sept 3).",
           "routing": {
             "tier": "quick",
             "model": "claude-haiku-4-5",
@@ -50,9 +50,9 @@
             "modelLabel": "Haiku 4.5",
             "label": "Haiku 4.5 · Low effort",
             "effortNote": "Haiku 4.5 · Low effort — single pass, no self-check",
-            "contextTokens": 180,
-            "estCostUsd": 0.000499,
-            "reason": "heuristic mock classifier. Complexity 1/3 against a 180-token compiled brief.",
+            "contextTokens": 185,
+            "estCostUsd": 0.000374,
+            "reason": "heuristic mock classifier. Complexity 1/3 against a 185-token compiled brief.",
             "complexity": 1,
             "escalated": false,
             "overridden": false
@@ -74,7 +74,7 @@
           "A reasonable second club if your first is Free Ventures rather than ML@B."
         ],
         "excludedNote": "Excluded: the rest of the parent thread — everything not bearing on Free Ventures.",
-        "availableTokens": 19013,
+        "availableTokens": 19009,
         "briefTokens": 180,
         "prunedPct": 99.1,
         "sourceRefs": [
@@ -473,6 +473,14 @@
           [
             "m14"
           ]
+        ],
+        "factProvenance": [
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive"
         ]
       },
       "insights": [],
@@ -480,20 +488,20 @@
       "archived": false
     },
     {
-      "id": "branch_7",
+      "id": "branch_8",
       "title": "ML@B club workload inquiry",
       "parentId": "conv_root_berkeley_clubs",
       "messages": [
         {
-          "id": "msg_11",
+          "id": "msg_12",
           "role": "user",
           "content": "how many hours a week is ML@B really, once the education track is counted?",
           "createdAt": "2026-08-07T18:00:00.000Z"
         },
         {
-          "id": "msg_10",
+          "id": "msg_11",
           "role": "assistant",
-          "content": "- - ML@B: breaks it. 8-10 average, 15-20 for three weeks, plus 3-4 hrs of first-semester education track.\n- - Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).\n- Go, collect information, talk to actual members, and ask each one the same two questions: how many hours in your worst week, and what happens if I have to miss two weeks.\n\nThat is what this branch's brief supports; anything beyond it would need more of the parent thread pulled in.",
+          "content": "- ML@B: breaks it. 8-10 average, 15-20 for three weeks, plus 3-4 hrs of first-semester education track.\n- Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).\n- Go, collect information, talk to actual members, and ask each one the same two questions: how many hours in your worst week, and what happens if I have to miss two weeks.\n\nThat is what this branch's brief supports; anything beyond it would need more of the parent thread pulled in.",
           "routing": {
             "tier": "thoughtful",
             "model": "claude-sonnet-5",
@@ -501,9 +509,9 @@
             "modelLabel": "Sonnet 5",
             "label": "Sonnet 5 · Medium effort",
             "effortNote": "Sonnet 5 · Medium effort — one self-check",
-            "contextTokens": 237,
-            "estCostUsd": 0.00306,
-            "reason": "heuristic mock classifier. Complexity 2/3 against a 237-token compiled brief.",
+            "contextTokens": 255,
+            "estCostUsd": 0.003042,
+            "reason": "heuristic mock classifier. Complexity 2/3 against a 255-token compiled brief.",
             "complexity": 2,
             "escalated": false,
             "overridden": false
@@ -512,21 +520,21 @@
         }
       ],
       "brief": {
-        "id": "brief_8",
-        "branchId": "branch_7",
+        "id": "brief_9",
+        "branchId": "branch_8",
         "selection": "ML@B",
-        "markdown": "# Branch brief — ML@B\n\n## Relevant facts\n- - ML@B: breaks it. 8-10 average, 15-20 for three weeks, plus 3-4 hrs of first-semester education track.\n- - Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).\n- Go, collect information, talk to actual members, and ask each one the same two questions: how many hours in your worst week, and what happens if I have to miss two weeks.\n- **The asymmetry worth noticing.** ML@B's downside is concentrated in a specific, predictable, three-week window that you can see coming.\n- Noted: builder-first, startup-adjacent, tight-knit, hard cap around 8-10 hours/week across everything.\n- Slot 2 = ML@B vs Codebase vs Blueprint — leaning ML@B, workload is the open question against your 8-10 hr/week cap.\n\n## Question\nhow many hours a week is ML@B really, once the education track is counted?",
+        "markdown": "# Branch brief — ML@B\n\n## Relevant facts\n- ML@B: breaks it. 8-10 average, 15-20 for three weeks, plus 3-4 hrs of first-semester education track.\n- Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).\n- Go, collect information, talk to actual members, and ask each one the same two questions: how many hours in your worst week, and what happens if I have to miss two weeks.\n- **The asymmetry worth noticing.** ML@B's downside is concentrated in a specific, predictable, three-week window that you can see coming.\n- Noted: builder-first, startup-adjacent, tight-knit, hard cap around 8-10 hours/week across everything.\n- Slot 2 = ML@B vs Codebase vs Blueprint — leaning ML@B, workload is the open question against your 8-10 hr/week cap.\n\n## Question\nhow many hours a week is ML@B really, once the education track is counted?",
         "facts": [
-          "- ML@B: breaks it. 8-10 average, 15-20 for three weeks, plus 3-4 hrs of first-semester education track.",
-          "- Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).",
+          "ML@B: breaks it. 8-10 average, 15-20 for three weeks, plus 3-4 hrs of first-semester education track.",
+          "Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).",
           "Go, collect information, talk to actual members, and ask each one the same two questions: how many hours in your worst week, and what happens if I have to miss two weeks.",
           "**The asymmetry worth noticing.** ML@B's downside is concentrated in a specific, predictable, three-week window that you can see coming.",
           "Noted: builder-first, startup-adjacent, tight-knit, hard cap around 8-10 hours/week across everything.",
           "Slot 2 = ML@B vs Codebase vs Blueprint — leaning ML@B, workload is the open question against your 8-10 hr/week cap."
         ],
         "excludedNote": "Excluded: the rest of the parent thread — everything not bearing on ML@B.",
-        "availableTokens": 19010,
-        "briefTokens": 237,
+        "availableTokens": 19009,
+        "briefTokens": 236,
         "prunedPct": 98.8,
         "sourceRefs": [
           {
@@ -896,13 +904,13 @@
           },
           {
             "kind": "selection",
-            "conversationId": "branch_7",
-            "sourceId": "selection:branch_7"
+            "conversationId": "branch_8",
+            "sourceId": "selection:branch_8"
           },
           {
             "kind": "question",
-            "conversationId": "branch_7",
-            "sourceId": "question:branch_7"
+            "conversationId": "branch_8",
+            "sourceId": "question:branch_8"
           }
         ],
         "factSourceIds": [
@@ -924,6 +932,14 @@
           [
             "m16"
           ]
+        ],
+        "factProvenance": [
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive"
         ]
       },
       "insights": [],
@@ -931,20 +947,20 @@
       "archived": false
     },
     {
-      "id": "branch_13",
+      "id": "branch_15",
       "title": "Top 3 clubs ranking inquiry",
       "parentId": "conv_root_berkeley_clubs",
       "messages": [
         {
-          "id": "msg_17",
+          "id": "msg_19",
           "role": "user",
           "content": "Given my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.",
           "createdAt": "2026-08-07T18:00:00.000Z"
         },
         {
-          "id": "msg_16",
+          "id": "msg_18",
           "role": "assistant",
-          "content": "Ranked, with the opportunity cost of each:\n\n1. **Free Ventures** — the only option whose hours go into your own company. Cost: ~3-4 hrs/week of overhead and a September application window that collides with technical-org recruiting.\n2. **ML@B** — strongest technical peer group and the highest ceiling. Cost: 12-14 hrs/week once the first-semester education track is counted, with a three-week spike landing on November midterms.\n3. **Blueprint** — fits the 8-10 hr cap and has the strongest community. Cost: almost no technical stretch.\n\nCodebase is dominated in both branches; cut it and reclaim the application slot.",
+          "content": "- Goals: startup and technical exposure over resume-padding; tight community over huge orgs; wary of clubs with brutal recruiting processes or huge time commitments\n- **What that means against your cap.** Your 8-10 hrs/week is a hard ceiling across *all* clubs, and you're running a startup on top.\n- Given your stated goals lean builder-first and technical, Blueprint is the \"safe but slightly off-target\" option — which is exactly why it keeps showing up in your slot-2 consideration rather than winning it.\n- The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.\n\nThat is what this branch's brief supports; anything beyond it would need more of the parent thread pulled in.",
           "routing": {
             "tier": "deep",
             "model": "claude-opus-5",
@@ -952,9 +968,9 @@
             "modelLabel": "Opus 5",
             "label": "Opus 5 · High effort",
             "effortNote": "Opus 5 · High effort — multi-step reasoning",
-            "contextTokens": 250,
-            "estCostUsd": 0.016635,
-            "reason": "heuristic mock classifier. Complexity 3/3 against a 250-token compiled brief.",
+            "contextTokens": 321,
+            "estCostUsd": 0.02001,
+            "reason": "heuristic mock classifier. Complexity 3/3 against a 321-token compiled brief.",
             "complexity": 3,
             "escalated": false,
             "overridden": false
@@ -963,22 +979,22 @@
         }
       ],
       "brief": {
-        "id": "brief_14",
-        "branchId": "branch_13",
+        "id": "brief_16",
+        "branchId": "branch_15",
         "selection": "which clubs to join",
-        "markdown": "# Branch brief — which clubs to join\n\n## Relevant facts\n- What's the opportunity cost of each in concrete terms?\n- Goals: startup and technical exposure over resume-padding; tight community over huge orgs; wary of clubs with brutal recruiting processes or huge time commitments\n- Given your 8-10 hour cap while running a startup, it would likely be your ONLY club if you join.\n- **What that means against your cap.** Your 8-10 hrs/week is a hard ceiling across *all* clubs, and you're running a startup on top.\n- Given your stated goals lean builder-first and technical, Blueprint is the \"safe but slightly off-target\" option — which is exactly why it keeps showing up in your slot-2 consideration rather than winning it.\n- The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.\n\n## Question\nGiven my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.",
+        "markdown": "# Branch brief — which clubs to join\n\n## Relevant facts\n- Goals: startup and technical exposure over resume-padding; tight community over huge orgs; wary of clubs with brutal recruiting processes or huge time commitments\n- Given your 8-10 hour cap while running a startup, it would likely be your ONLY club if you join.\n- **What that means against your cap.** Your 8-10 hrs/week is a hard ceiling across *all* clubs, and you're running a startup on top.\n- Given your stated goals lean builder-first and technical, Blueprint is the \"safe but slightly off-target\" option — which is exactly why it keeps showing up in your slot-2 consideration rather than winning it.\n- The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.\n- **How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost.\n\n## Question\nGiven my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.",
         "facts": [
-          "What's the opportunity cost of each in concrete terms?",
           "Goals: startup and technical exposure over resume-padding; tight community over huge orgs; wary of clubs with brutal recruiting processes or huge time commitments",
           "Given your 8-10 hour cap while running a startup, it would likely be your ONLY club if you join.",
           "**What that means against your cap.** Your 8-10 hrs/week is a hard ceiling across *all* clubs, and you're running a startup on top.",
           "Given your stated goals lean builder-first and technical, Blueprint is the \"safe but slightly off-target\" option — which is exactly why it keeps showing up in your slot-2 consideration rather than winning it.",
-          "The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder."
+          "The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.",
+          "**How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost."
         ],
         "excludedNote": "Excluded: the rest of the parent thread — everything not bearing on which clubs to join.",
-        "availableTokens": 19014,
-        "briefTokens": 250,
-        "prunedPct": 98.7,
+        "availableTokens": 19009,
+        "briefTokens": 291,
+        "prunedPct": 98.5,
         "sourceRefs": [
           {
             "kind": "profile",
@@ -1347,19 +1363,16 @@
           },
           {
             "kind": "selection",
-            "conversationId": "branch_13",
-            "sourceId": "selection:branch_13"
+            "conversationId": "branch_15",
+            "sourceId": "selection:branch_15"
           },
           {
             "kind": "question",
-            "conversationId": "branch_13",
-            "sourceId": "question:branch_13"
+            "conversationId": "branch_15",
+            "sourceId": "question:branch_15"
           }
         ],
         "factSourceIds": [
-          [
-            "m49"
-          ],
           [
             "profile:conv_root_berkeley_clubs"
           ],
@@ -1374,7 +1387,18 @@
           ],
           [
             "m30"
+          ],
+          [
+            "m34"
           ]
+        ],
+        "factProvenance": [
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive"
         ]
       },
       "insights": [],
@@ -1382,44 +1406,18 @@
       "archived": false
     },
     {
-      "id": "branch_19",
+      "id": "branch_22",
       "title": "Codebase club inquiry",
-      "parentId": "branch_13",
+      "parentId": "branch_15",
       "messages": [
         {
-          "id": "msg_23",
+          "id": "msg_26",
           "role": "user",
           "content": "why is Codebase dominated in every scenario?",
           "createdAt": "2026-08-07T18:00:00.000Z"
         },
         {
-          "id": "msg_22",
-          "role": "assistant",
-          "content": "Codebase is dominated in both branches; cut it and reclaim the application slot.",
-          "routing": {
-            "tier": "quick",
-            "model": "claude-haiku-4-5",
-            "effort": "low",
-            "modelLabel": "Haiku 4.5",
-            "label": "Haiku 4.5 · Low effort",
-            "effortNote": "Haiku 4.5 · Low effort — single pass, no self-check",
-            "contextTokens": 172,
-            "estCostUsd": 0.000337,
-            "reason": "heuristic mock classifier. Complexity 1/3 against a 172-token compiled brief.",
-            "complexity": 1,
-            "escalated": false,
-            "overridden": false
-          },
-          "createdAt": "2026-08-07T18:00:00.000Z"
-        },
-        {
           "id": "msg_25",
-          "role": "user",
-          "content": "what changes if I only have 8 hours a week?",
-          "createdAt": "2026-08-07T18:00:00.000Z"
-        },
-        {
-          "id": "msg_26",
           "role": "assistant",
           "content": "The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does.",
           "routing": {
@@ -1429,9 +1427,35 @@
             "modelLabel": "Haiku 4.5",
             "label": "Haiku 4.5 · Low effort",
             "effortNote": "Haiku 4.5 · Low effort — single pass, no self-check",
-            "contextTokens": 241,
-            "estCostUsd": 0.000498,
-            "reason": "heuristic mock classifier. Complexity 1/3 against a 241-token compiled brief.",
+            "contextTokens": 167,
+            "estCostUsd": 0.000421,
+            "reason": "heuristic mock classifier. Complexity 1/3 against a 167-token compiled brief.",
+            "complexity": 1,
+            "escalated": false,
+            "overridden": false
+          },
+          "createdAt": "2026-08-07T18:00:00.000Z"
+        },
+        {
+          "id": "msg_29",
+          "role": "user",
+          "content": "what changes if I only have 8 hours a week?",
+          "createdAt": "2026-08-07T18:00:00.000Z"
+        },
+        {
+          "id": "msg_30",
+          "role": "assistant",
+          "content": "The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does.",
+          "routing": {
+            "tier": "quick",
+            "model": "claude-haiku-4-5",
+            "effort": "low",
+            "modelLabel": "Haiku 4.5",
+            "label": "Haiku 4.5 · Low effort",
+            "effortNote": "Haiku 4.5 · Low effort — single pass, no self-check",
+            "contextTokens": 244,
+            "estCostUsd": 0.000501,
+            "reason": "heuristic mock classifier. Complexity 1/3 against a 244-token compiled brief.",
             "complexity": 1,
             "escalated": false,
             "overridden": false
@@ -1440,68 +1464,61 @@
         }
       ],
       "brief": {
-        "id": "brief_20",
-        "branchId": "branch_19",
+        "id": "brief_23",
+        "branchId": "branch_22",
         "selection": "opportunity cost",
-        "markdown": "# Branch brief — opportunity cost\n\n## Relevant facts\n- Given my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.\n- Given my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.\n- - What's the opportunity cost of each in concrete terms?\n- - The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.\n- Ranked, with the opportunity cost of each:\n- Codebase is dominated in both branches; cut it and reclaim the application slot.\n\n## Question\nwhy is Codebase dominated in every scenario?",
+        "markdown": "# Branch brief — opportunity cost\n\n## Relevant facts\n- The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.\n- **How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost.\n- The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.\n\n## Question\nwhy is Codebase dominated in every scenario?",
         "facts": [
-          "Given my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.",
-          "Given my goals, workload, and everything we've learned, rank my top 3 clubs and explain the opportunity cost of each.",
-          "- What's the opportunity cost of each in concrete terms?",
-          "- The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.",
-          "Ranked, with the opportunity cost of each:",
-          "Codebase is dominated in both branches; cut it and reclaim the application slot."
+          "The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder.",
+          "**How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost.",
+          "The opportunity cost is near zero — it's the same work, with structure, deadlines, and people who've done it before looking over your shoulder."
         ],
         "excludedNote": "Excluded: the rest of the parent thread — everything not bearing on opportunity cost.",
-        "availableTokens": 19206,
-        "briefTokens": 172,
-        "prunedPct": 99.1,
+        "availableTokens": 19239,
+        "briefTokens": 156,
+        "prunedPct": 99.2,
         "sourceRefs": [
           {
             "kind": "brief",
-            "conversationId": "branch_13",
-            "sourceId": "brief_14"
+            "conversationId": "branch_15",
+            "sourceId": "brief_16"
           },
           {
             "kind": "message",
-            "conversationId": "branch_13",
-            "sourceId": "msg_17"
+            "conversationId": "branch_15",
+            "sourceId": "msg_19"
           },
           {
             "kind": "message",
-            "conversationId": "branch_13",
-            "sourceId": "msg_16"
+            "conversationId": "branch_15",
+            "sourceId": "msg_18"
           },
           {
             "kind": "selection",
-            "conversationId": "branch_19",
-            "sourceId": "selection:branch_19"
+            "conversationId": "branch_22",
+            "sourceId": "selection:branch_22"
           },
           {
             "kind": "question",
-            "conversationId": "branch_19",
-            "sourceId": "question:branch_19"
+            "conversationId": "branch_22",
+            "sourceId": "question:branch_22"
           }
         ],
         "factSourceIds": [
           [
-            "brief_14"
+            "brief_16"
           ],
           [
-            "msg_17"
+            "brief_16"
           ],
           [
-            "brief_14"
-          ],
-          [
-            "brief_14"
-          ],
-          [
-            "msg_16"
-          ],
-          [
-            "msg_16"
+            "msg_18"
           ]
+        ],
+        "factProvenance": [
+          "extractive",
+          "extractive",
+          "extractive"
         ]
       },
       "insights": [],
@@ -1509,20 +1526,20 @@
       "archived": false
     },
     {
-      "id": "branch_28",
+      "id": "branch_33",
       "title": "Blueprint club inquiry",
       "parentId": "conv_root_berkeley_clubs",
       "messages": [
         {
-          "id": "msg_32",
+          "id": "msg_37",
           "role": "user",
           "content": "is Blueprint worth it if I already have a technical peer group?",
           "createdAt": "2026-08-07T18:00:00.000Z"
         },
         {
-          "id": "msg_31",
+          "id": "msg_36",
           "role": "assistant",
-          "content": "- **The counter-argument you should hold onto:** you already have a forcing function and a technical peer — your cofounder and your startup.\n- **How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost.\n- Technical credibility and ML capability that may matter to your product, plus a peer group that includes future founders.\n- - What you buy: the strongest technical peer group available to you, real ML depth, and a credential with weight.\n- If I only get into Free Ventures and nothing else, how do I replace the technical peer group I'd have gotten from ML@B?\n\nThat is what this branch's brief supports; anything beyond it would need more of the parent thread pulled in.",
+          "content": "- **The counter-argument you should hold onto:** you already have a forcing function and a technical peer — your cofounder and your startup.\n- **How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost.\n- Technical credibility and ML capability that may matter to your product, plus a peer group that includes future founders.\n- The Free Ventures cohort itself.* Worth naming explicitly, because in this branch it's your primary peer group and it's better targeted than ML@B would have been.\n- Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).\n\nThat is what this branch's brief supports; anything beyond it would need more of the parent thread pulled in.",
           "routing": {
             "tier": "deep",
             "model": "claude-fable-5",
@@ -1530,8 +1547,8 @@
             "modelLabel": "Fable 5",
             "label": "Fable 5 · Max effort",
             "effortNote": "Fable 5 · Max effort — exhaustive, weighs alternatives",
-            "contextTokens": 253,
-            "estCostUsd": 0.0342,
+            "contextTokens": 292,
+            "estCostUsd": 0.03805,
             "reason": "You picked Fable 5 at Max effort; classification skipped.",
             "complexity": 3,
             "escalated": false,
@@ -1541,22 +1558,22 @@
         }
       ],
       "brief": {
-        "id": "brief_29",
-        "branchId": "branch_28",
+        "id": "brief_34",
+        "branchId": "branch_33",
         "selection": "Blueprint",
-        "markdown": "# Branch brief — Blueprint\n\n## Relevant facts\n- **The counter-argument you should hold onto:** you already have a forcing function and a technical peer — your cofounder and your startup.\n- **How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost.\n- Technical credibility and ML capability that may matter to your product, plus a peer group that includes future founders.\n- - What you buy: the strongest technical peer group available to you, real ML depth, and a credential with weight.\n- If I only get into Free Ventures and nothing else, how do I replace the technical peer group I'd have gotten from ML@B?\n- The Free Ventures cohort itself.* Worth naming explicitly, because in this branch it's your primary peer group and it's better targeted than ML@B would have been.\n\n## Question\nis Blueprint worth it if I already have a technical peer group?",
+        "markdown": "# Branch brief — Blueprint\n\n## Relevant facts\n- **The counter-argument you should hold onto:** you already have a forcing function and a technical peer — your cofounder and your startup.\n- **How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost.\n- Technical credibility and ML capability that may matter to your product, plus a peer group that includes future founders.\n- The Free Ventures cohort itself.* Worth naming explicitly, because in this branch it's your primary peer group and it's better targeted than ML@B would have been.\n- Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).\n- Candidates worth researching: Machine Learning at Berkeley (ML@B), Free Ventures, Codebase, Blueprint, Berkeley Consulting, and the hackathon org scene.\n\n## Question\nis Blueprint worth it if I already have a technical peer group?",
         "facts": [
           "**The counter-argument you should hold onto:** you already have a forcing function and a technical peer — your cofounder and your startup.",
           "**How this changes your club math.** The hackathon scene gives you the thing you'd partly be joining ML@B or Codebase for — a technical peer group and forcing functions — at roughly a tenth of the recurring time cost.",
           "Technical credibility and ML capability that may matter to your product, plus a peer group that includes future founders.",
-          "- What you buy: the strongest technical peer group available to you, real ML depth, and a credential with weight.",
-          "If I only get into Free Ventures and nothing else, how do I replace the technical peer group I'd have gotten from ML@B?",
-          "The Free Ventures cohort itself.* Worth naming explicitly, because in this branch it's your primary peer group and it's better targeted than ML@B would have been."
+          "The Free Ventures cohort itself.* Worth naming explicitly, because in this branch it's your primary peer group and it's better targeted than ML@B would have been.",
+          "Free Ventures NO → **ML@B** (8-10 average, 15-20 spike for three weeks, plus a 3-4 hr first-semester education track; strongest technical peer group and the highest ceiling).",
+          "Candidates worth researching: Machine Learning at Berkeley (ML@B), Free Ventures, Codebase, Blueprint, Berkeley Consulting, and the hackathon org scene."
         ],
         "excludedNote": "Excluded: the rest of the parent thread — everything not bearing on Blueprint.",
-        "availableTokens": 19012,
-        "briefTokens": 253,
-        "prunedPct": 98.7,
+        "availableTokens": 19009,
+        "briefTokens": 276,
+        "prunedPct": 98.5,
         "sourceRefs": [
           {
             "kind": "profile",
@@ -1925,13 +1942,13 @@
           },
           {
             "kind": "selection",
-            "conversationId": "branch_28",
-            "sourceId": "selection:branch_28"
+            "conversationId": "branch_33",
+            "sourceId": "selection:branch_33"
           },
           {
             "kind": "question",
-            "conversationId": "branch_28",
-            "sourceId": "question:branch_28"
+            "conversationId": "branch_33",
+            "sourceId": "question:branch_33"
           }
         ],
         "factSourceIds": [
@@ -1945,14 +1962,22 @@
             "m48"
           ],
           [
-            "m50"
-          ],
-          [
-            "m69"
-          ],
-          [
             "m70"
+          ],
+          [
+            "m72"
+          ],
+          [
+            "m4"
           ]
+        ],
+        "factProvenance": [
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive"
         ]
       },
       "insights": [],
@@ -1960,18 +1985,18 @@
       "archived": false
     },
     {
-      "id": "branch_34",
+      "id": "branch_39",
       "title": "Law school tuition inquiry (off-brief)",
       "parentId": "conv_root_berkeley_clubs",
       "messages": [
         {
-          "id": "msg_38",
+          "id": "msg_43",
           "role": "user",
           "content": "what is the tuition of Berkeley law school?",
           "createdAt": "2026-08-07T18:00:00.000Z"
         },
         {
-          "id": "msg_37",
+          "id": "msg_42",
           "role": "assistant",
           "content": "The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does.",
           "routing": {
@@ -1981,8 +2006,8 @@
             "modelLabel": "Haiku 4.5",
             "label": "Haiku 4.5 · Low effort",
             "effortNote": "Haiku 4.5 · Low effort — single pass, no self-check",
-            "contextTokens": 204,
-            "estCostUsd": 0.000469,
+            "contextTokens": 217,
+            "estCostUsd": 0.000471,
             "reason": "You picked Haiku 4.5 at Low effort; classification skipped.",
             "complexity": 1,
             "escalated": false,
@@ -1992,21 +2017,21 @@
         }
       ],
       "brief": {
-        "id": "brief_35",
-        "branchId": "branch_34",
+        "id": "brief_40",
+        "branchId": "branch_39",
         "selection": "Berkeley",
-        "markdown": "# Branch brief — Berkeley\n\n## Relevant facts\n- Context: Incoming Berkeley freshman, applied math, CS-focused.\n- I'm an incoming Berkeley freshman doing applied math but really I care about CS, AI, and startups.\n- Candidates worth researching: Machine Learning at Berkeley (ML@B), Free Ventures, Codebase, Blueprint, Berkeley Consulting, and the hackathon org scene.\n- Free Ventures is Berkeley's student-run startup accelerator — you apply WITH your startup, and if accepted you get structure, mentorship, and demo day exposure.\n- What about Berkeley Consulting?\n- Berkeley Consulting is prestigious and well-run, but it's consulting: client decks and business analysis, with a famously intense multi-round recruiting process including case-style interviews.\n\n## Question\nwhat is the tuition of Berkeley law school?",
+        "markdown": "# Branch brief — Berkeley\n\n## Relevant facts\n- Context: Incoming Berkeley freshman, applied math, CS-focused.\n- I'm an incoming Berkeley freshman doing applied math but really I care about CS, AI, and startups.\n- Candidates worth researching: Machine Learning at Berkeley (ML@B), Free Ventures, Codebase, Blueprint, Berkeley Consulting, and the hackathon org scene.\n- Free Ventures is Berkeley's student-run startup accelerator — you apply WITH your startup, and if accepted you get structure, mentorship, and demo day exposure.\n- Berkeley Consulting is prestigious and well-run, but it's consulting: client decks and business analysis, with a famously intense multi-round recruiting process including case-style interviews.\n- Yeah, ruling out Berkeley Consulting.\n\n## Question\nwhat is the tuition of Berkeley law school?",
         "facts": [
           "Context: Incoming Berkeley freshman, applied math, CS-focused.",
           "I'm an incoming Berkeley freshman doing applied math but really I care about CS, AI, and startups.",
           "Candidates worth researching: Machine Learning at Berkeley (ML@B), Free Ventures, Codebase, Blueprint, Berkeley Consulting, and the hackathon org scene.",
           "Free Ventures is Berkeley's student-run startup accelerator — you apply WITH your startup, and if accepted you get structure, mentorship, and demo day exposure.",
-          "What about Berkeley Consulting?",
-          "Berkeley Consulting is prestigious and well-run, but it's consulting: client decks and business analysis, with a famously intense multi-round recruiting process including case-style interviews."
+          "Berkeley Consulting is prestigious and well-run, but it's consulting: client decks and business analysis, with a famously intense multi-round recruiting process including case-style interviews.",
+          "Yeah, ruling out Berkeley Consulting."
         ],
         "excludedNote": "Excluded: the rest of the parent thread — everything not bearing on Berkeley.",
-        "availableTokens": 19011,
-        "briefTokens": 204,
+        "availableTokens": 19009,
+        "briefTokens": 206,
         "prunedPct": 98.9,
         "sourceRefs": [
           {
@@ -2376,13 +2401,13 @@
           },
           {
             "kind": "selection",
-            "conversationId": "branch_34",
-            "sourceId": "selection:branch_34"
+            "conversationId": "branch_39",
+            "sourceId": "selection:branch_39"
           },
           {
             "kind": "question",
-            "conversationId": "branch_34",
-            "sourceId": "question:branch_34"
+            "conversationId": "branch_39",
+            "sourceId": "question:branch_39"
           }
         ],
         "factSourceIds": [
@@ -2399,11 +2424,19 @@
             "m8"
           ],
           [
-            "m11"
+            "m12"
           ],
           [
-            "m12"
+            "m13"
           ]
+        ],
+        "factProvenance": [
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive",
+          "extractive"
         ]
       },
       "insights": [],
@@ -2420,16 +2453,34 @@
       "tier": "quick",
       "model": "claude-haiku-4-5",
       "effort": "low",
-      "inputTokens": 19013,
-      "outputTokens": 180,
-      "estCostUsd": 0.019913,
+      "inputTokens": 19623,
+      "outputTokens": 230,
+      "estCostUsd": 0.020773,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19013,
-      "baselineCostUsd": 0.298695
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
     },
     {
       "id": "log_6",
+      "ts": "2026-08-07T18:00:00.000Z",
+      "branchId": "branch_1",
+      "purpose": "classify",
+      "tier": "quick",
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "inputTokens": 96,
+      "outputTokens": 14,
+      "estCostUsd": 0.000166,
+      "status": "succeeded",
+      "escalated": false,
+      "overridden": false,
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
+    },
+    {
+      "id": "log_7",
       "ts": "2026-08-07T18:00:00.000Z",
       "branchId": "branch_1",
       "purpose": "chat",
@@ -2437,189 +2488,269 @@
       "model": "claude-haiku-4-5",
       "effort": "low",
       "inputTokens": 239,
-      "outputTokens": 52,
-      "estCostUsd": 0.000499,
+      "outputTokens": 27,
+      "estCostUsd": 0.000374,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19013,
-      "baselineCostUsd": 0.289095
+      "baselineInputTokens": 19014,
+      "baselineCostUsd": 0.478725
     },
     {
-      "id": "log_9",
+      "id": "log_10",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_7",
+      "branchId": "branch_8",
       "purpose": "compile",
       "tier": "quick",
       "model": "claude-haiku-4-5",
       "effort": "low",
-      "inputTokens": 19010,
-      "outputTokens": 237,
-      "estCostUsd": 0.020195,
+      "inputTokens": 19635,
+      "outputTokens": 273,
+      "estCostUsd": 0.021,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19010,
-      "baselineCostUsd": 0.302925
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
     },
     {
-      "id": "log_12",
+      "id": "log_13",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_7",
+      "branchId": "branch_8",
+      "purpose": "classify",
+      "tier": "quick",
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "inputTokens": 110,
+      "outputTokens": 14,
+      "estCostUsd": 0.00018,
+      "status": "succeeded",
+      "escalated": false,
+      "overridden": false,
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
+    },
+    {
+      "id": "log_14",
+      "ts": "2026-08-07T18:00:00.000Z",
+      "branchId": "branch_8",
       "purpose": "chat",
       "tier": "thoughtful",
       "model": "claude-sonnet-5",
       "effort": "medium",
-      "inputTokens": 310,
-      "outputTokens": 142,
-      "estCostUsd": 0.00306,
+      "inputTokens": 309,
+      "outputTokens": 141,
+      "estCostUsd": 0.003042,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19010,
-      "baselineCostUsd": 0.2958
+      "baselineInputTokens": 19028,
+      "baselineCostUsd": 0.493325
     },
     {
-      "id": "log_15",
+      "id": "log_17",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_13",
+      "branchId": "branch_15",
       "purpose": "compile",
       "tier": "quick",
       "model": "claude-haiku-4-5",
       "effort": "low",
-      "inputTokens": 19014,
-      "outputTokens": 250,
-      "estCostUsd": 0.020264,
+      "inputTokens": 19650,
+      "outputTokens": 324,
+      "estCostUsd": 0.02127,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19014,
-      "baselineCostUsd": 0.30396
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
     },
     {
-      "id": "log_18",
+      "id": "log_20",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_13",
-      "purpose": "chat",
-      "tier": "deep",
-      "model": "claude-opus-5",
-      "effort": "high",
-      "inputTokens": 334,
-      "outputTokens": 155,
-      "estCostUsd": 0.016635,
+      "branchId": "branch_15",
+      "purpose": "classify",
+      "tier": "quick",
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "inputTokens": 121,
+      "outputTokens": 14,
+      "estCostUsd": 0.000191,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19014,
-      "baselineCostUsd": 0.296835
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
     },
     {
       "id": "log_21",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_19",
-      "purpose": "compile",
-      "tier": "quick",
-      "model": "claude-haiku-4-5",
-      "effort": "low",
-      "inputTokens": 19206,
-      "outputTokens": 172,
-      "estCostUsd": 0.020066,
+      "branchId": "branch_15",
+      "purpose": "chat",
+      "tier": "deep",
+      "model": "claude-opus-5",
+      "effort": "high",
+      "inputTokens": 374,
+      "outputTokens": 192,
+      "estCostUsd": 0.02001,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19206,
-      "baselineCostUsd": 0.30099
+      "baselineInputTokens": 19039,
+      "baselineCostUsd": 0.499975
     },
     {
       "id": "log_24",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_19",
-      "purpose": "chat",
+      "branchId": "branch_22",
+      "purpose": "compile",
       "tier": "quick",
       "model": "claude-haiku-4-5",
       "effort": "low",
-      "inputTokens": 237,
-      "outputTokens": 20,
-      "estCostUsd": 0.000337,
+      "inputTokens": 712,
+      "outputTokens": 182,
+      "estCostUsd": 0.001622,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19206,
-      "baselineCostUsd": 0.28959
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
     },
     {
       "id": "log_27",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_19",
+      "branchId": "branch_22",
+      "purpose": "classify",
+      "tier": "quick",
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "inputTokens": 102,
+      "outputTokens": 14,
+      "estCostUsd": 0.000172,
+      "status": "succeeded",
+      "escalated": false,
+      "overridden": false,
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
+    },
+    {
+      "id": "log_28",
+      "ts": "2026-08-07T18:00:00.000Z",
+      "branchId": "branch_22",
       "purpose": "chat",
       "tier": "quick",
       "model": "claude-haiku-4-5",
       "effort": "low",
-      "inputTokens": 298,
+      "inputTokens": 221,
       "outputTokens": 40,
-      "estCostUsd": 0.000498,
+      "estCostUsd": 0.000421,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19252,
-      "baselineCostUsd": 0.29178
+      "baselineInputTokens": 19250,
+      "baselineCostUsd": 0.48625
     },
     {
-      "id": "log_30",
+      "id": "log_31",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_28",
+      "branchId": "branch_22",
+      "purpose": "classify",
+      "tier": "quick",
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "inputTokens": 102,
+      "outputTokens": 14,
+      "estCostUsd": 0.000172,
+      "status": "succeeded",
+      "escalated": false,
+      "overridden": false,
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
+    },
+    {
+      "id": "log_32",
+      "ts": "2026-08-07T18:00:00.000Z",
+      "branchId": "branch_22",
+      "purpose": "chat",
+      "tier": "quick",
+      "model": "claude-haiku-4-5",
+      "effort": "low",
+      "inputTokens": 301,
+      "outputTokens": 40,
+      "estCostUsd": 0.000501,
+      "status": "succeeded",
+      "escalated": false,
+      "overridden": false,
+      "baselineInputTokens": 19309,
+      "baselineCostUsd": 0.487725
+    },
+    {
+      "id": "log_35",
+      "ts": "2026-08-07T18:00:00.000Z",
+      "branchId": "branch_33",
       "purpose": "compile",
       "tier": "quick",
       "model": "claude-haiku-4-5",
       "effort": "low",
-      "inputTokens": 19012,
-      "outputTokens": 253,
-      "estCostUsd": 0.020277,
+      "inputTokens": 19634,
+      "outputTokens": 316,
+      "estCostUsd": 0.021214,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19012,
-      "baselineCostUsd": 0.304155
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
     },
     {
-      "id": "log_33",
+      "id": "log_38",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_28",
+      "branchId": "branch_33",
       "purpose": "chat",
       "tier": "deep",
       "model": "claude-fable-5",
       "effort": "max",
-      "inputTokens": 323,
-      "outputTokens": 209,
-      "estCostUsd": 0.0342,
+      "inputTokens": 347,
+      "outputTokens": 235,
+      "estCostUsd": 0.03805,
+      "status": "succeeded",
       "escalated": false,
-      "overridden": false,
-      "baselineInputTokens": 19012,
-      "baselineCostUsd": 0.300855
+      "overridden": true,
+      "baselineInputTokens": 19025,
+      "baselineCostUsd": 0.505
     },
     {
-      "id": "log_36",
+      "id": "log_41",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_34",
+      "branchId": "branch_39",
       "purpose": "compile",
       "tier": "quick",
       "model": "claude-haiku-4-5",
       "effort": "low",
-      "inputTokens": 19011,
-      "outputTokens": 204,
-      "estCostUsd": 0.020031,
+      "inputTokens": 19629,
+      "outputTokens": 257,
+      "estCostUsd": 0.020914,
+      "status": "succeeded",
       "escalated": false,
       "overridden": false,
-      "baselineInputTokens": 19011,
-      "baselineCostUsd": 0.300465
+      "baselineInputTokens": 0,
+      "baselineCostUsd": 0
     },
     {
-      "id": "log_39",
+      "id": "log_44",
       "ts": "2026-08-07T18:00:00.000Z",
-      "branchId": "branch_34",
+      "branchId": "branch_39",
       "purpose": "chat",
       "tier": "quick",
       "model": "claude-haiku-4-5",
       "effort": "low",
-      "inputTokens": 269,
+      "inputTokens": 271,
       "outputTokens": 40,
-      "estCostUsd": 0.000469,
+      "estCostUsd": 0.000471,
+      "status": "succeeded",
       "escalated": false,
-      "overridden": false,
-      "baselineInputTokens": 19011,
-      "baselineCostUsd": 0.288165
+      "overridden": true,
+      "baselineInputTokens": 19020,
+      "baselineCostUsd": 0.4805
     }
   ],
-  "seq": 39
+  "seq": 44
 }
