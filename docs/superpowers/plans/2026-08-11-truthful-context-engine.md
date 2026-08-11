@@ -299,6 +299,7 @@ git push origin copy-b
 **Interfaces:**
 - Consumes: AssembledContext and ContextSourceRef.
 - Changes: CompileParams replaces parentMessages/profile with parentContext.
+- Changes: ContextSourceKind adds selection and question for compiler-owned query sources.
 - Produces: ContextBrief.sourceRefs and ContextBrief.factSourceIds aligned by fact index.
 
 - [ ] **Step 1: Write compiler parsing tests**
@@ -322,7 +323,11 @@ Pass a parentContext containing source i1 and assert:
 ```ts
 expect(brief.facts).toEqual(['Codex App Server is the selected runtime.']);
 expect(brief.factSourceIds).toEqual([['i1']]);
-expect(brief.sourceRefs).toEqual(parentContext.sources.map(({ content: _content, ...ref }) => ref));
+expect(brief.sourceRefs.map((source) => source.sourceId)).toEqual([
+  'i1',
+  'selection:branch-1',
+  'question:branch-1',
+]);
 ```
 
 Add a second test where complete() returns invalid JSON. Assert the fallback fact cites only valid candidate source IDs and the excludedNote contains compiler fallback.
@@ -333,6 +338,10 @@ Run npm test -- lib/compiler.test.ts and expect FAIL.
 
 Make ContextBrief.sourceRefs and ContextBrief.factSourceIds required in lib/types.ts in the same
 change, after compiler and mock producers have been updated.
+
+Add selection and question to ContextSourceKind. Build compilerSources by appending a required
+selection source and, when non-empty, a question source to parentContext.sources. Render all of
+them with source markers in the compiler prompt and persist all of their references on the brief.
 
 Use:
 
@@ -374,7 +383,7 @@ Render facts using fact.text while preserving the existing markdown surface.
 
 - [ ] **Step 4: Make the fallback deterministic**
 
-The fallback must rank parentContext.sources by keyword overlap with selection plus question, take at most three non-empty sources, turn their first complete sentence into facts, and attach each selected source's ID. If no source overlaps, return one selection fact with no source IDs and explicitly label the degraded fallback.
+The fallback must rank compilerSources by keyword overlap with selection plus question, take at most three non-empty sources, turn their first complete sentence into facts, and attach each selected source's ID. If no parent source overlaps, return one topic fact citing selection:<branchId> and explicitly label the degraded fallback. No new fact may have an empty source-ID list.
 
 Update mock compiler output to the structured fact shape so zero-key mode exercises the same parser.
 
