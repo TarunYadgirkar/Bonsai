@@ -92,84 +92,44 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-11T09:20:00Z by claude session (lane A)
+Updated: 2026-08-11T10:00:00Z by claude session (lane A)
 
-**Three subscription-riding surfaces now live (BYOK standalone is the dead path):**
-- Claude Code **plugin** (`plugin/`) — full loop on the Claude Code subscription; local
-  marketplace install verified.
-- Chrome **extension** (`extension/`) — MV3 side panel + content script, engine bundled
-  (esbuild), strictly human-in-the-loop (reads claude.ai same-origin, pre-fills composers, never
-  sends). Verified live against claude.ai. Its own `chrome`-typed tsconfig; excluded from the
-  root `tsc` gate; CI runs its typecheck + build.
-- Remote **MCP connector** (`app/api/mcp/[key]`) — **deployed to bonsai-connector.vercel.app and
-  connected in Tarun's claude.ai (Max)**, all 4 tools discovered + permission-gated. Neon
-  `mcp_*` tables (`migrations/003`). Connector URL/key + deploy gotchas are in the project
-  memory (a credential — not in the repo). Deploy notes: new Vercel projects default framework
-  `None` (set `nextjs`); disable the team SSO protection wall; an authless MCP server must NOT
-  send `WWW-Authenticate` (triggers OAuth DCR).
+**Done — four subscription-riding surfaces + a designed UI. All BYOK-standalone was ruled
+out; value is riding the session the user already pays for.**
+- Engine `@bonsai/engine`: path-based compile, closed merge loop, context-first escalation,
+  honest live provider + pricing, and the **learning router** (`learning.ts`, `migrations/002`
+  — per-user priors from overrides/escalations/merges; verified live quick→Sonnet after 3
+  upgrades). 124 tests + 8/8 evals; per-package README + metadata (dist build still TODO).
+- **Claude Code plugin** (`plugin/`) — full loop on the CC subscription; marketplace install
+  verified.
+- **Chrome extension** (`extension/`) — MV3 side panel, engine bundled, strictly HITL (GET-only
+  reads + composer prefill, never sends). Verified live vs claude.ai. Own chrome-typed tsconfig,
+  excluded from root tsc, CI runs its typecheck+build+jsdom render tests.
+- **MCP connector** (`app/api/mcp/[key]`) — deployed to **bonsai-connector.vercel.app**,
+  connected + proven in-chat in Tarun’s claude.ai (Max): Claude called `bonsai_tree` live.
+  Neon `mcp_*` (`migrations/003`). URL/key + deploy gotchas in project memory (credential, not
+  in repo): Vercel new-project framework defaults to `None` (set `nextjs`); disable team SSO
+  wall; authless MCP must NOT send `WWW-Authenticate` (else claude.ai attempts OAuth DCR).
+- **Web app redesign** (`DESIGN.md`) — sumi-e ink on rice paper, the garden tree as signature,
+  season cost scale (never cost-purple), Fraunces/Instrument Sans/IBM Plex Mono. Anti-vibecode
+  verified. Deployed live at bonsai-connector.vercel.app. Extension panel restyled to match.
+- Shareable **interactive garden** artifact published (claude.ai/code/artifact); OSS docs
+  (engine/connector READMEs, CONTRIBUTING); PRODUCT.md/AGENTS truth reconciled.
 
-**Learning router** (`packages/engine/src/learning.ts`, `migrations/002`) — the pitched "learns
-from what you kept", rebuilt from the stripped EverOS integration: per-user priors from
-overrides/escalations/merges shift routing, persisted to Neon, verified live. Feeds `route()` on
-the auto path; chat/branch/merge routes emit feedback.
-
-Engine test count is 118 + 8/8 evals; CI gates typecheck (root + extension), tests, evals, and
-both builds.
-
---- earlier this session ---
-
-**Done:**
-- Toolchain + lane plan: tsx/vitest/typecheck, `PLAN.md`, `BUILDLOG.md` (`8e9acc8`).
-- Engine extracted to `@bonsai/engine` npm-workspace package (packages/engine) with injectable
-  inference seam and 59-test suite; dead M0 stubs deleted (`26f64b2`). Review: no HIGH/CRITICAL.
-- Engine semantics made true (`ded8651`): path-based compile (parent brief + insights +
-  anchor-scoped transcript — briefs compose recursively, depth≥2 referents verified live),
-  merge loop closed (insights enter chat context + sibling compiles), context-first escalation
-  (classifier judges brief coverage; widen-before-upgrade; manual picks never overridden),
-  brief token budget, anchored forks, persisted branch pins. 93 tests.
-- Live provider fixed + honest accounting (`1f768b3`): per-model param policy (sampling 400s on
-  5-family — 3 of 4 rungs were silently mocking with a live key), real `output_config.effort`,
-  effort-keyed max_tokens/timeouts, Fable refusal handling, verified pricing (old table
-  overstated savings ~3x), servedBy-rate pricing for OpenAI/xAI. 99 tests.
-
-**Decided (research-backed, sources in BUILDLOG); all three surfaces since BUILT — see the top
-`## Ongoing` note for live state:**
-- **Claude Code plugin** — full loop on the Pro/Max subscription (sanctioned).
-- **claude.ai MCP connector** — Claude compiles in-conversation; connector stores/formats (no
-  sampling there). Deployed + wired live.
-- **Chrome extension** — kept, but STRICTLY human-in-the-loop: it reads + pre-fills, never
-  auto-sends (auto-send is the pattern behind the April 2026 account bans, so it is structurally
-  impossible in the bundle — no POST/send code).
-- Positioning: on the loop (compiled briefs + per-branch routing + distilled merge-back —
-  unclaimed by any shipped product), not the tree (commoditized).
-
-**Done (continued, same session):**
-- Segment 4 (`abdc262`): relational Neon store (per-row, migrations/, restart-survival PROVEN,
-  commit failures 503), zod route boundary, guarded reset. Security review: no HIGH/CRITICAL;
-  its two LOW fixes applied.
-- Segment 5 (`837c805`): eval harness — 7/7 incl. the depth-2 referent proof through composed
-  briefs; GitHub Actions CI gating typecheck+tests+evals+build.
-- Segment 6 (`2d3d03d`): **working Claude Code plugin** in `plugin/` + root marketplace.json —
-  verified end-to-end headless (fork → honest punt → widen → merge at 97.6% pruned) on
-  subscription auth. MCP tree server smoke 12/12.
-- Segment 7 (`32076e1`..`3362e64`): web demo truth pass (visible errors, server-truth pins,
-  markdown, insights strip, truth badges, honest economics), PRODUCT.md rewritten as
-  spec+roadmap, README/AGENTS updated, DEMO.md comment sweep. React+TS reviews: both HIGHs
-  fixed (pending-mode race, alert semantics) + both MEDIUMs (memoized markdown bubbles,
-  focusable routing card). CI green.
-
-**In flight:** nothing — all planned segments shipped.
+**In flight:** nothing — the /goal (extension + MCP + more surfaces, great non-vibecoded UI)
+is delivered.
 
 **Blocked:** nothing.
 
-**Next (candidates for a fresh session, Tarun picks):**
-1. Dogfood the plugin in real Claude Code sessions; polish the skill flow from friction found.
-2. Live-key eval grading (needs ANTHROPIC_API_KEY in .env.local — hook-blocked for agents,
-   hand Tarun the command) to grade real compiler output vs the mock gate.
-3. claude.ai connector (remote MCP + MCP Apps tree UI) — hosting + OAuth groundwork.
-4. Extract `@bonsai/engine` publishable (add exports conditions/build), marketplace repo split
-   for the plugin, skillrank.dev listing.
-5. Streaming chat for the web demo.
+**Next (candidates; Tarun picks):**
+1. Promote the redesign + connector to `main`/the live demo when Tarun is ready (currently
+   copy-a only; bonsai-lac still runs the old build).
+2. MCP Apps interactive tree INLINE in claude.ai — the connector returns `structuredContent`
+   so it slots in; deferred (draft spec, don’t risk the live connector). The garden artifact
+   is the design reference.
+3. Live-key eval grading (ANTHROPIC_API_KEY in .env.local, hook-blocked — hand Tarun the cmd).
+4. Publishable `@bonsai/engine` (dist build + exports conditions) for a real `npm publish`.
+5. Streaming chat; connector OAuth; dogfound-driven plugin polish.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
