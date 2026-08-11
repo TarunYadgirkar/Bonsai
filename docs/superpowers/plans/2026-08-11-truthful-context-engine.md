@@ -295,6 +295,9 @@ git push origin copy-b
 - Create: lib/compiler.test.ts
 - Modify: lib/llm.ts only if a test seam is required.
 - Modify: lib/mock.ts
+- Modify: app/api/branch/route.ts for the minimal permanent CompileParams call-site update.
+- Modify: lib/context.test.ts and lib/store.test.ts only to update typed brief fixtures when provenance becomes required.
+- Modify: scripts/try-engine.ts for the minimal permanent CompileParams call-site update; Task 5 still owns provenance printing.
 
 **Interfaces:**
 - Consumes: AssembledContext and ContextSourceRef.
@@ -387,6 +390,15 @@ The fallback must rank compilerSources by keyword overlap with selection plus qu
 
 Update mock compiler output to the structured fact shape so zero-key mode exercises the same parser.
 
+Update app/api/branch/route.ts in this same task so the branch remains buildable when CompileParams
+changes: resolve visibleContextFor(parent.id), return a 500 ApiError if assembly is unavailable,
+pass parentContext, and remove parentMessages, profile, and profileFor(). Keep all other route
+semantics unchanged; Task 4 adds route-level acceptance coverage and completes the chat/merge flow.
+
+Update scripts/try-engine.ts to resolve visibleContextFor(parent.id), fail explicitly when it is
+unavailable, and pass parentContext. Remove its parentMessages and profile arguments. Do not change
+its output formatting until Task 5.
+
 - [ ] **Step 5: Verify and commit**
 
 Run:
@@ -439,7 +451,7 @@ Run npm test -- app/api/context-flow.test.ts and expect FAIL.
 
 - [ ] **Step 2: Fix branch creation**
 
-In app/api/branch/route.ts:
+Verify the permanent call-site change made with Task 3, then cover it in the acceptance test:
 
 - resolve parentContext = visibleContextFor(parent.id);
 - return a 500 ApiError if the parent exists but assembly fails;
