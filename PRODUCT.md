@@ -58,13 +58,20 @@ web app was ruled out as the product bet (the value is riding the session you al
 | MCP connector | `app/api/mcp/[key]` — a claude.ai custom connector (remote MCP). Claude compiles the brief in-conversation and passes it as a tool argument; the connector stores the tree and formats. Deployed and connected in a live claude.ai account. |
 | Web app | Hosted demo + engine testbed (this repo, Vercel). Mock-first: runs with zero keys. |
 
-## The learning router
+## The learning router (and the moat)
 
-The router personalizes. When you upgrade a branch it picked as cheap, escalate a too-small
-brief, or merge an answer back, that's a labelled example — and once a pattern is clear the router
-pre-empts the classifier and tells you why ("you've upgraded quick picks 7/7 times, so this one
-starts at thoughtful"). Two people can type the same prompt and get different routes because their
-histories differ. Signals are real behavior, not an AI judge; priors persist per user.
+The router personalizes. When you upgrade a branch it picked as cheap, escalate a too-small brief,
+or merge an answer back, that's a labelled example — learned **per question kind**, so your
+rewrites route cheap while your "analyze" routes deep. Once a pattern is clear the router pre-empts
+the classifier and tells you why ("you've upgraded comparison quick picks 7/7 times, so this one
+starts at thoughtful"), tempered by how confident the classifier was in its read. Two people type
+the same prompt and get different routes because their histories differ.
+
+This is where the defensibility is. Per user it's a switching cost; aggregated across users
+(`mergeProfiles` → a community cold-start prior every new user inherits) it's a genuine network
+effect — the routing memory gets sharper for everyone as more people use it. That flywheel, plus
+owning the brief-fidelity [benchmark](BENCHMARK.md), is the [moat](MOAT.md). Signals are real
+behavior, not an AI judge; priors persist per user.
 
 ## Roadmap (deliberately not built yet)
 
