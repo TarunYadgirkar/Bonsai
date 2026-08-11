@@ -12,6 +12,7 @@ function manifest(): Record<string, unknown> {
       'root-main': 4,
       'independent-root': 2,
     },
+    conversationOrder: ['root-main', 'independent-root'],
     inferenceLogStartBytes: 24,
     inferenceLogBytes: 80,
   };
@@ -67,6 +68,18 @@ describe('parseManifestV1', () => {
       'a non-positive conversation revision',
       (value: Record<string, unknown>) => {
         value.conversations = { 'root-main': 0 };
+      },
+    ],
+    [
+      'an incomplete conversation order',
+      (value: Record<string, unknown>) => {
+        value.conversationOrder = ['root-main'];
+      },
+    ],
+    [
+      'a duplicate conversation order entry',
+      (value: Record<string, unknown>) => {
+        value.conversationOrder = ['root-main', 'root-main'];
       },
     ],
     ['a negative log offset', (value: Record<string, unknown>) => (value.inferenceLogStartBytes = -1)],

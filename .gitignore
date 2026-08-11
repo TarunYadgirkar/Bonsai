@@ -9,6 +9,7 @@ build/
 .env*.local
 
 data/
+.bonsai/
 
 .DS_Store
 *.log

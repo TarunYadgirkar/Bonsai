@@ -8,6 +8,7 @@ export interface ManifestV1 {
   rootId: string;
   seq: number;
   conversations: Record<string, number>;
+  conversationOrder: string[];
   inferenceLogStartBytes: number;
   inferenceLogBytes: number;
 }
@@ -32,6 +33,16 @@ export function parseManifestV1(value: unknown): ManifestV1 {
     ]);
   }
   const conversations = Object.fromEntries(conversationEntries);
+  const conversationOrder = requireArray(record.conversationOrder, 'manifest conversationOrder').map(
+    (conversationId) => requireId(conversationId, 'manifest conversationOrder ID'),
+  );
+  if (
+    new Set(conversationOrder).size !== conversationOrder.length ||
+    conversationOrder.length !== conversationEntries.length ||
+    conversationOrder.some((conversationId) => !Object.hasOwn(conversations, conversationId))
+  ) {
+    fail('manifest conversationOrder must contain every conversation exactly once');
+  }
   const rootId = requireId(record.rootId, 'manifest rootId');
   if (!Object.hasOwn(conversations, rootId)) fail('manifest rootId is not in conversations');
   const inferenceLogStartBytes = requireNonNegativeInteger(
@@ -51,6 +62,7 @@ export function parseManifestV1(value: unknown): ManifestV1 {
     rootId,
     seq: requireNonNegativeInteger(record.seq, 'manifest seq'),
     conversations,
+    conversationOrder,
     inferenceLogStartBytes,
     inferenceLogBytes,
   };
@@ -97,6 +109,11 @@ function requireRecord(value: unknown, label: string): Record<string, unknown> {
     fail(`${label} must be an object`);
   }
   return value as Record<string, unknown>;
+}
+
+function requireArray(value: unknown, label: string): unknown[] {
+  if (!Array.isArray(value)) fail(`${label} must be an array`);
+  return value;
 }
 
 function requireId(value: unknown, label: string): string {
