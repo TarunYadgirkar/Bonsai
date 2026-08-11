@@ -113,7 +113,8 @@ async function tryPendingPrefill(): Promise<void> {
   const pending = got[PENDING_KEY] as PendingBranch | undefined;
   if (!pending) return;
   prefillComposer(pending.text);
-  linkedNodeId = pending.nodeId;
+  // Only a branch (not a merge) carries a nodeId to link once the new chat gets its real id.
+  linkedNodeId = pending.nodeId ?? null;
   await chrome.storage.session.remove(PENDING_KEY);
 }
 

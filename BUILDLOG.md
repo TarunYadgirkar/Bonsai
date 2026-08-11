@@ -3,6 +3,42 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Remote MCP connector for claude.ai (subscription-riding surface #3)
+
+`app/api/mcp/[key]/route.ts` — a claude.ai custom connector (mcp-handler 2.1.0, Streamable HTTP)
+so claude.ai Pro/Max users get the Bonsai loop on their subscription. No LLM calls (MCP sampling
+is unsupported): Claude compiles the brief in-conversation and passes it as a tool argument; the
+connector stores tree state (Neon `mcp_nodes`, `migrations/003`) and formats. Tools: `bonsai_fork`
+(returns a paste-ready brief block + routing + economics), `bonsai_merge` (one distilled insight,
+≤30 words), `bonsai_abandon`, `bonsai_tree` (unicode tree in text + `structuredContent` so a
+future MCP Apps UI slots in free). Auth v1: garden-key path segment validated against `mcp_users`,
+`Authorization: Bearer` accepted too (static-headers-beta ready); unknown key → 401.
+**Smoke: 18/18 against live Neon** — fork/tree/merge persisted, root session node auto-created,
+unknown key rejected. MCP Apps tree UI deferred to v2 (draft spec; and the iframe can't spawn new
+chats — that's the extension's job).
+
+Toolchain: extension excluded from the root `tsc` gate (it has its own `chrome`-typed tsconfig +
+typecheck); CI now runs the extension typecheck + build too. `@types/chrome` at root.
+
+## 2026-08-11 — Chrome extension for claude.ai (subscription-riding surface #2)
+
+`extension/` — MV3, side panel + thin content script, engine bundled via esbuild (39kb). The
+full loop on the user's claude.ai subscription, **strictly human-in-the-loop**: reads the
+conversation (same-origin GET, cookie auth — dodges Cloudflare), compiles a minimal brief
+LOCALLY with the extractive engine (zero model calls), recommends model+effort (local learning
+router; changing the pick teaches it), pre-fills a new-chat composer with the brief, and
+pre-fills the parent chat with the merged insight. **It never sends** — enforced structurally:
+`claude-api.ts` exposes only a GET helper with an allowlisted path prefix; no POST/send/
+completion code exists in the bundle.
+
+**Verified live against real claude.ai (nothing sent):** org id from `lastActiveOrg` cookie +
+conversation list (245 convs), `?tree=true` endpoint + `reconstructPath` rebuilding the
+on-screen path (6-msg thread, leaf pointer, content blocks — matches the 4 unit tests), and the
+multi-line brief pre-filling the ProseMirror composer then clearing cleanly. Finding:
+`execCommand('insertText')`, synthetic paste, and `beforeinput` all no-op on the current
+ProseMirror build — the working method is `<p>`-per-line `replaceChildren` + `input` event, now
+shipped. Cross-conversation tree + learned profile in `chrome.storage.local`.
+
 ## 2026-08-11 — Learning router (the pitched differentiator, now real)
 
 The one feature the deck sold that the rebuild had stripped (was the EverOS sponsor integration):

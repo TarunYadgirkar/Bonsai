@@ -135,7 +135,7 @@
     const pending = got[PENDING_KEY];
     if (!pending) return;
     prefillComposer(pending.text);
-    linkedNodeId = pending.nodeId;
+    linkedNodeId = pending.nodeId ?? null;
     await chrome.storage.session.remove(PENDING_KEY);
   }
   function watchForConversationId() {

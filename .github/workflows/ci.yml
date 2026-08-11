@@ -16,6 +16,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npx tsc --noEmit --project extension/tsconfig.json
+      - run: node extension/build.mjs
       - run: npm run test
       # No keys in CI: evals run against the mock, gating plumbing + routing thresholds.
       - run: npm run eval
