@@ -195,16 +195,21 @@ export interface AssembledContext {
 Extend ContextBrief without changing facts:
 
 ```ts
-sourceRefs: ContextSourceRef[];
-factSourceIds: string[][];
+sourceRefs?: ContextSourceRef[];
+factSourceIds?: string[][];
 ```
 
 Extend Insight:
 
 ```ts
-sourceMessageIds: string[];
-active: boolean;
+sourceMessageIds?: string[];
+active?: boolean;
 ```
+
+These fields are optional only for this compatibility checkpoint because existing compiler and
+merge producers are updated by Tasks 3 and 4. Task 3 makes ContextBrief provenance required after
+updating every brief producer. Task 4 makes Insight evidence and lifecycle required after updating
+the merge producer. Readers must treat missing active as true for legacy data.
 
 - [ ] **Step 3: Implement the pure assembler**
 
@@ -325,6 +330,9 @@ Add a second test where complete() returns invalid JSON. Assert the fallback fac
 Run npm test -- lib/compiler.test.ts and expect FAIL.
 
 - [ ] **Step 2: Change CompileParams and compiler output**
+
+Make ContextBrief.sourceRefs and ContextBrief.factSourceIds required in lib/types.ts in the same
+change, after compiler and mock producers have been updated.
 
 Use:
 
@@ -447,6 +455,9 @@ In app/api/chat/route.ts:
 Delete renderTurns() when unused.
 
 - [ ] **Step 4: Add merge evidence**
+
+Make Insight.sourceMessageIds and Insight.active required in lib/types.ts in the same change, after
+the merge producer has been updated.
 
 When creating Insight in app/api/merge/route.ts add:
 
