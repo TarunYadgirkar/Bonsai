@@ -6,9 +6,8 @@ import type { Effort, Tier } from './types';
  * The catalog behind the mode picker: three Claude models × four effort levels, plus Auto
  * (no explicit choice — the router classifies and picks for you).
  *
- * Nothing here is ever sent anywhere. Cortex is barred on this account (AGENTS.md → CLOSED), so
- * these are display names and published-rate pricing used to model spend. Change them here only;
- * nothing else in the codebase may name a model.
+ * These are display names and published-rate pricing used to model spend; lib/provider.ts maps them
+ * onto real upstream ids. Change them here only; nothing else in the codebase may name a model.
  */
 export interface ModelSpec {
   id: string;

@@ -1,20 +1,14 @@
 /**
  * Inference. One model parameter, many models — the substrate the router needs.
  *
- * Three layers, first one available wins:
+ * Two layers, first one available wins:
  *   1. A live provider (lib/provider.ts) when ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY is set.
- *   2. Snowflake Cortex, kept behind its interface but barred on this account (AGENTS.md → CLOSED).
- *   3. The mock, with realistic token math, so DEMO.md is walkable with zero keys.
+ *   2. The mock, with realistic token math, so the app is walkable with zero keys.
  */
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, effortSpec } from './models';
 import { providerComplete } from './provider';
 import { estimateTokens } from './tokens';
 import type { Effort, Tier } from './types';
-
-const ACCOUNT_URL = process.env.SNOWFLAKE_ACCOUNT_URL;
-const PAT = process.env.SNOWFLAKE_PAT;
-const ENDPOINT = '/api/v2/cortex/inference:complete';
-const TIMEOUT_MS = 30_000;
 
 export interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
@@ -46,15 +40,6 @@ export interface CompleteResult {
   servedBy?: string;
 }
 
-/**
- * Cortex inference is barred on this account, so credentials alone must NOT switch it on: with the
- * SNOWFLAKE_ vars present for SQL logging, every inference otherwise paid a doomed 403 round trip
- * (branch 1.51s → 0.33s once they were unset). Opt in explicitly if a live backend ever lands.
- */
-export function isCortexEnabled(): boolean {
-  return Boolean(ACCOUNT_URL && PAT && process.env.SNOWFLAKE_CORTEX_ENABLED === '1');
-}
-
 export async function complete(params: CompleteParams): Promise<CompleteResult> {
   const { tier, messages } = params;
   const model = params.model ?? MODEL_TIERS[tier];
@@ -84,115 +69,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
     };
   }
 
-  if (!isCortexEnabled()) {
-    return mockComplete(tier, model, messages, inputTokens);
-  }
-
-  try {
-    const res = await fetch(`${ACCOUNT_URL}${ENDPOINT}`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${PAT}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json, text/event-stream',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        max_tokens: maxTokens,
-        temperature: params.temperature ?? 0.2,
-      }),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-    });
-
-    if (!res.ok) {
-      console.warn(`[llm] cortex ${res.status} on ${model} — falling back to mock`);
-      return mockComplete(tier, model, messages, inputTokens);
-    }
-
-    const parsed = parseCortex(await res.text());
-    if (!parsed.text) {
-      console.warn(`[llm] cortex returned no content on ${model} — falling back to mock`);
-      return mockComplete(tier, model, messages, inputTokens);
-    }
-
-    const usedInput = parsed.inputTokens ?? inputTokens;
-    const usedOutput = parsed.outputTokens ?? estimateTokens(parsed.text);
-    return {
-      text: parsed.text,
-      model,
-      tier,
-      inputTokens: usedInput,
-      outputTokens: usedOutput,
-      estCostUsd: costForModel(model, usedInput, usedOutput),
-      mock: false,
-    };
-  } catch (err) {
-    console.warn(`[llm] cortex failed (${(err as Error).message}) — falling back to mock`);
-    return mockComplete(tier, model, messages, inputTokens);
-  }
-}
-
-/**
- * Cortex may answer as one JSON object or as an SSE stream depending on account and model.
- * Both shapes are handled because we cannot verify which one this account returns until the
- * PAT lands — and the demo must not die on a parse.
- */
-interface ParsedCortex {
-  text: string;
-  inputTokens?: number;
-  outputTokens?: number;
-}
-
-function parseCortex(body: string): ParsedCortex {
-  const trimmed = body.trim();
-
-  if (trimmed.startsWith('{')) {
-    try {
-      return extractFromJson(JSON.parse(trimmed));
-    } catch {
-      return { text: '' };
-    }
-  }
-
-  // SSE: concatenate the content deltas, keep the last usage block we see.
-  let text = '';
-  let inputTokens: number | undefined;
-  let outputTokens: number | undefined;
-  for (const line of trimmed.split('\n')) {
-    if (!line.startsWith('data:')) continue;
-    const payload = line.slice(5).trim();
-    if (!payload || payload === '[DONE]') continue;
-    try {
-      const chunk = extractFromJson(JSON.parse(payload));
-      text += chunk.text;
-      inputTokens = chunk.inputTokens ?? inputTokens;
-      outputTokens = chunk.outputTokens ?? outputTokens;
-    } catch {
-      // A malformed chunk is not worth failing the whole completion over.
-    }
-  }
-  return { text, inputTokens, outputTokens };
-}
-
-interface CortexChoice {
-  message?: { content?: string };
-  delta?: { content?: string };
-  text?: string;
-}
-
-function extractFromJson(json: unknown): ParsedCortex {
-  const obj = json as {
-    choices?: CortexChoice[];
-    usage?: { prompt_tokens?: number; completion_tokens?: number };
-  };
-  const choice = obj.choices?.[0];
-  const text = choice?.message?.content ?? choice?.delta?.content ?? choice?.text ?? '';
-  return {
-    text,
-    inputTokens: obj.usage?.prompt_tokens,
-    outputTokens: obj.usage?.completion_tokens,
-  };
+  return mockComplete(tier, model, messages, inputTokens);
 }
 
 /* ---------- mock ---------- */

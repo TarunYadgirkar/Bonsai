@@ -1,7 +1,7 @@
 import seed from '@/fixtures/seed-conversation.json';
 import tree from '@/fixtures/seed-tree.json';
 import { kvEnabled, kvGet, kvSet } from './kv';
-import { mirrorInferenceLogs } from './snowflake';
+import { appendInferenceLogs } from './inference-log';
 import { messagesTokens, prunedPct } from './tokens';
 import type {
   BranchNode,
@@ -49,7 +49,7 @@ interface StoreSnapshot {
 const GLOBAL_KEY = Symbol.for('bonsai.store');
 const KV_KEY = 'bonsai:store:v1';
 
-/** Logs written this request, waiting to be mirrored to Snowflake by flushLogs(). */
+/** Logs written this request, waiting to be flushed to the local mirror by flushLogs(). */
 const pending: InferenceLog[] = [];
 
 /**
@@ -203,14 +203,14 @@ export function logInference(log: InferenceLog): InferenceLog {
 }
 
 /**
- * Mirror everything logged during this request into Snowflake (and the local JSON file).
+ * Mirror everything logged during this request into the local JSON file.
  * Awaited by the routes after saveStore: a frozen lambda drops floating promises. Queued per
  * process rather than per store, so a snapshot reload can't resurrect already-written rows.
  */
 export async function flushLogs(): Promise<void> {
   if (!pending.length) return;
   const batch = pending.splice(0, pending.length);
-  await mirrorInferenceLogs(batch);
+  await appendInferenceLogs(batch);
 }
 
 export function listLogs(): InferenceLog[] {

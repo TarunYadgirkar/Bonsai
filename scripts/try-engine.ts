@@ -2,12 +2,12 @@
  * Engine smoke test — compiles briefs and routes the two DEMO.md questions in isolation.
  *
  * Run:  npx tsx --env-file=.env.local scripts/try-engine.ts
- * With no Snowflake keys this exercises mock mode, which is a valid pass.
+ * With no provider keys this exercises mock mode, which is a valid pass.
  */
 import seed from '../fixtures/seed-conversation.json';
 import { compileBrief } from '../lib/compiler';
-import { isCortexEnabled } from '../lib/llm';
 import { MODEL_TIERS } from '../lib/models';
+import { providerName } from '../lib/provider';
 import { completeWithEscalation, route } from '../lib/router';
 import { messagesTokens } from '../lib/tokens';
 import type { SeedConversation } from '../lib/types';
@@ -25,7 +25,7 @@ const CASES = [
 ];
 
 async function main() {
-  console.log(`cortex enabled: ${isCortexEnabled()}  models: ${JSON.stringify(MODEL_TIERS)}`);
+  console.log(`provider: ${providerName()}  models: ${JSON.stringify(MODEL_TIERS)}`);
   const available = messagesTokens(fixture.messages);
   console.log(`parent history: ${fixture.messages.length} messages, ~${available} tokens\n`);
 
