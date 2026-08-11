@@ -13,6 +13,7 @@ import {
 } from '@bonsai/engine';
 import { branchPrompt, compileBranch, mergePrompt } from './compile';
 import type { ActiveInfo, ContentToPanel, PrefillResult, TreeResult } from './messages';
+import { escapeHtml, renderTreeInto } from './render';
 import { listNodes, loadProfile, putNode, saveProfile, updateNode, type TreeNode } from './store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -176,32 +177,10 @@ async function openBranch(
 
 /* ---------- tree ---------- */
 
-const GLYPH: Record<TreeNode['status'], string> = {
-  draft: '◌',
-  open: '○',
-  merged: '✓',
-  abandoned: '✕',
-};
-
 async function renderTree(): Promise<void> {
-  const nodes = (await listNodes()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const tree = $<HTMLDivElement>('tree');
-  if (!nodes.length) {
-    tree.innerHTML = '<p class="empty">No branches yet.</p>';
-    return;
-  }
-  tree.innerHTML = '';
-  for (const n of nodes) {
-    const el = document.createElement('div');
-    el.className = 'node';
-    el.innerHTML = `
-      <div class="title"><span class="glyph-${n.status}">${GLYPH[n.status]}</span> ${escapeHtml(n.title)}</div>
-      <div class="meta"><span class="chip">${escapeHtml(n.modelLabel)} · ${n.effort}</span>
-        ~${n.availableTokens}→${n.briefTokens} tok · ${n.prunedPct}% pruned · ${n.status}</div>
-      ${n.insight ? `<div class="insight">↳ ${escapeHtml(n.insight)}</div>` : ''}
-    `;
-    if (n.status === 'open' || n.status === 'draft') el.appendChild(mergeControls(n));
-    tree.appendChild(el);
+  const rendered = renderTreeInto($<HTMLDivElement>('tree'), await listNodes());
+  for (const { node, el } of rendered) {
+    if (node.status === 'open' || node.status === 'draft') el.appendChild(mergeControls(node));
   }
 }
 
@@ -245,10 +224,6 @@ function mergeControls(node: TreeNode): HTMLElement {
 }
 
 /* ---------- wiring ---------- */
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-}
 
 chrome.runtime.onMessage.addListener((msg: ContentToPanel) => {
   if (msg.type === 'SELECTION') {

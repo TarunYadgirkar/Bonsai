@@ -758,6 +758,45 @@ Question: ${params.question}`
     return `Insight from a side branch: ${insight}`;
   }
 
+  // src/render.ts
+  var GLYPH = {
+    draft: "\u25CC",
+    open: "\u25CB",
+    merged: "\u2713",
+    abandoned: "\u2715"
+  };
+  function escapeHtml(s) {
+    return s.replace(
+      /[&<>"']/g,
+      (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]
+    );
+  }
+  function nodeCardHtml(node) {
+    return `
+    <div class="title"><span class="glyph-${node.status}">${GLYPH[node.status]}</span> ${escapeHtml(node.title)}</div>
+    <div class="meta"><span class="chip">${escapeHtml(node.modelLabel)} \xB7 ${escapeHtml(node.effort)}</span>
+      ~${node.availableTokens}\u2192${node.briefTokens} tok \xB7 ${node.prunedPct}% pruned \xB7 ${escapeHtml(node.status)}</div>
+    ${node.insight ? `<div class="insight">\u21B3 ${escapeHtml(node.insight)}</div>` : ""}
+  `;
+  }
+  function renderTreeInto(container, nodes) {
+    const sorted = [...nodes].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+    if (!sorted.length) {
+      container.innerHTML = '<p class="empty">No branches yet.</p>';
+      return [];
+    }
+    container.innerHTML = "";
+    const out = [];
+    for (const node of sorted) {
+      const el = document.createElement("div");
+      el.className = "node";
+      el.innerHTML = nodeCardHtml(node);
+      container.appendChild(el);
+      out.push({ node, el });
+    }
+    return out;
+  }
+
   // src/store.ts
   var NODES_KEY = "bonsai:nodes";
   var PROFILE_KEY = "bonsai:profile";
@@ -916,31 +955,10 @@ Question: ${params.question}`
     void parentName;
     await renderTree();
   }
-  var GLYPH = {
-    draft: "\u25CC",
-    open: "\u25CB",
-    merged: "\u2713",
-    abandoned: "\u2715"
-  };
   async function renderTree() {
-    const nodes = (await listNodes()).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    const tree = $("tree");
-    if (!nodes.length) {
-      tree.innerHTML = '<p class="empty">No branches yet.</p>';
-      return;
-    }
-    tree.innerHTML = "";
-    for (const n of nodes) {
-      const el = document.createElement("div");
-      el.className = "node";
-      el.innerHTML = `
-      <div class="title"><span class="glyph-${n.status}">${GLYPH[n.status]}</span> ${escapeHtml(n.title)}</div>
-      <div class="meta"><span class="chip">${escapeHtml(n.modelLabel)} \xB7 ${n.effort}</span>
-        ~${n.availableTokens}\u2192${n.briefTokens} tok \xB7 ${n.prunedPct}% pruned \xB7 ${n.status}</div>
-      ${n.insight ? `<div class="insight">\u21B3 ${escapeHtml(n.insight)}</div>` : ""}
-    `;
-      if (n.status === "open" || n.status === "draft") el.appendChild(mergeControls(n));
-      tree.appendChild(el);
+    const rendered = renderTreeInto($("tree"), await listNodes());
+    for (const { node, el } of rendered) {
+      if (node.status === "open" || node.status === "draft") el.appendChild(mergeControls(node));
     }
   }
   function mergeControls(node) {
@@ -977,9 +995,6 @@ Question: ${params.question}`
     wrap.appendChild(ta);
     wrap.appendChild(row);
     return wrap;
-  }
-  function escapeHtml(s) {
-    return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
   }
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === "SELECTION") {
