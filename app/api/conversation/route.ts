@@ -1,13 +1,16 @@
+import { persistenceErrorResponse } from '@/app/api/persistence-response';
+import {
+  abortApiTransaction,
+  transactionAbortResponse,
+} from '@/app/api/transaction-abort';
 import { parseConversationRequest } from '@/lib/api-validation';
 import {
   buildTree,
-  flushLogs,
   getConversation,
-  loadStore,
   nextId,
   putConversation,
   rootId,
-  saveStore,
+  transactStore,
 } from '@/lib/store';
 import type { ApiError, Conversation, BranchNode } from '@/lib/types';
 
@@ -28,7 +31,7 @@ export interface NewConversationResponse {
  * It carries the seeded profile so anything branched off it still compiles a brief that knows
  * who the user is; `parentId` is null, so it inherits no transcript and no tokens.
  */
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<Response> {
   const parsedRequest = await parseConversationRequest(request);
   if (!parsedRequest.ok) {
     return Response.json({ error: parsedRequest.error } satisfies ApiError, {
@@ -37,32 +40,31 @@ export async function POST(request: Request) {
   }
   const body = parsedRequest.value;
 
-  await loadStore();
-  const id = nextId('conv');
-  const seedProfile = getConversation(rootId())?.profile;
-
-  const conversation: Conversation = {
-    id,
-    title: body.title?.trim() || 'New chat',
-    parentId: null,
-    ...(seedProfile ? { profile: seedProfile } : {}),
-    messages: [],
-    insights: [],
-    pinnedTier: null,
-    archived: false,
-  };
-  putConversation(conversation);
-
-  const node = buildTree().find((n) => n.id === id);
-  if (!node) {
-    return Response.json({ error: 'conversation missing after write' } satisfies ApiError, {
-      status: 500,
+  try {
+    const response = await transactStore<NewConversationResponse>(() => {
+      const id = nextId('conv');
+      const seedProfile = getConversation(rootId())?.profile;
+      const conversation: Conversation = {
+        id,
+        title: body.title?.trim() || 'New chat',
+        parentId: null,
+        ...(seedProfile ? { profile: seedProfile } : {}),
+        messages: [],
+        insights: [],
+        pinnedTier: null,
+        archived: false,
+      };
+      putConversation(conversation);
+      const node = buildTree().find((candidate) => candidate.id === id);
+      if (!node) abortApiTransaction({ error: 'conversation missing after write' }, 500);
+      return { node, conversation };
     });
+    return Response.json(response);
+  } catch (error: unknown) {
+    const abortResponse = transactionAbortResponse(error);
+    if (abortResponse) return abortResponse;
+    const response = persistenceErrorResponse(error);
+    if (response) return response;
+    throw error;
   }
-
-  await saveStore();
-  await flushLogs();
-
-  const response: NewConversationResponse = { node, conversation };
-  return Response.json(response);
 }

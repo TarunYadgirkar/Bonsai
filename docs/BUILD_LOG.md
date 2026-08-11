@@ -214,3 +214,25 @@ Interim boundary:
 Next:
 
 - execute durability Task 5 without claiming the documented route-concurrency limitation is already resolved.
+
+## 2026-08-11 — Persistence status and route transactions
+
+Completed:
+
+- moved chat, branch, merge, new-conversation, and reset mutations into one `transactStore()` boundary per request, including authoritative load, sequence allocation, inference, mutation, completed-event logging, and commit;
+- preserved compiler, classifier, retry, delivered-answer baseline, and merge accounting while keeping provider-failure events durable without publishing staged messages, branches, or merge state;
+- added `GET /api/persistence` and `StateResponse.persistence` with backend, health, durability, revision, and recovery details;
+- mapped configured load failures, confirmed commit failures, and uncertain commit outcomes to distinct safe 503 codes without exposing backend errors, paths, responses, or configuration;
+- kept state and economics from serving cached process state after an authoritative load failure, while uncertain reconciliation exposes only the backend-visible winner and blocks later mutations;
+- reported memory as non-durable and file and KV backends as durable.
+
+Verification evidence:
+
+- the Task 5 RED suite first failed because the persistence route was absent, then failed all 13 behavioral contracts against the legacy route implementation before production conversion;
+- the focused Task 5 plan gate passed 49 tests across persistence, context flow, inference logging, and request validation;
+- full Vitest passed 241 tests; strict TypeScript, ESLint, webpack production build, diff check, and changed-file secret/debug scans passed.
+- code, TypeScript, and security re-reviews approved the final diff with no remaining Critical or Important findings.
+
+Next:
+
+- enforce fixture isolation in Task 6, then prove independent-process restart survival in Task 7.

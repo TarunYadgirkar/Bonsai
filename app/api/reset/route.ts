@@ -1,3 +1,4 @@
+import { persistenceErrorResponse } from '@/app/api/persistence-response';
 import { resetStore } from '@/lib/store';
 import type { StateResponse } from '@/lib/types';
 
@@ -11,7 +12,13 @@ export const dynamic = 'force-dynamic';
  * globalThis and writes it straight back on the next request. This clears both, in that order,
  * and returns the fresh state so the caller can render it without a second round trip.
  */
-export async function POST() {
-  const state = await resetStore();
-  return Response.json(state satisfies StateResponse);
+export async function POST(): Promise<Response> {
+  try {
+    const state = await resetStore();
+    return Response.json(state satisfies StateResponse);
+  } catch (error: unknown) {
+    const response = persistenceErrorResponse(error);
+    if (response) return response;
+    throw error;
+  }
 }

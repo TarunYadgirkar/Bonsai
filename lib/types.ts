@@ -1,3 +1,5 @@
+import type { PersistenceStatus } from './persistence/types';
+
 /**
  * Frozen contract (PLAN.md M0). Changing anything here requires A and B agreeing
  * out loud first, then one agent makes the change in a single commit.
@@ -217,6 +219,7 @@ export interface StateResponse {
   rootId: string;
   tree: BranchNode[];
   conversations: Conversation[];
+  persistence: PersistenceStatus;
 }
 
 /** POST /api/chat */
@@ -280,6 +283,11 @@ export interface EconomicsResponse {
 /** Every route returns this shape on failure. The demo never crashes on a 4xx. */
 export interface ApiError {
   error: string;
+  code?:
+    | 'PROVIDER_UNAVAILABLE'
+    | 'PERSISTENCE_UNAVAILABLE'
+    | 'PERSISTENCE_COMMIT_FAILED'
+    | 'PERSISTENCE_COMMIT_UNCERTAIN';
 }
 
 /* ---------- Fixture ---------- */

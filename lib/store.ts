@@ -4,7 +4,7 @@ import tree from '@/fixtures/seed-tree.json';
 import { assembleVisibleContext } from './context';
 import { PersistenceUncertainCommitError } from './persistence/errors';
 import { selectPersistenceBackend } from './persistence/select';
-import type { PersistenceBackend } from './persistence/types';
+import type { PersistenceBackend, PersistenceStatus } from './persistence/types';
 import {
   normalizeInferenceLog,
   normalizeInsight,
@@ -236,7 +236,16 @@ export async function resetStore(): Promise<StateResponse> {
     },
     { replaceInferenceLogView: true },
   );
-  return { rootId: rootId(), tree: buildTree(), conversations: listConversations() };
+  return {
+    rootId: rootId(),
+    tree: buildTree(),
+    conversations: listConversations(),
+    persistence: persistenceStatus(),
+  };
+}
+
+export function persistenceStatus(): PersistenceStatus {
+  return persistenceBackend().status();
 }
 
 export function configureStorePersistenceForTests(backend: PersistenceBackend): void {

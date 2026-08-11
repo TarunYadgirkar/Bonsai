@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 Lane: copy-b
-Status: in progress — Tasks 1–4 complete
+Status: in progress — Tasks 1–5 complete
 Design: `docs/superpowers/specs/2026-08-11-bonsai-local-runtime-design.md`
 
 ## Outcome
@@ -278,7 +278,7 @@ Commit:
 feat: integrate durable store transactions
 ```
 
-## Task 5: Expose persistence health and failure semantics
+## Task 5: Expose persistence health and failure semantics — complete
 
 Create:
 

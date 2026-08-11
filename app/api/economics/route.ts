@@ -1,3 +1,4 @@
+import { persistenceErrorResponse } from '@/app/api/persistence-response';
 import { listLogs, loadStore } from '@/lib/store';
 import type { EconomicsBaseline, EconomicsResponse, EconomicsTotals } from '@/lib/types';
 
@@ -8,8 +9,14 @@ function pctSaved(baseline: number, actual: number): number {
   return Math.round(((baseline - actual) / baseline) * 1000) / 10;
 }
 
-export async function GET() {
-  await loadStore();
+export async function GET(): Promise<Response> {
+  try {
+    await loadStore();
+  } catch (error: unknown) {
+    const response = persistenceErrorResponse(error);
+    if (response) return response;
+    throw error;
+  }
   const logs = listLogs();
 
   const totals: EconomicsTotals = logs.reduce<EconomicsTotals>(
