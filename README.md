@@ -42,8 +42,9 @@ comes back. Bonsai is the loop those products don't have:
   routing memory compounds per-user *and* across users.
 - **Honest economics** (`stats.ts`) — tokenizer-generation correction (the 4.7+/5 tokenizer runs
   ~1.3× heavier), measured-vs-modeled provenance on every figure, per-purpose and per-model spend.
-- **A referent-resolution benchmark** (`evals/`) — `npm run eval` *executes* the correctness claim
-  that makes compiled briefs safe. Runs in CI.
+- **A referent-resolution benchmark** ([`evals/`](BENCHMARK.md)) — `npm run eval` *executes* the
+  correctness claim that makes compiled briefs safe (referent resolution at depth 2, salience over
+  keyword noise). Differential and provider-agnostic. Runs in CI.
 
 ## Four surfaces, one engine, zero API keys
 
