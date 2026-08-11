@@ -1,3 +1,4 @@
+import { savingsCurve, sessionStats } from '@bonsai/engine';
 import { apiRoute } from '@/lib/api';
 import { loadWorkingSet } from '@/lib/store';
 import type { EconomicsBaseline, EconomicsResponse, EconomicsTotals } from '@/lib/types';
@@ -34,6 +35,12 @@ export const GET = apiRoute(null, async () => {
     costSavedPct: pctSaved(baselineCost, totals.costUsd),
   };
 
-  const response: EconomicsResponse = { logs, totals, baseline };
+  const response: EconomicsResponse = {
+    logs,
+    totals,
+    baseline,
+    stats: sessionStats(logs),
+    savingsCurve: savingsCurve(logs),
+  };
   return Response.json(response);
 });

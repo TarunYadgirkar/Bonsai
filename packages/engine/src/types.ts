@@ -10,6 +10,16 @@ export type Tier = 'quick' | 'thoughtful' | 'deep';
 
 export type Complexity = 1 | 2 | 3;
 
+/** Semantic class of a request, from the classifier. Routing priors are learned per kind. */
+export type QuestionKind =
+  | 'lookup'
+  | 'synthesis'
+  | 'comparison'
+  | 'reasoning'
+  | 'code'
+  | 'creative'
+  | 'other';
+
 /** Reasoning effort, picked independently of the model. */
 export type Effort = 'low' | 'medium' | 'high' | 'max';
 
@@ -101,6 +111,10 @@ export interface RoutingDecision {
   widened?: boolean;
   /** True when the user's learned routing priors moved the tier off the classifier's choice. */
   learned?: boolean;
+  /** The classifier's semantic class for this question. Absent when classification was skipped. */
+  kind?: QuestionKind;
+  /** Classifier confidence 0..1 in its own read. Low confidence tempers the learned adjustment. */
+  confidence?: number;
 }
 
 export interface Insight {

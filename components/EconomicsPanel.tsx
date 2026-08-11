@@ -133,6 +133,9 @@ export function EconomicsPanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Actuals provenance: 'measured' only when every log row carried live provider usage.
+  const basisWord = data?.stats.basis === 'measured' ? 'measured' : 'modeled';
+
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
@@ -186,7 +189,7 @@ export function EconomicsPanel({
                   actualNote="Bonsai (compiled)"
                   baseline={data.baseline.inputTokens.toLocaleString()}
                   baselineNote="full history"
-                  baselineCaption="vs sending the full parent history every turn (modeled, not measured)"
+                  baselineCaption={`vs sending the full parent history every turn (baseline modeled; actuals ${basisWord})`}
                 />
                 <SeasonBar
                   label="spend"
@@ -196,7 +199,7 @@ export function EconomicsPanel({
                   actualNote="routed spend"
                   baseline={formatUsd(data.baseline.costUsd)}
                   baselineNote="strong model always"
-                  baselineCaption="vs full history on the strongest model (modeled at list rates)"
+                  baselineCaption={`vs full history on the strongest model (modeled at list rates; actuals ${basisWord})`}
                 />
               </section>
 
@@ -219,7 +222,43 @@ export function EconomicsPanel({
                   </span>{' '}
                   tokens out
                 </div>
+                <div className="text-xs text-ink-soft">
+                  <span className="tnum text-ink">
+                    {data.stats.escalationRatePct.toFixed(1)}%
+                  </span>{' '}
+                  escalated
+                </div>
+                <div className="text-xs text-ink-soft">
+                  <span className="tnum text-ink">
+                    {data.stats.overriddenRatePct.toFixed(1)}%
+                  </span>{' '}
+                  pinned
+                </div>
+                <div className="text-xs text-ink-soft">
+                  counts <span className="text-ink">{basisWord}</span>
+                </div>
               </section>
+
+              {data.stats.byPurpose.length > 0 && (
+                <section className="mt-7">
+                  <div className="eyebrow mb-2.5">spend by purpose</div>
+                  {data.stats.byPurpose.map((p) => (
+                    <div
+                      key={p.purpose}
+                      className="flex items-baseline justify-between border-t border-rule py-2 text-xs"
+                    >
+                      <span className="text-ink-soft">{PURPOSE_LABEL[p.purpose] ?? p.purpose}</span>
+                      <span className="flex items-baseline gap-6">
+                        <span className="tnum text-bark">{p.count}×</span>
+                        <span className="tnum text-moss">{formatUsd(p.costUsd)}</span>
+                        <span className="tnum w-14 text-right text-ink">
+                          {p.costSharePct.toFixed(1)}%
+                        </span>
+                      </span>
+                    </div>
+                  ))}
+                </section>
+              )}
 
               <section className="mt-7">
                 <div className="eyebrow mb-2.5">per-inference log</div>
@@ -293,6 +332,9 @@ export function EconomicsPanel({
                 carrying the full parent history, answered on the strongest model every time,
                 priced at published per-token list rates. That is what a flat chat log would
                 have cost.
+                {basisWord === 'measured'
+                  ? ' Actual counts are provider-reported usage.'
+                  : ' Actual counts are modeled from character counts, not provider-reported usage.'}
               </p>
             </>
           )}

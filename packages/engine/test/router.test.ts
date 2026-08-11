@@ -209,7 +209,10 @@ describe('route — auto mode', () => {
     expect(d.escalated).toBe(false);
     expect(d.complexity).toBe(3);
     expect(d.coveredByBrief).toBe(true);
-    expect(d.reason).toBe('weighs trade-offs. Complexity 3/3 against a 400-token compiled brief.');
+    // Classifier JSON omits kind/confidence → defaults: kind 'other', confidence 1.
+    expect(d.kind).toBe('other');
+    expect(d.confidence).toBe(1);
+    expect(d.reason).toBe('weighs trade-offs. A other question, complexity 3/3, against a 400-token brief.');
     expect(d.estCostUsd).toBe(costForModel('claude-opus-5', 400, 750));
   });
 

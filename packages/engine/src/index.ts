@@ -72,11 +72,36 @@ export {
 export {
   adjustForProfile,
   emptyProfile,
+  mergeProfiles,
   normalizeProfile,
   profileSummary,
+  QUESTION_KINDS,
   recordFeedback,
+  type AdjustOptions,
   type FeedbackKind,
   type LearnedAdjustment,
+  type QuestionKind,
   type RoutingFeedback,
   type RoutingProfile,
 } from './learning';
+export {
+  DEFAULT_TOKENIZER_FACTOR,
+  TOKENIZER_GENERATION,
+  estimateTokensFor,
+  tokenizerFactor,
+} from './tokens';
+export {
+  combineFigures,
+  estimatedFigure,
+  measuredFigure,
+  savingsCurve,
+  sessionStats,
+  type ModelStats,
+  type PurposeStats,
+  type SavingsPoint,
+  type SessionSavings,
+  type SessionStats,
+  type StatsLog,
+  type TokenBasis,
+  type TokenFigure,
+} from './stats';

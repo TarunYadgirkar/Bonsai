@@ -51,8 +51,14 @@ export const POST = apiRoute(MergeRequestSchema, async (body) => {
   if ((await commit(ws)) === 'failed') return persistenceError();
 
   // A merged branch is a kept answer: the tier that produced its last auto reply was sufficient.
-  const keptTier = lastAutoTier(branch);
-  if (keptTier) await recordRoutingFeedback({ kind: 'merge', classifiedTier: keptTier });
+  const kept = lastAuto(branch);
+  if (kept) {
+    await recordRoutingFeedback({
+      kind: 'merge',
+      classifiedTier: kept.tier,
+      questionKind: kept.kind,
+    });
+  }
 
   const response: MergeResponse = {
     insight,
@@ -63,11 +69,11 @@ export const POST = apiRoute(MergeRequestSchema, async (body) => {
   return Response.json(response);
 });
 
-/** The tier the auto-router last chose on this branch (ignoring manual/pinned picks). */
-function lastAutoTier(conversation: Conversation) {
+/** The auto-router's last decision on this branch (tier + question kind; ignoring manual picks). */
+function lastAuto(conversation: Conversation) {
   for (let i = conversation.messages.length - 1; i >= 0; i -= 1) {
     const r = conversation.messages[i].routing;
-    if (r && !r.overridden) return r.tier;
+    if (r && !r.overridden) return { tier: r.tier, kind: r.kind };
   }
   return null;
 }

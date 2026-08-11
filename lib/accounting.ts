@@ -26,7 +26,9 @@ export function buildLog(params: {
   /** From the routing decision when there is one, so a manual pick is what the panel shows. */
   model?: string;
   effort?: Effort;
-}): InferenceLog {
+  /** True when token counts are live provider usage (CompleteResult.mock === false). Absent = estimated. */
+  measured?: boolean;
+}): InferenceLog & { measured?: boolean } {
   const { branchId, purpose, tier, inputTokens, outputTokens, baselineInputTokens } = params;
   const model = params.model ?? MODEL_TIERS[tier];
   return {
@@ -44,5 +46,6 @@ export function buildLog(params: {
     overridden: params.overridden ?? false,
     baselineInputTokens,
     baselineCostUsd: estimateCostUsd('deep', baselineInputTokens, outputTokens),
+    measured: params.measured,
   };
 }

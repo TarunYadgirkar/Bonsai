@@ -8,7 +8,7 @@
  * is their own labelled example, and overriding it would destroy the signal.
  */
 import { complete as defaultComplete, type CompleteFn } from './llm';
-import { adjustForProfile, type RoutingProfile } from './learning';
+import { adjustForProfile, QUESTION_KINDS, type RoutingProfile } from './learning';
 import {
   INTERNAL_TIER,
   CEILING_MODEL,
@@ -26,6 +26,7 @@ import type {
   ContextBrief,
   Effort,
   ModeSelection,
+  QuestionKind,
   RoutingDecision,
   Tier,
 } from './types';
@@ -59,6 +60,8 @@ export interface RouteParams {
   pinnedMode?: ModeSelection | null;
   /** The user's learned routing priors. Applied only on the auto path, after classification. */
   profile?: RoutingProfile;
+  /** Community cold-start prior (aggregated across users) — calibrates a new user's routing. */
+  population?: RoutingProfile;
 }
 
 export interface RouterDeps {
@@ -104,13 +107,19 @@ export async function route(
     });
   }
 
-  const { complexity, covered, why } = await classify(params, deps);
+  const { complexity, covered, kind, confidence, why } = await classify(params, deps);
   const classifiedTier = TIER_BY_COMPLEXITY[complexity];
 
-  // Learned priors pre-empt the classifier once the user has shown a consistent pattern.
-  const adjusted = adjustForProfile(classifiedTier, params.profile);
+  // Learned priors pre-empt the classifier once the user has shown a consistent pattern — keyed
+  // to this question's kind, tempered by how sure the classifier was, and cold-started from the
+  // community prior when the user has no history of their own.
+  const adjusted = adjustForProfile(classifiedTier, params.profile, {
+    questionKind: kind,
+    confidence,
+    population: params.population,
+  });
   const tier = adjusted.tier;
-  const baseReason = `${why} Complexity ${complexity}/3 against a ${contextTokens}-token compiled brief.`;
+  const baseReason = `${why} A ${kind} question, complexity ${complexity}/3, against a ${contextTokens}-token brief.`;
 
   return decision({
     tier,
@@ -120,6 +129,8 @@ export async function route(
     overridden: false,
     coveredByBrief: covered,
     learned: adjusted.learned,
+    kind,
+    confidence,
   });
 }
 
@@ -128,10 +139,15 @@ export async function route(
  * It reads the brief's facts, so "does the brief cover this question" is judged before any
  * spend on an answer that was doomed to punt.
  */
-async function classify(
-  params: RouteParams,
-  deps: RouterDeps,
-): Promise<{ complexity: Complexity; covered: boolean; why: string }> {
+interface Classification {
+  complexity: Complexity;
+  covered: boolean;
+  kind: QuestionKind;
+  confidence: number;
+  why: string;
+}
+
+async function classify(params: RouteParams, deps: RouterDeps): Promise<Classification> {
   const factsBlock = params.brief?.facts.length
     ? `\nBrief facts:\n${params.brief.facts.map((f) => `- ${f}`).join('\n')}`
     : '';
@@ -143,7 +159,12 @@ async function classify(
       {
         role: 'system',
         content:
-          'You rate how much intelligence a question deserves, and whether the provided brief facts cover it. complexity: 1 = a single fact lookup answerable from the given context. 2 = synthesis or explanation over a few facts. 3 = multi-constraint reasoning, ranking, or weighing trade-offs. covered: whether the brief facts contain what the question needs (true when no facts are provided). Respond with JSON only: {"complexity": 1|2|3, "covered": true|false, "reason": "<8 words>"}.',
+          'You classify a question so a router can pick the right model and effort, and judge whether the provided brief covers it.\n' +
+          'complexity: 1 = a single fact lookup answerable straight from the context; 2 = synthesis or explanation over a few facts; 3 = multi-constraint reasoning, ranking, or weighing trade-offs.\n' +
+          'kind: one of lookup | synthesis | comparison | reasoning | code | creative | other — the shape of the task.\n' +
+          'covered: whether the brief facts contain what the question needs (true when no facts are provided).\n' +
+          'confidence: 0.0–1.0, how sure you are of this read.\n' +
+          'Respond with JSON only: {"complexity": 1|2|3, "kind": "...", "covered": true|false, "confidence": 0.0-1.0, "reason": "<8 words>"}.',
       },
       {
         role: 'user',
@@ -156,17 +177,23 @@ async function classify(
   if (parsed) return parsed;
 
   console.warn('[router] unparseable classifier output — defaulting to thoughtful');
-  return { complexity: 2, covered: true, why: 'Classifier unclear; defaulted to the middle tier.' };
+  return {
+    complexity: 2,
+    covered: true,
+    kind: 'other',
+    confidence: 0.3,
+    why: 'Classifier unclear; defaulted to the middle tier.',
+  };
 }
 
-function parseClassifier(
-  text: string,
-): { complexity: Complexity; covered: boolean; why: string } | null {
+function parseClassifier(text: string): Classification | null {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start === -1 || end <= start) return null;
   try {
     const json = JSON.parse(text.slice(start, end + 1)) as {
+      kind?: string;
+      confidence?: number;
       complexity?: number;
       covered?: boolean;
       reason?: string;
@@ -176,6 +203,11 @@ function parseClassifier(
     return {
       complexity: value as Complexity,
       covered: typeof json.covered === 'boolean' ? json.covered : true,
+      kind: QUESTION_KINDS.includes(json.kind as QuestionKind) ? (json.kind as QuestionKind) : 'other',
+      confidence:
+        typeof json.confidence === 'number' && Number.isFinite(json.confidence)
+          ? Math.max(0, Math.min(1, json.confidence))
+          : 1,
       why: typeof json.reason === 'string' ? `${json.reason}.` : 'Classified by the router.',
     };
   } catch {
@@ -194,6 +226,8 @@ function decision(params: {
   effort?: Effort;
   coveredByBrief?: boolean;
   learned?: boolean;
+  kind?: QuestionKind;
+  confidence?: number;
 }): RoutingDecision {
   const model = params.model ?? MODEL_TIERS[params.tier];
   const effort = params.effort ?? TIER_DEFAULTS[params.tier].effort;
@@ -214,6 +248,8 @@ function decision(params: {
     overridden: params.overridden,
     ...(params.coveredByBrief === undefined ? {} : { coveredByBrief: params.coveredByBrief }),
     ...(params.learned ? { learned: true } : {}),
+    ...(params.kind ? { kind: params.kind } : {}),
+    ...(params.confidence === undefined ? {} : { confidence: params.confidence }),
   };
 }
 

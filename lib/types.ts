@@ -13,6 +13,8 @@ import type {
   Message,
   ModeSelection,
   RoutingDecision,
+  SavingsPoint,
+  SessionStats,
   Tier,
   UserProfile,
 } from '@bonsai/engine';
@@ -29,10 +31,17 @@ export type {
   InferencePurpose,
   Insight,
   Message,
+  ModelStats,
   ModeSelection,
+  PurposeStats,
+  QuestionKind,
   Role,
   RoutingDecision,
+  SavingsPoint,
+  SessionStats,
   Tier,
+  TokenBasis,
+  TokenFigure,
   UserProfile,
 } from '@bonsai/engine';
 
@@ -113,6 +122,10 @@ export interface EconomicsResponse {
   logs: InferenceLog[];
   totals: EconomicsTotals;
   baseline: EconomicsBaseline;
+  /** Rigorous aggregation with measured/estimated provenance. Additive to the original shape. */
+  stats: SessionStats;
+  /** Cumulative actual-vs-baseline spend per inference, for a sparkline. */
+  savingsCurve: SavingsPoint[];
 }
 
 /** Every route returns this shape on failure. The app never crashes on a 4xx. */

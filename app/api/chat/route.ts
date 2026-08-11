@@ -18,13 +18,13 @@ import {
   recordRoutingFeedback,
   updateConversation,
 } from '@/lib/store';
-import type { ChatResponse, Conversation, Tier } from '@/lib/types';
+import type { ChatResponse, Conversation, QuestionKind, Tier } from '@/lib/types';
 
-/** Most recent tier the auto-router chose on this branch (ignoring manual/pinned picks). */
-function lastAutoTier(conversation: Conversation): Tier | null {
+/** Most recent auto-router decision on this branch (ignoring manual/pinned picks). */
+function lastAuto(conversation: Conversation): { tier: Tier; kind?: QuestionKind } | null {
   for (let i = conversation.messages.length - 1; i >= 0; i -= 1) {
     const r = conversation.messages[i].routing;
-    if (r && !r.overridden) return r.tier;
+    if (r && !r.overridden) return { tier: r.tier, kind: r.kind };
   }
   return null;
 }
@@ -49,9 +49,9 @@ export const POST = apiRoute(ChatRequestSchema, async (body) => {
       updateConversation(ws, conversation.id, (c) => ({ ...c, pinnedMode: null })) ?? conversation;
   }
 
-  // The auto tier this branch last landed on, captured before the new turn is appended — the
-  // baseline a manual pick this turn is judged an up/down override against.
-  const priorAutoTier = lastAutoTier(conversation);
+  // The auto decision this branch last landed on, captured before the new turn is appended — the
+  // baseline (tier + question kind) a manual pick this turn is judged an up/down override against.
+  const priorAuto = lastAuto(conversation);
 
   appendMessage(ws, conversation.id, {
     id: newId('msg'),
@@ -111,6 +111,8 @@ export const POST = apiRoute(ChatRequestSchema, async (body) => {
         : contextTokens + availableTokensFor(ws, conversation.parentId),
       escalated: result.routing.escalated,
       overridden: result.routing.overridden,
+      // Live provider set servedBy; the mock never does — so this is the measured/estimated flag.
+      measured: Boolean(result.routing.servedBy),
     }),
   );
 
@@ -120,13 +122,18 @@ export const POST = apiRoute(ChatRequestSchema, async (body) => {
   // pick that moved off the branch's last auto tier is a labeled up/down correction. Both feed
   // the profile that shifts future routing — the "it learns from what you kept" loop.
   if (result.routing.escalated) {
-    await recordRoutingFeedback({ kind: 'escalation', classifiedTier: initial.tier });
+    await recordRoutingFeedback({
+      kind: 'escalation',
+      classifiedTier: initial.tier,
+      questionKind: initial.kind,
+    });
   }
-  if (result.routing.overridden && priorAutoTier && priorAutoTier !== result.routing.tier) {
+  if (result.routing.overridden && priorAuto && priorAuto.tier !== result.routing.tier) {
     await recordRoutingFeedback({
       kind: 'override',
-      classifiedTier: priorAutoTier,
+      classifiedTier: priorAuto.tier,
       chosenTier: result.routing.tier,
+      questionKind: priorAuto.kind,
     });
   }
 
