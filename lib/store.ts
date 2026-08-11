@@ -425,6 +425,8 @@ export async function loadWorkingSet(
 }
 
 export function newId(prefix: string): string {
+  // Full 128-bit UUID, not a truncation: message inserts use ON CONFLICT (id) DO NOTHING, so a
+  // shortened id that collided would silently drop the message while the commit reported success.
   return `${prefix}_${crypto.randomUUID().replace(/-/g, '')}`;
 }
 
