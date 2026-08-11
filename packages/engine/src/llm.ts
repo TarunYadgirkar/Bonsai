@@ -368,16 +368,29 @@ function mockAnswer(tier: Tier, prompt: string): string {
   if (DEADLINE_QUESTION.test(question)) return DEMO_ANSWERS.deadline;
   if (RANKING_QUESTION.test(question)) return DEMO_ANSWERS.ranking;
 
+  const facts = factsFromBrief(prompt);
+  const onBrief = facts.length > 0;
+  const body = prompt.split(/\n---\n/).slice(0, -1).join('\n---\n');
+  // Roots have no brief — their transcript IS the context, so extract from it directly. A
+  // branch stays brief-only (the punt is what drives widening), but once the ladder has pulled
+  // parent turns in, those turns are answer material too.
+  const widened = /## Pulled from the parent thread[^\n]*\n([\s\S]*)$/.exec(body)?.[1] ?? '';
+  const candidates = onBrief
+    ? [...facts, ...sentencesOf(widened).filter((s) => !s.endsWith('?'))]
+    : sentencesOf(body).filter((s) => !s.endsWith('?'));
+
   // Two matching terms, not one: a lone "Berkeley" hit is not an answer, it is a coincidence.
   const hits = rankByRelevance(
-    factsFromBrief(prompt),
+    candidates,
     keywords(question),
     FACTS_PER_TIER[tier],
     undefined,
     ANSWER_MIN_SCORE,
   );
   if (!hits.length) {
-    return 'The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does.';
+    return onBrief
+      ? 'The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does.'
+      : 'The context here does not cover that yet — add what matters to the conversation and ask again.';
   }
   if (tier === 'quick') return hits[0];
   return `${hits.map((h) => `- ${h}`).join('\n')}\n\nThat is what this branch's brief supports; anything beyond it would need more of the parent thread pulled in.`;

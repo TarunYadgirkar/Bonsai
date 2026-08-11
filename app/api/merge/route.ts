@@ -1,6 +1,7 @@
 import { INTERNAL_TIER, complete, estimateTokens, messagesTokens } from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
 import { MergeRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
+import { resolveSession, withSession } from '@/lib/session';
 import {
   appendInsight,
   commit,
@@ -13,8 +14,9 @@ import {
 } from '@/lib/store';
 import type { Conversation, Insight, MergeResponse } from '@/lib/types';
 
-export const POST = apiRoute(MergeRequestSchema, async (body) => {
-  const ws = await loadWorkingSet();
+export const POST = apiRoute(MergeRequestSchema, async (body, request) => {
+  const session = resolveSession(request);
+  const ws = await loadWorkingSet(session.id);
   const branch = getConversation(ws, body.branchId);
   if (!branch) return apiError(`unknown branch ${body.branchId}`, 404);
   if (!branch.parentId) return apiError('the root has no parent to merge into', 400);
@@ -53,7 +55,7 @@ export const POST = apiRoute(MergeRequestSchema, async (body) => {
   // A merged branch is a kept answer: the tier that produced its last auto reply was sufficient.
   const kept = lastAuto(branch);
   if (kept) {
-    await recordRoutingFeedback({
+    await recordRoutingFeedback(session.id, {
       kind: 'merge',
       classifiedTier: kept.tier,
       questionKind: kept.kind,
@@ -66,7 +68,7 @@ export const POST = apiRoute(MergeRequestSchema, async (body) => {
     archived: archive,
     log,
   };
-  return Response.json(response);
+  return withSession(Response.json(response), session);
 });
 
 /** The auto-router's last decision on this branch (tier + question kind; ignoring manual picks). */

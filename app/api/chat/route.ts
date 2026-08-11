@@ -6,6 +6,7 @@ import {
 } from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
 import { ChatRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
+import { resolveSession, withSession } from '@/lib/session';
 import {
   appendMessage,
   availableTokensFor,
@@ -32,8 +33,9 @@ function lastAuto(conversation: Conversation): { tier: Tier; kind?: QuestionKind
 const ANSWER_SYSTEM_PROMPT =
   'You answer using only the context provided. If it is a compiled brief, it is deliberately minimal and self-contained; if it genuinely lacks what you need, say so plainly rather than guessing.';
 
-export const POST = apiRoute(ChatRequestSchema, async (body) => {
-  const ws = await loadWorkingSet();
+export const POST = apiRoute(ChatRequestSchema, async (body, request) => {
+  const session = resolveSession(request);
+  const ws = await loadWorkingSet(session.id);
   let conversation = getConversation(ws, body.branchId);
   if (!conversation) return apiError(`unknown branch ${body.branchId}`, 404);
 
@@ -72,7 +74,7 @@ export const POST = apiRoute(ChatRequestSchema, async (body) => {
     pinnedTier,
     mode: body.mode,
     pinnedMode: conversation.pinnedMode,
-    profile: await loadProfile(),
+    profile: await loadProfile(session.id),
   });
 
   const result = await completeWithEscalation({
@@ -118,18 +120,23 @@ export const POST = apiRoute(ChatRequestSchema, async (body) => {
 
   if ((await commit(ws)) === 'failed') return persistenceError();
 
-  // Learn from what just happened. An escalation means the classifier started too low; a manual
-  // pick that moved off the branch's last auto tier is a labeled up/down correction. Both feed
-  // the profile that shifts future routing — the "it learns from what you kept" loop.
+  // Learn from what just happened. An escalation means the classifier started too low — credited
+  // to the tier the CLASSIFIER chose, not the tier a learned prior shifted it to, so a bad
+  // down-shift's own escalations become the counter-evidence that unwinds it.
   if (result.routing.escalated) {
-    await recordRoutingFeedback({
+    await recordRoutingFeedback(session.id, {
       kind: 'escalation',
-      classifiedTier: initial.tier,
+      classifiedTier: initial.classifiedTier ?? initial.tier,
       questionKind: initial.kind,
     });
   }
-  if (result.routing.overridden && priorAuto && priorAuto.tier !== result.routing.tier) {
-    await recordRoutingFeedback({
+  // A manual pick that moved off the branch's last auto tier is ONE labeled up/down correction.
+  // Gate on a pick actually made THIS turn — an inherited server-side pin re-reports overridden
+  // on every following message, and counting each would fabricate a "consistent pattern" from a
+  // single decision (and poison the shared community prior).
+  const pickedThisTurn = body.mode?.mode === 'manual' || body.pinnedTier != null;
+  if (pickedThisTurn && priorAuto && priorAuto.tier !== result.routing.tier) {
+    await recordRoutingFeedback(session.id, {
       kind: 'override',
       classifiedTier: priorAuto.tier,
       chosenTier: result.routing.tier,
@@ -143,5 +150,5 @@ export const POST = apiRoute(ChatRequestSchema, async (body) => {
     routing: result.routing,
     log,
   };
-  return Response.json(response);
+  return withSession(Response.json(response), session);
 });

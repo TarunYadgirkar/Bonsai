@@ -341,6 +341,55 @@ describe('mock provider path', () => {
     expect(result.text).toBe(PUNT_SENTENCE);
   });
 
+  it('answers a root question extractively from the transcript when there is no brief', async () => {
+    const transcript = [
+      'User: We are planning the fall docs migration for the platform team.',
+      'Assistant: The docs migration freeze begins October 2 and lasts two weeks for review.',
+    ].join('\n');
+    const result = await complete({
+      tier: 'quick',
+      messages: [
+        { role: 'system', content: 'Answer from the conversation.' },
+        { role: 'user', content: `${transcript}\n---\nWhen does the docs migration freeze begin?` },
+      ],
+    });
+    expect(result.text).toBe(
+      'The docs migration freeze begins October 2 and lasts two weeks for review.',
+    );
+  });
+
+  it('punts with a context message, not a brief message, on an uncovered root question', async () => {
+    const transcript = 'User: We are planning the fall docs migration for the platform team.';
+    const result = await complete({
+      tier: 'quick',
+      messages: [
+        { role: 'system', content: 'Answer from the conversation.' },
+        { role: 'user', content: `${transcript}\n---\nWhat is the annual security budget?` },
+      ],
+    });
+    expect(result.text).toMatch(/context here does not cover/);
+    expect(result.text).not.toMatch(/compiled brief/);
+  });
+
+  it('uses turns pulled from the parent thread once the ladder has widened a branch', async () => {
+    const prompt = [
+      '## Relevant facts',
+      '- Blueprint builds software for nonprofits and needs around ten hours weekly.',
+      '',
+      '## Pulled from the parent thread (brief was insufficient)',
+      'Assistant: The Free Ventures info session is September 3 at the Haas courtyard venue.',
+      '---',
+      'Where is the Free Ventures info session held?',
+    ].join('\n');
+    const result = await complete({
+      tier: 'quick',
+      messages: [{ role: 'user', content: prompt }],
+    });
+    expect(result.text).toBe(
+      'The Free Ventures info session is September 3 at the Haas courtyard venue.',
+    );
+  });
+
   it('dispatches on purpose merge even when the prompt looks like a chat answer', async () => {
     const conclusion =
       'Free Ventures applications close September 11 so draft the application early.';

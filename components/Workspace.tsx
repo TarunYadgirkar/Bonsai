@@ -133,12 +133,18 @@ export function Workspace() {
     writeBranchToUrl(id, 'push');
   }, []);
 
-  // Back and Forward: adopt whatever branch the entry names, without pushing a new entry.
+  // Back and Forward: adopt whatever branch the entry names — but only if it still exists in the
+  // current garden, else fall back to the root. A history entry can point at a branch that a reset
+  // or demo-load has since removed; without this guard the view would strand on a dead id.
   useEffect(() => {
-    const onPop = () => setActiveId(branchFromUrl());
+    const onPop = () => {
+      const id = branchFromUrl();
+      const exists = id && state?.conversations.some((c) => c.id === id);
+      setActiveId(exists ? id : (state?.rootId ?? null));
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
-  }, []);
+  }, [state]);
 
   // Keep the address bar honest for programmatic moves (first load, merge landing, reset).
   useEffect(() => {
@@ -286,6 +292,25 @@ export function Workspace() {
       setError(describe(err));
     } finally {
       setMerging(false);
+    }
+  };
+
+  /** Pull the Berkeley Clubs example into this session, replacing whatever is here. */
+  const loadDemo = async () => {
+    try {
+      const res = await fetch('/api/demo', { method: 'POST' });
+      if (!res.ok) throw new Error(`POST /api/demo → ${res.status}`);
+      const data: StateResponse = await res.json();
+      setState(data);
+      setPendingModes({});
+      setFlight(null);
+      setMerged(null);
+      setActiveId(data.rootId);
+      setError(null);
+      const logs = await fetchEconomics();
+      setEconomics(logs);
+    } catch (err) {
+      setError(describe(err));
     }
   };
 
@@ -442,6 +467,7 @@ export function Workspace() {
         onOpenEconomics={() => setEconomicsOpen(true)}
         onReset={reset}
         onNewChat={newChat}
+        onLoadDemo={loadDemo}
         flashId={merged?.parentId ?? null}
         stats={nodeStats}
         session={

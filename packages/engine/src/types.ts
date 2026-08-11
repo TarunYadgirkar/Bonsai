@@ -111,6 +111,12 @@ export interface RoutingDecision {
   widened?: boolean;
   /** True when the user's learned routing priors moved the tier off the classifier's choice. */
   learned?: boolean;
+  /**
+   * The tier the classifier chose BEFORE any learned adjustment. Feedback must be attributed to
+   * this, not `tier` — otherwise a learned down-shift's own escalations credit the shifted-to
+   * tier and the bad prior never accrues counter-evidence. Absent when classification was skipped.
+   */
+  classifiedTier?: Tier;
   /** The classifier's semantic class for this question. Absent when classification was skipped. */
   kind?: QuestionKind;
   /** Classifier confidence 0..1 in its own read. Low confidence tempers the learned adjustment. */

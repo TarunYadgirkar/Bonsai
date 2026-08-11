@@ -1,16 +1,17 @@
 /**
- * Working-set store over two backends:
+ * Working-set store over two backends, scoped per browser session (`lib/session.ts`):
  *
- * - Neon (`DATABASE_URL`): rows per conversation/message/insight/log. Each request loads the
- *   working set, mutates it locally, and `commit()` flushes only what changed — two requests on
- *   different branches can no longer clobber each other the way the old whole-snapshot blob
- *   did. Same-row races resolve last-write-wins; message inserts retry past seq collisions so
- *   a racing append shifts position instead of vanishing.
- * - Memory (no env): a module-global working set seeded from the fixtures, exactly the old
- *   behavior. `commit()` is a no-op — the map IS the store. Keyless dev stays zero-config.
+ * - Neon (`DATABASE_URL`): rows per conversation/message/insight/log, every one tagged with the
+ *   session that owns it. Each request loads that session's working set, mutates it locally, and
+ *   `commit()` flushes only what changed — two requests on different branches (or different
+ *   sessions) can no longer clobber each other. Same-row races resolve last-write-wins; message
+ *   inserts retry past seq collisions so a racing append shifts position instead of vanishing.
+ * - Memory (no env): a per-session working set. `commit()` is a no-op — the map IS the store.
  *
- * Failure honesty: `commit()` reports 'failed' instead of swallowing, so mutating routes can
- * stop returning 200 for writes that evaporated (the old silent-degrade trap).
+ * A fresh session starts with a single empty root you can chat into; the Berkeley fixture is an
+ * opt-in demo (`seedDemo`), not the default. Failure honesty: `commit()` reports 'failed' instead
+ * of swallowing (the old silent-degrade trap), and refuses to write a memory-fallback working set
+ * back over a database that only failed to read — that would overwrite real rows with seed state.
  */
 import {
   availableTokensFor as availableTokensForIn,
@@ -35,7 +36,11 @@ import type {
   StateResponse,
 } from './types';
 
+export type StoreSource = 'db' | 'memory';
+
 export interface WorkingSet {
+  sessionId: string;
+  source: StoreSource;
   byId: Map<string, Conversation>;
   rootId: string;
   logs: InferenceLog[];
@@ -48,7 +53,32 @@ export interface WorkingSet {
 
 export type CommitOutcome = 'memory' | 'persisted' | 'failed';
 
-/* ---------- fixture seed ---------- */
+function shortId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+}
+
+/* ---------- state shapes ---------- */
+
+interface SessionState {
+  conversations: Conversation[];
+  logs: InferenceLog[];
+  rootId: string;
+}
+
+/** A fresh session: one empty root, nothing preloaded. This is the default landing state. */
+function emptyState(sessionId: string): SessionState {
+  const root: Conversation = {
+    id: `root_${sessionId}`,
+    title: 'New conversation',
+    parentId: null,
+    messages: [],
+    insights: [],
+    pinnedTier: null,
+    pinnedMode: null,
+    archived: false,
+  };
+  return { conversations: [root], logs: [], rootId: root.id };
+}
 
 interface SeedTree {
   rootInsights?: Insight[];
@@ -57,11 +87,16 @@ interface SeedTree {
   seq?: number;
 }
 
-function buildSeedState(): { conversations: Conversation[]; logs: InferenceLog[]; rootId: string } {
+/**
+ * The Berkeley demo, cloned with fresh ids so it can be seeded independently into any session
+ * without primary-key collisions and re-seeded cleanly. Every id is regenerated and every
+ * cross-reference (parentId, brief.branchId, insight branch/parent, log branchId) is rewritten
+ * through the same map.
+ */
+function buildDemoState(): SessionState {
   const fixture = seed as SeedConversation;
-  // Clone: an imported JSON module is a live singleton and must never be mutated in place.
   const preloaded = structuredClone(tree) as SeedTree;
-  const root: Conversation = {
+  const berkeleyRoot: Conversation = {
     id: fixture.id,
     title: fixture.title,
     parentId: null,
@@ -71,16 +106,41 @@ function buildSeedState(): { conversations: Conversation[]; logs: InferenceLog[]
     pinnedTier: null,
     archived: false,
   };
-  return {
-    conversations: [root, ...(preloaded.branches ?? [])],
-    logs: preloaded.logs ?? [],
-    rootId: root.id,
-  };
+  const source = [berkeleyRoot, ...(preloaded.branches ?? [])];
+
+  const idMap = new Map<string, string>();
+  for (const c of source) idMap.set(c.id, shortId('demo'));
+  const map = (id: string | null | undefined): string | null =>
+    id ? (idMap.get(id) ?? id) : null;
+
+  const conversations: Conversation[] = source.map((c) => ({
+    ...c,
+    id: idMap.get(c.id)!,
+    parentId: map(c.parentId),
+    messages: c.messages.map((m) => ({ ...m, id: shortId('msg') })),
+    insights: c.insights.map((ins) => ({
+      ...ins,
+      id: shortId('insight'),
+      branchId: map(ins.branchId)!,
+      parentId: map(ins.parentId)!,
+    })),
+    ...(c.brief
+      ? { brief: { ...c.brief, id: shortId('brief'), branchId: idMap.get(c.id)! } }
+      : {}),
+  }));
+
+  const logs = (preloaded.logs ?? []).map((l) => ({
+    ...l,
+    id: shortId('log'),
+    branchId: map(l.branchId)!,
+  }));
+
+  return { conversations, logs, rootId: idMap.get(fixture.id)! };
 }
 
-/* ---------- memory backend ---------- */
+/* ---------- memory backend (per session) ---------- */
 
-const GLOBAL_KEY = Symbol.for('bonsai.store.v2');
+const GLOBAL_KEY = Symbol.for('bonsai.store.v3');
 
 interface MemoryState {
   byId: Map<string, Conversation>;
@@ -88,21 +148,28 @@ interface MemoryState {
   logs: InferenceLog[];
 }
 
-function memoryState(): MemoryState {
-  const g = globalThis as typeof globalThis & { [GLOBAL_KEY]?: MemoryState };
-  if (!g[GLOBAL_KEY]) {
-    const seeded = buildSeedState();
-    g[GLOBAL_KEY] = {
-      byId: new Map(seeded.conversations.map((c) => [c.id, c])),
-      rootId: seeded.rootId,
-      logs: seeded.logs,
-    };
-  }
+function memoryMap(): Map<string, MemoryState> {
+  const g = globalThis as typeof globalThis & { [GLOBAL_KEY]?: Map<string, MemoryState> };
+  if (!g[GLOBAL_KEY]) g[GLOBAL_KEY] = new Map();
   return g[GLOBAL_KEY];
 }
 
-function resetMemory(): void {
-  (globalThis as typeof globalThis & { [GLOBAL_KEY]?: MemoryState })[GLOBAL_KEY] = undefined;
+function toMemory(state: SessionState): MemoryState {
+  return {
+    byId: new Map(state.conversations.map((c) => [c.id, c])),
+    rootId: state.rootId,
+    logs: state.logs,
+  };
+}
+
+function memoryState(sessionId: string): MemoryState {
+  const map = memoryMap();
+  let state = map.get(sessionId);
+  if (!state) {
+    state = toMemory(emptyState(sessionId));
+    map.set(sessionId, state);
+  }
+  return state;
 }
 
 /* ---------- neon backend ---------- */
@@ -136,27 +203,43 @@ interface InsightRow {
   created_at: string;
 }
 
-async function loadFromDb(withLogs: boolean): Promise<WorkingSet | null> {
-  const q = sql();
-  const conversations = (await q`SELECT * FROM conversations`) as unknown as ConversationRow[];
-  if (!conversations.length) {
-    await seedDb();
-    return loadAssembled(withLogs);
-  }
-  return loadAssembled(withLogs);
+async function ensureSessionRoot(sessionId: string): Promise<void> {
+  const root = emptyState(sessionId).conversations[0];
+  await upsertConversationRow(sessionId, root, true);
 }
 
-async function loadAssembled(withLogs: boolean): Promise<WorkingSet> {
+async function loadFromDb(sessionId: string, withLogs: boolean): Promise<WorkingSet> {
   const q = sql();
-  const [convRows, msgRows, insightRows, logRows] = await Promise.all([
-    q`SELECT * FROM conversations` as unknown as Promise<ConversationRow[]>,
-    q`SELECT * FROM messages ORDER BY conversation_id, seq` as unknown as Promise<MessageRow[]>,
-    q`SELECT * FROM insights ORDER BY created_at` as unknown as Promise<InsightRow[]>,
+  const existing = (await q`
+    SELECT 1 FROM conversations WHERE session_id = ${sessionId} LIMIT 1
+  `) as unknown as unknown[];
+  if (!existing.length) await ensureSessionRoot(sessionId);
+  return loadAssembled(sessionId, withLogs);
+}
+
+async function loadAssembled(sessionId: string, withLogs: boolean): Promise<WorkingSet> {
+  const q = sql();
+  const convRows = (await q`
+    SELECT * FROM conversations WHERE session_id = ${sessionId}
+  `) as unknown as ConversationRow[];
+  const ids = convRows.map((r) => r.id);
+
+  const [msgRows, insightRows, logRows] = await Promise.all([
+    ids.length
+      ? (q`SELECT * FROM messages WHERE conversation_id = ANY(${ids}::text[]) ORDER BY conversation_id, seq` as unknown as Promise<
+          MessageRow[]
+        >)
+      : Promise.resolve([] as MessageRow[]),
+    ids.length
+      ? (q`SELECT * FROM insights WHERE parent_id = ANY(${ids}::text[]) ORDER BY created_at` as unknown as Promise<
+          InsightRow[]
+        >)
+      : Promise.resolve([] as InsightRow[]),
     withLogs
-      ? (q`SELECT payload FROM inference_logs ORDER BY ts` as unknown as Promise<
+      ? (q`SELECT payload FROM inference_logs WHERE session_id = ${sessionId} ORDER BY ts` as unknown as Promise<
           { payload: InferenceLog }[]
         >)
-      : Promise.resolve([]),
+      : Promise.resolve([] as { payload: InferenceLog }[]),
   ]);
 
   const byId = new Map<string, Conversation>();
@@ -206,8 +289,10 @@ async function loadAssembled(withLogs: boolean): Promise<WorkingSet> {
   }
 
   return {
+    sessionId,
+    source: 'db',
     byId,
-    rootId: rootId || convRows[0]?.id || '',
+    rootId: rootId || convRows[0]?.id || `root_${sessionId}`,
     logs: logRows.map((r) => r.payload),
     persistedMessages,
     persistedInsights,
@@ -216,11 +301,15 @@ async function loadAssembled(withLogs: boolean): Promise<WorkingSet> {
   };
 }
 
-async function upsertConversationRow(c: Conversation, isRoot: boolean): Promise<void> {
+async function upsertConversationRow(
+  sessionId: string,
+  c: Conversation,
+  isRoot: boolean,
+): Promise<void> {
   const q = sql();
   await q`
-    INSERT INTO conversations (id, title, parent_id, profile, brief, pinned_tier, pinned_mode, archived, is_root, updated_at)
-    VALUES (${c.id}, ${c.title}, ${c.parentId}, ${JSON.stringify(c.profile ?? null)}::jsonb,
+    INSERT INTO conversations (id, session_id, title, parent_id, profile, brief, pinned_tier, pinned_mode, archived, is_root, updated_at)
+    VALUES (${c.id}, ${sessionId}, ${c.title}, ${c.parentId}, ${JSON.stringify(c.profile ?? null)}::jsonb,
             ${JSON.stringify(c.brief ?? null)}::jsonb, ${c.pinnedTier},
             ${JSON.stringify(c.pinnedMode ?? null)}::jsonb, ${c.archived}, ${isRoot}, now())
     ON CONFLICT (id) DO UPDATE SET
@@ -229,7 +318,7 @@ async function upsertConversationRow(c: Conversation, isRoot: boolean): Promise<
   `;
 }
 
-/** Insert at the local index; on a seq race, land after whatever got there first. */
+/** Insert at the local index; on a seq race, retry landing after whatever got there first. */
 async function insertMessageRow(conversationId: string, m: Message, seq: number): Promise<void> {
   const q = sql();
   try {
@@ -239,32 +328,33 @@ async function insertMessageRow(conversationId: string, m: Message, seq: number)
               ${JSON.stringify(m.routing ?? null)}::jsonb)
       ON CONFLICT (id) DO NOTHING
     `;
+    return;
   } catch {
-    const rows = (await q`
-      SELECT COALESCE(MAX(seq), -1) + 1 AS next FROM messages WHERE conversation_id = ${conversationId}
-    `) as unknown as { next: number }[];
-    await q`
-      INSERT INTO messages (id, conversation_id, seq, role, content, routing)
-      VALUES (${m.id}, ${conversationId}, ${rows[0]?.next ?? seq + 100}, ${m.role}, ${m.content},
-              ${JSON.stringify(m.routing ?? null)}::jsonb)
-      ON CONFLICT (id) DO NOTHING
-    `;
+    // seq collision — fall through to the atomic append below.
+  }
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await q`
+        INSERT INTO messages (id, conversation_id, seq, role, content, routing)
+        SELECT ${m.id}, ${conversationId}, COALESCE(MAX(seq), -1) + 1, ${m.role}, ${m.content},
+               ${JSON.stringify(m.routing ?? null)}::jsonb
+        FROM messages WHERE conversation_id = ${conversationId}
+        ON CONFLICT (id) DO NOTHING
+      `;
+      return;
+    } catch (err) {
+      if (attempt === 4) throw err;
+    }
   }
 }
 
-async function seedDb(): Promise<void> {
-  const seeded = buildSeedState();
-  // Parents before children so the FK holds: root first, then by depth.
-  const ordered = [...seeded.conversations].sort((a, b) => depthIn(seeded.conversations, a) - depthIn(seeded.conversations, b));
-  for (const c of ordered) {
-    await upsertConversationRow(c, c.id === seeded.rootId);
-    for (const [i, m] of c.messages.entries()) await insertMessageRow(c.id, m, i);
-    for (const ins of c.insights) await insertInsightRow(ins);
-  }
+async function insertInsightRow(i: Insight): Promise<void> {
   const q = sql();
-  for (const log of seeded.logs) {
-    await q`INSERT INTO inference_logs (id, branch_id, payload) VALUES (${log.id}, ${log.branchId}, ${JSON.stringify(log)}::jsonb) ON CONFLICT (id) DO NOTHING`;
-  }
+  await q`
+    INSERT INTO insights (id, branch_id, parent_id, text)
+    VALUES (${i.id}, ${i.branchId}, ${i.parentId}, ${i.text})
+    ON CONFLICT (id) DO NOTHING
+  `;
 }
 
 function depthIn(all: Conversation[], c: Conversation): number {
@@ -278,29 +368,52 @@ function depthIn(all: Conversation[], c: Conversation): number {
   return depth;
 }
 
-async function insertInsightRow(i: Insight): Promise<void> {
+/** Write a whole session state to the database, parents before children so the FK holds. */
+async function writeSessionToDb(sessionId: string, state: SessionState): Promise<void> {
   const q = sql();
-  await q`
-    INSERT INTO insights (id, branch_id, parent_id, text)
-    VALUES (${i.id}, ${i.branchId}, ${i.parentId}, ${i.text})
-    ON CONFLICT (id) DO NOTHING
-  `;
+  const ordered = [...state.conversations].sort(
+    (a, b) => depthIn(state.conversations, a) - depthIn(state.conversations, b),
+  );
+  for (const c of ordered) {
+    await upsertConversationRow(sessionId, c, c.id === state.rootId);
+    for (const [i, m] of c.messages.entries()) await insertMessageRow(c.id, m, i);
+    for (const ins of c.insights) await insertInsightRow(ins);
+  }
+  for (const log of state.logs) {
+    await q`
+      INSERT INTO inference_logs (id, session_id, branch_id, payload)
+      VALUES (${log.id}, ${sessionId}, ${log.branchId}, ${JSON.stringify(log)}::jsonb)
+      ON CONFLICT (id) DO NOTHING
+    `;
+  }
+}
+
+async function clearSessionInDb(sessionId: string): Promise<void> {
+  const q = sql();
+  await q`DELETE FROM inference_logs WHERE session_id = ${sessionId}`;
+  await q`DELETE FROM insights WHERE parent_id IN (SELECT id FROM conversations WHERE session_id = ${sessionId})`;
+  await q`DELETE FROM messages WHERE conversation_id IN (SELECT id FROM conversations WHERE session_id = ${sessionId})`;
+  await q`DELETE FROM conversations WHERE session_id = ${sessionId}`;
 }
 
 /* ---------- public API ---------- */
 
-export async function loadWorkingSet(opts?: { withLogs?: boolean }): Promise<WorkingSet> {
+export async function loadWorkingSet(
+  sessionId: string,
+  opts?: { withLogs?: boolean },
+): Promise<WorkingSet> {
   const withLogs = opts?.withLogs ?? false;
   if (dbEnabled()) {
     try {
-      const ws = await loadFromDb(withLogs);
-      if (ws) return ws;
+      return await loadFromDb(sessionId, withLogs);
     } catch (err) {
       console.warn(`[store] db load failed (${(err as Error).message}) — memory working set`);
     }
   }
-  const mem = memoryState();
+  const mem = memoryState(sessionId);
   return {
+    sessionId,
+    source: 'memory',
     byId: mem.byId,
     rootId: mem.rootId,
     logs: mem.logs,
@@ -312,7 +425,7 @@ export async function loadWorkingSet(opts?: { withLogs?: boolean }): Promise<Wor
 }
 
 export function newId(prefix: string): string {
-  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '')}`;
 }
 
 export function getConversation(ws: WorkingSet, id: string): Conversation | undefined {
@@ -363,15 +476,18 @@ export function logInference(ws: WorkingSet, log: InferenceLog): InferenceLog {
   return log;
 }
 
-/** Flush local mutations. 'failed' means a configured database did not take the writes. */
+/** Flush local mutations. 'failed' means a configured database did not (or must not) take them. */
 export async function commit(ws: WorkingSet): Promise<CommitOutcome> {
   if (!dbEnabled()) return 'memory';
+  // A working set that fell back to memory because the DB failed to READ must never be written
+  // back — that would overwrite real rows with seed/empty state. Refuse instead of lying.
+  if (ws.source !== 'db') return 'failed';
   try {
     const q = sql();
     for (const id of ws.dirty) {
       const c = ws.byId.get(id);
       if (!c) continue;
-      await upsertConversationRow(c, id === ws.rootId);
+      await upsertConversationRow(ws.sessionId, c, id === ws.rootId);
       const persisted = ws.persistedMessages.get(id) ?? new Set();
       for (const [i, m] of c.messages.entries()) {
         if (persisted.has(m.id)) continue;
@@ -386,7 +502,11 @@ export async function commit(ws: WorkingSet): Promise<CommitOutcome> {
       }
     }
     for (const log of ws.newLogs) {
-      await q`INSERT INTO inference_logs (id, branch_id, payload) VALUES (${log.id}, ${log.branchId}, ${JSON.stringify(log)}::jsonb) ON CONFLICT (id) DO NOTHING`;
+      await q`
+        INSERT INTO inference_logs (id, session_id, branch_id, payload)
+        VALUES (${log.id}, ${ws.sessionId}, ${log.branchId}, ${JSON.stringify(log)}::jsonb)
+        ON CONFLICT (id) DO NOTHING
+      `;
     }
     ws.dirty.clear();
     ws.newLogs = [];
@@ -397,40 +517,51 @@ export async function commit(ws: WorkingSet): Promise<CommitOutcome> {
   }
 }
 
-/** Back to the opening state: truncate (db) or rebuild (memory), then reseed. */
-export async function resetStore(): Promise<StateResponse> {
+async function replaceSession(sessionId: string, state: SessionState): Promise<StateResponse> {
   if (dbEnabled()) {
-    try {
-      const q = sql();
-      await q`TRUNCATE conversations, messages, insights, inference_logs`;
-      await seedDb();
-    } catch (err) {
-      console.warn(`[store] reset failed (${(err as Error).message})`);
-    }
+    await clearSessionInDb(sessionId);
+    await writeSessionToDb(sessionId, state);
   }
-  resetMemory();
-  const ws = await loadWorkingSet();
+  memoryMap().set(sessionId, toMemory(state));
+  const ws = await loadWorkingSet(sessionId);
   return { rootId: ws.rootId, tree: buildTree(ws), conversations: listConversations(ws) };
 }
 
-/* ---------- derived ---------- */
+/** Wipe the session back to a single empty root. Surfaces DB failure instead of faking success. */
+export async function resetStore(sessionId: string): Promise<StateResponse> {
+  return replaceSession(sessionId, emptyState(sessionId));
+}
 
-/* ---------- learned routing profile ---------- */
+/** Seed the Berkeley demo into this session (replacing whatever was there). */
+export async function seedDemo(sessionId: string): Promise<StateResponse> {
+  return replaceSession(sessionId, buildDemoState());
+}
 
-const PROFILE_KEY = 'default';
-const PROFILE_GLOBAL = Symbol.for('bonsai.profile.v1');
+/* ---------- learned routing profile (per session) ---------- */
 
-function memoryProfile(): RoutingProfile {
-  const g = globalThis as typeof globalThis & { [PROFILE_GLOBAL]?: RoutingProfile };
-  if (!g[PROFILE_GLOBAL]) g[PROFILE_GLOBAL] = emptyProfile();
+const PROFILE_GLOBAL = Symbol.for('bonsai.profile.v2');
+
+function profileMap(): Map<string, RoutingProfile> {
+  const g = globalThis as typeof globalThis & { [PROFILE_GLOBAL]?: Map<string, RoutingProfile> };
+  if (!g[PROFILE_GLOBAL]) g[PROFILE_GLOBAL] = new Map();
   return g[PROFILE_GLOBAL];
 }
 
-export async function loadProfile(): Promise<RoutingProfile> {
+function memoryProfile(sessionId: string): RoutingProfile {
+  const map = profileMap();
+  let profile = map.get(sessionId);
+  if (!profile) {
+    profile = emptyProfile();
+    map.set(sessionId, profile);
+  }
+  return profile;
+}
+
+export async function loadProfile(sessionId: string): Promise<RoutingProfile> {
   if (dbEnabled()) {
     try {
       const rows = (await sql()`
-        SELECT profile FROM routing_profiles WHERE id = ${PROFILE_KEY}
+        SELECT profile FROM routing_profiles WHERE id = ${sessionId}
       `) as unknown as { profile: unknown }[];
       if (rows.length) return normalizeProfile(rows[0].profile);
       return emptyProfile();
@@ -438,19 +569,28 @@ export async function loadProfile(): Promise<RoutingProfile> {
       console.warn(`[store] profile load failed (${(err as Error).message}) — memory profile`);
     }
   }
-  return memoryProfile();
+  return memoryProfile(sessionId);
 }
 
-/** Fold one behavioral signal into the profile and persist it. Never throws — routing must not
- *  break because a learning write failed. */
-export async function recordRoutingFeedback(event: RoutingFeedback): Promise<void> {
-  const current = await loadProfile();
+/**
+ * Fold one behavioral signal into the session's profile and persist it. Never throws — routing
+ * must not break because a learning write failed. This is a read-modify-write; the HTTP driver
+ * runs each statement in its own transaction, so truly concurrent writes on the SAME session
+ * resolve last-write-wins. That contention is negligible now the profile is per browser session
+ * (one visitor rarely fires two learning writes at once), so it stays a plain fold rather than a
+ * heavier locking scheme.
+ */
+export async function recordRoutingFeedback(
+  sessionId: string,
+  event: RoutingFeedback,
+): Promise<void> {
+  const current = await loadProfile(sessionId);
   const next = recordFeedback(current, event);
   if (dbEnabled()) {
     try {
       await sql()`
         INSERT INTO routing_profiles (id, profile, updated_at)
-        VALUES (${PROFILE_KEY}, ${JSON.stringify(next)}::jsonb, now())
+        VALUES (${sessionId}, ${JSON.stringify(next)}::jsonb, now())
         ON CONFLICT (id) DO UPDATE SET profile = EXCLUDED.profile, updated_at = now()
       `;
       return;
@@ -458,7 +598,7 @@ export async function recordRoutingFeedback(event: RoutingFeedback): Promise<voi
       console.warn(`[store] profile save failed (${(err as Error).message})`);
     }
   }
-  (globalThis as typeof globalThis & { [PROFILE_GLOBAL]?: RoutingProfile })[PROFILE_GLOBAL] = next;
+  profileMap().set(sessionId, next);
 }
 
 /* ---------- derived ---------- */

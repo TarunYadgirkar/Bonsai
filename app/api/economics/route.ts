@@ -1,5 +1,6 @@
 import { savingsCurve, sessionStats } from '@bonsai/engine';
 import { apiRoute } from '@/lib/api';
+import { resolveSession, withSession } from '@/lib/session';
 import { loadWorkingSet } from '@/lib/store';
 import type { EconomicsBaseline, EconomicsResponse, EconomicsTotals } from '@/lib/types';
 
@@ -10,8 +11,9 @@ function pctSaved(baseline: number, actual: number): number {
   return Math.round(((baseline - actual) / baseline) * 1000) / 10;
 }
 
-export const GET = apiRoute(null, async () => {
-  const ws = await loadWorkingSet({ withLogs: true });
+export const GET = apiRoute(null, async (_body, request) => {
+  const session = resolveSession(request);
+  const ws = await loadWorkingSet(session.id, { withLogs: true });
   const logs = ws.logs;
 
   const totals: EconomicsTotals = logs.reduce<EconomicsTotals>(
@@ -42,5 +44,5 @@ export const GET = apiRoute(null, async () => {
     stats: sessionStats(logs),
     savingsCurve: savingsCurve(logs),
   };
-  return Response.json(response);
+  return withSession(Response.json(response), session);
 });

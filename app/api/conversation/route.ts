@@ -1,4 +1,5 @@
 import { NewConversationRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
+import { resolveSession, withSession } from '@/lib/session';
 import {
   buildTree,
   commit,
@@ -17,8 +18,9 @@ export const dynamic = 'force-dynamic';
  * It carries the seeded profile so anything branched off it still compiles a brief that knows
  * who the user is; `parentId` is null, so it inherits no transcript and no tokens.
  */
-export const POST = apiRoute(NewConversationRequestSchema, async (body) => {
-  const ws = await loadWorkingSet();
+export const POST = apiRoute(NewConversationRequestSchema, async (body, request) => {
+  const session = resolveSession(request);
+  const ws = await loadWorkingSet(session.id);
   const id = newId('conv');
   const seedProfile = getConversation(ws, ws.rootId)?.profile;
 
@@ -41,5 +43,5 @@ export const POST = apiRoute(NewConversationRequestSchema, async (body) => {
   if ((await commit(ws)) === 'failed') return persistenceError();
 
   const response: NewConversationResponse = { node, conversation };
-  return Response.json(response);
+  return withSession(Response.json(response), session);
 });

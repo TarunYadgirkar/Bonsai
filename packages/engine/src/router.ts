@@ -130,6 +130,7 @@ export async function route(
     overridden: false,
     coveredByBrief: covered,
     learned: adjusted.learned,
+    classifiedTier,
     kind,
     confidence,
   });
@@ -227,6 +228,7 @@ function decision(params: {
   effort?: Effort;
   coveredByBrief?: boolean;
   learned?: boolean;
+  classifiedTier?: Tier;
   kind?: QuestionKind;
   confidence?: number;
 }): RoutingDecision {
@@ -249,6 +251,7 @@ function decision(params: {
     overridden: params.overridden,
     ...(params.coveredByBrief === undefined ? {} : { coveredByBrief: params.coveredByBrief }),
     ...(params.learned ? { learned: true } : {}),
+    ...(params.classifiedTier ? { classifiedTier: params.classifiedTier } : {}),
     ...(params.kind ? { kind: params.kind } : {}),
     ...(params.confidence === undefined ? {} : { confidence: params.confidence }),
   };

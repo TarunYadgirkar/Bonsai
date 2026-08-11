@@ -110,6 +110,13 @@
     deep: routingLabel(TIER_DEFAULTS.deep.model, TIER_DEFAULTS.deep.effort)
   };
 
+  // ../packages/engine/src/logger.ts
+  var active = console;
+  var logger = {
+    warn: (...args) => active.warn(...args),
+    error: (...args) => active.error(...args)
+  };
+
   // ../packages/engine/src/provider.ts
   function providerName() {
     if (void 0) return "anthropic";
@@ -173,12 +180,12 @@
     try {
       const result = provider === "anthropic" ? await callAnthropic(upstream, params) : await callOpenAiCompatible(provider, upstream, params);
       if (!result?.text.trim()) {
-        console.warn(`[llm] ${provider} returned no content on ${upstream} \u2014 falling back to mock`);
+        logger.warn(`[llm] ${provider} returned no content on ${upstream} \u2014 falling back to mock`);
         return null;
       }
       return result;
     } catch (err) {
-      console.warn(`[llm] ${provider} failed (${err.message}) \u2014 falling back to mock`);
+      logger.warn(`[llm] ${provider} failed (${err.message}) \u2014 falling back to mock`);
       return null;
     }
   }
@@ -283,6 +290,33 @@
     if (words > 12) return 2;
     return 1;
   }
+  var KIND_CUES = [
+    { kind: "comparison", cue: /\b(rank(s|ed|ing)?|compar(e|es|ed|ison)|vs|versus|which of|trade-?offs?)\b/ },
+    { kind: "code", cue: /\b(rewrite|refactor|debug|code|function|bug|implement)\b/ },
+    { kind: "creative", cue: /\b(write|draft|story|poem|creative)\b/ },
+    { kind: "synthesis", cue: /\b(why|explain|summar\w*)\b/ },
+    { kind: "lookup", cue: /\b(when|what|where|who|how many|deadline|list)\b/ }
+  ];
+  var CLEAR_CUE_CONFIDENCE = 0.85;
+  var STRUCTURAL_CUE_CONFIDENCE = 0.6;
+  var UNCLEAR_CONFIDENCE = 0.4;
+  var LOOKUP_MAX_WORDS = 12;
+  var REASONING_MIN_WORDS = 16;
+  var REASONING_MIN_CLAUSES = 3;
+  function mockKind(question) {
+    const q = question.toLowerCase();
+    const words = q.trim().split(/\s+/).filter(Boolean).length;
+    const matched = KIND_CUES.filter(
+      ({ kind, cue }) => cue.test(q) && (kind !== "lookup" || words <= LOOKUP_MAX_WORDS)
+    );
+    if (matched.length === 1) return { kind: matched[0].kind, confidence: CLEAR_CUE_CONFIDENCE };
+    if (matched.length > 1) return { kind: matched[0].kind, confidence: UNCLEAR_CONFIDENCE };
+    const clauses = q.split(/,|;|\band\b/).filter((part) => part.trim().length > 0).length;
+    if (words >= REASONING_MIN_WORDS && clauses >= REASONING_MIN_CLAUSES) {
+      return { kind: "reasoning", confidence: STRUCTURAL_CUE_CONFIDENCE };
+    }
+    return { kind: "other", confidence: UNCLEAR_CONFIDENCE };
+  }
   var MOCK_FACTS = [
     "Free Ventures is a student-run startup accelerator at Berkeley; you apply with your own startup.",
     "Free Ventures applications close September 11, with an info session on September 3.",
@@ -314,12 +348,61 @@
       return { text, score: relevance(text, terms) + mentions, i };
     }).filter((c) => c.score >= minScore).sort((a, b) => b.score - a.score || a.i - b.i).slice(0, limit).map((c) => c.text);
   }
+  var RECENCY_WEIGHT = 0.5;
+  var ROLE_FACT_WEIGHT = 0.75;
+  var CONSTRAINT_CUE = /\b(must|need|want|only|at most|at least|no more than|cap|capped|cannot|can't|won't|budget|prefer|require|hard)\b/i;
+  function sentencesWithRole(transcript) {
+    let role = "unknown";
+    const out = [];
+    for (const line of transcript.split("\n")) {
+      const tag = /^(user|assistant|system):\s*/i.exec(line);
+      if (tag) role = tag[1].toLowerCase();
+      const body = line.replace(/^(user|assistant|system):\s*/i, "");
+      for (const raw of body.split(/(?<=[.!?])\s+(?=[A-Z])/)) {
+        const text = raw.replace(/\s+/g, " ").trim();
+        if (text.length > 30 && text.length < 320) out.push({ text, role });
+      }
+    }
+    return out;
+  }
+  function rarityWeights(sentences, terms) {
+    const lower = sentences.map((s) => s.toLowerCase());
+    const total = Math.max(1, lower.length);
+    const weights = /* @__PURE__ */ new Map();
+    for (const term of terms) {
+      const inSentences = lower.filter((s) => s.includes(term)).length;
+      weights.set(term, 1 + Math.log(total / Math.max(1, inSentences)));
+    }
+    return weights;
+  }
+  function roleWeight(sentence) {
+    if (sentence.text.endsWith("?")) return 0;
+    if (sentence.role === "assistant") return ROLE_FACT_WEIGHT;
+    if (sentence.role === "user" && CONSTRAINT_CUE.test(sentence.text)) return ROLE_FACT_WEIGHT;
+    return 0;
+  }
+  function rankBySalience(sentences, terms, limit, topic) {
+    const needle = topic?.trim().toLowerCase();
+    const rarity = rarityWeights(sentences.map((s) => s.text), terms);
+    const span = Math.max(1, sentences.length - 1);
+    return sentences.map((sentence, i) => {
+      const hay = sentence.text.toLowerCase();
+      const termScore = terms.reduce(
+        (sum, t) => hay.includes(t) ? sum + (rarity.get(t) ?? 0) : sum,
+        0
+      );
+      const topicScore = needle && hay.includes(needle) ? TOPIC_MENTION_WEIGHT : 0;
+      const relevant = termScore + topicScore;
+      const score = relevant + RECENCY_WEIGHT * (i / span) + roleWeight(sentence);
+      return { text: sentence.text, relevant, score, i };
+    }).filter((c) => c.relevant > 0).sort((a, b) => b.score - a.score || a.i - b.i).slice(0, limit).map((c) => c.text);
+  }
   function mockCompilerJson(prompt) {
     const selection = /Branch topic \(highlighted text\):\s*(.*)$/m.exec(prompt)?.[1] ?? "";
     const question = /Branch question:\s*(.*)$/m.exec(prompt)?.[1] ?? "";
     const transcript = prompt.split(/^Parent conversation:$/m)[1] ?? "";
     const terms = keywords(`${selection} ${question}`);
-    const facts = rankByRelevance(sentencesOf(transcript), terms, MOCK_FACT_COUNT, selection);
+    const facts = rankBySalience(sentencesWithRole(transcript), terms, MOCK_FACT_COUNT, selection);
     return JSON.stringify({
       facts: facts.length ? facts : MOCK_FACTS,
       excludedNote: facts.length ? `Excluded: the rest of the parent thread \u2014 everything not bearing on ${selection || "this branch"}.` : "Excluded: the club-by-club comparison, workload math, decision tree, and interview prep from the parent thread."
@@ -387,9 +470,16 @@ That is what this branch's brief supports; anything beyond it would need more of
   function mockClassifierJson(prompt) {
     const complexity = mockComplexity(prompt);
     const question = /Question:\s*(.*)$/m.exec(prompt)?.[1] ?? "";
+    const { kind, confidence } = mockKind(question);
     const facts = classifierFacts(prompt);
     const covered = !facts.length || rankByRelevance(facts, keywords(question), 1, void 0, ANSWER_MIN_SCORE).length > 0;
-    return `{"complexity": ${complexity}, "covered": ${covered}, "reason": "heuristic mock classifier"}`;
+    return JSON.stringify({
+      complexity,
+      kind,
+      covered,
+      confidence,
+      reason: "heuristic mock classifier"
+    });
   }
   function mockText(tier, prompt, purpose) {
     switch (purpose) {
@@ -453,7 +543,7 @@ That is what this branch's brief supports; anything beyond it would need more of
       messages: [
         {
           role: "system",
-          content: 'You compile minimal context briefs. Given the context above a conversation fork and a branch topic, extract ONLY the facts needed to answer the branch question, ordered most-important first. Resolve every referent so each fact stands alone without the parent \u2014 never write "apps", "it", "that club" where a name belongs. Facts under "Inherited context" or "Learned from branches" headings are pre-distilled: carry the relevant ones through rather than re-deriving them. Respond with JSON only: {"facts": string[], "excludedNote": string}. facts: at most 8 short self-contained sentences. excludedNote: one sentence naming what you deliberately left out.'
+          content: 'You compile minimal context briefs. Given the context above a conversation fork and a branch topic, extract ONLY the facts needed to answer the branch question, ordered most load-bearing first: state the ONE fact the question most depends on first, then the rest in falling order of importance. Prefer facts a smaller model could not infer without them \u2014 the names, numbers, dates, and constraints that exist only in this conversation \u2014 over anything general knowledge supplies. Resolve every referent so each fact stands alone without the parent \u2014 never write "apps", "it", "that club" where a name belongs. Facts under "Inherited context" or "Learned from branches" headings are pre-distilled: carry the relevant ones through rather than re-deriving them. Respond with JSON only: {"facts": string[], "excludedNote": string}. facts: at most 8 short self-contained sentences. excludedNote: one sentence naming what you deliberately left out.'
         },
         {
           role: "user",
@@ -495,7 +585,7 @@ That is what this branch's brief supports; anything beyond it would need more of
       } catch {
       }
     }
-    console.warn("[compiler] unparseable output \u2014 using fallback facts");
+    logger.warn("[compiler] unparseable output \u2014 using fallback facts");
     return {
       facts: [`Topic in focus: ${selection}.`],
       excludedNote: "Excluded: the rest of the parent conversation (compiler fallback)."
@@ -512,45 +602,64 @@ That is what this branch's brief supports; anything beyond it would need more of
   }
 
   // ../packages/engine/src/learning.ts
+  var QUESTION_KINDS = [
+    "lookup",
+    "synthesis",
+    "comparison",
+    "reasoning",
+    "code",
+    "creative",
+    "other"
+  ];
   var TIER_ORDER = ["quick", "thoughtful", "deep"];
   var MIN_MOVES = 3;
   var SHIFT_THRESHOLD = 0.6;
+  var DOWNSHIFT_CONFIDENCE_FLOOR = 0.5;
   function emptyStat() {
     return { up: 0, down: 0, kept: 0, dropped: 0, moves: 0 };
   }
-  function emptyProfile() {
-    return {
-      version: 1,
-      tiers: { quick: emptyStat(), thoughtful: emptyStat(), deep: emptyStat() }
-    };
+  function emptyTierStats() {
+    return { quick: emptyStat(), thoughtful: emptyStat(), deep: emptyStat() };
   }
-  function normalizeProfile(raw) {
-    const profile = emptyProfile();
-    const tiers = raw?.tiers;
-    if (!tiers) return profile;
-    for (const tier of TIER_ORDER) {
-      const s = tiers[tier];
-      if (!s) continue;
-      profile.tiers[tier] = {
-        up: numeric(s.up),
-        down: numeric(s.down),
-        kept: numeric(s.kept),
-        dropped: numeric(s.dropped),
-        moves: numeric(s.moves)
-      };
-    }
-    return profile;
+  function emptyProfile() {
+    return { version: 2, tiers: emptyTierStats(), kinds: {} };
   }
   function numeric(n) {
     return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  }
+  function normalizeStat(raw) {
+    const s = raw ?? {};
+    return {
+      up: numeric(s.up),
+      down: numeric(s.down),
+      kept: numeric(s.kept),
+      dropped: numeric(s.dropped),
+      moves: numeric(s.moves)
+    };
+  }
+  function normalizeTierStats(raw) {
+    const t = raw ?? {};
+    return { quick: normalizeStat(t.quick), thoughtful: normalizeStat(t.thoughtful), deep: normalizeStat(t.deep) };
+  }
+  function normalizeProfile(raw) {
+    const p = raw ?? {};
+    const profile = {
+      version: 2,
+      tiers: normalizeTierStats(p.tiers),
+      kinds: {}
+    };
+    const kinds = p.kinds ?? {};
+    for (const kind of QUESTION_KINDS) {
+      const k = kinds[kind];
+      if (k) profile.kinds[kind] = normalizeTierStats(k);
+    }
+    return profile;
   }
   function step(tier, delta) {
     const i = TIER_ORDER.indexOf(tier);
     return TIER_ORDER[Math.max(0, Math.min(TIER_ORDER.length - 1, i + delta))];
   }
-  function recordFeedback(profile, event) {
-    const base = normalizeProfile(profile);
-    const stat = { ...base.tiers[event.classifiedTier] };
+  function applyEvent(stat, event) {
     switch (event.kind) {
       case "override": {
         const from = TIER_ORDER.indexOf(event.classifiedTier);
@@ -575,34 +684,68 @@ That is what this branch's brief supports; anything beyond it would need more of
         stat.dropped += 1;
         break;
     }
-    return {
-      ...base,
-      tiers: { ...base.tiers, [event.classifiedTier]: stat }
-    };
   }
-  function adjustForProfile(classifiedTier, profile) {
-    if (!profile) return { tier: classifiedTier, learned: false, note: "" };
-    const stat = normalizeProfile(profile).tiers[classifiedTier];
-    if (stat.moves < MIN_MOVES) return { tier: classifiedTier, learned: false, note: "" };
+  function recordFeedback(profile, event) {
+    const base = normalizeProfile(profile);
+    const tiers = { ...base.tiers, [event.classifiedTier]: { ...base.tiers[event.classifiedTier] } };
+    applyEvent(tiers[event.classifiedTier], event);
+    const kinds = { ...base.kinds };
+    if (event.questionKind) {
+      const existing = kinds[event.questionKind] ?? emptyTierStats();
+      const updated = { ...existing, [event.classifiedTier]: { ...existing[event.classifiedTier] } };
+      applyEvent(updated[event.classifiedTier], event);
+      kinds[event.questionKind] = updated;
+    }
+    return { version: 2, tiers, kinds };
+  }
+  function adjustForProfile(classifiedTier, profile, opts = {}) {
+    const confidence = clampConfidence(opts.confidence);
+    const pick = pickStat(profile, classifiedTier, opts.questionKind, opts.population);
+    if (!pick) return { tier: classifiedTier, learned: false, source: "none", note: "" };
+    const { stat, source, community } = pick;
+    const threshold = Math.min(0.95, SHIFT_THRESHOLD + (1 - confidence) * 0.2);
     const upRate = stat.up / stat.moves;
     const downRate = stat.down / stat.moves;
-    if (upRate >= SHIFT_THRESHOLD && classifiedTier !== "deep") {
+    const who = community ? "The community has" : "You've";
+    const where = source === "kind" ? `${opts.questionKind} ` : "";
+    if (upRate >= threshold && classifiedTier !== "deep") {
       const tier = step(classifiedTier, 1);
       return {
         tier,
         learned: true,
-        note: `You've upgraded ${classifiedTier} picks ${stat.up}/${stat.moves} times, so this one starts at ${tier}.`
+        source,
+        note: `${who} upgraded ${where}${classifiedTier} picks ${stat.up}/${stat.moves} times, so this one starts at ${tier}.`
       };
     }
-    if (downRate >= SHIFT_THRESHOLD && classifiedTier !== "quick") {
+    if (downRate >= threshold && classifiedTier !== "quick" && confidence >= DOWNSHIFT_CONFIDENCE_FLOOR) {
       const tier = step(classifiedTier, -1);
       return {
         tier,
         learned: true,
-        note: `You've downgraded ${classifiedTier} picks ${stat.down}/${stat.moves} times, so this one starts at ${tier}.`
+        source,
+        note: `${who} downgraded ${where}${classifiedTier} picks ${stat.down}/${stat.moves} times, so this one starts at ${tier}.`
       };
     }
-    return { tier: classifiedTier, learned: false, note: "" };
+    return { tier: classifiedTier, learned: false, source: "none", note: "" };
+  }
+  function pickStat(profile, tier, kind, population) {
+    const sources = [
+      { profile, community: false },
+      { profile: population, community: true }
+    ];
+    for (const { profile: prof, community } of sources) {
+      if (!prof) continue;
+      const p = normalizeProfile(prof);
+      const kindStat = kind ? p.kinds[kind]?.[tier] : void 0;
+      if (kindStat && kindStat.moves >= MIN_MOVES) return { stat: kindStat, source: "kind", community };
+      const agg = p.tiers[tier];
+      if (agg.moves >= MIN_MOVES) return { stat: agg, source: "aggregate", community };
+    }
+    return null;
+  }
+  function clampConfidence(c) {
+    if (typeof c !== "number" || !Number.isFinite(c)) return 1;
+    return Math.max(0, Math.min(1, c));
   }
 
   // ../packages/engine/src/router.ts
@@ -642,11 +785,15 @@ That is what this branch's brief supports; anything beyond it would need more of
         overridden: true
       });
     }
-    const { complexity, covered, why } = await classify(params, deps);
+    const { complexity, covered, kind, confidence, why } = await classify(params, deps);
     const classifiedTier = TIER_BY_COMPLEXITY[complexity];
-    const adjusted = adjustForProfile(classifiedTier, params.profile);
+    const adjusted = adjustForProfile(classifiedTier, params.profile, {
+      questionKind: kind,
+      confidence,
+      population: params.population
+    });
     const tier = adjusted.tier;
-    const baseReason = `${why} Complexity ${complexity}/3 against a ${contextTokens}-token compiled brief.`;
+    const baseReason = `${why} A ${kind} question, complexity ${complexity}/3, against a ${contextTokens}-token brief.`;
     return decision({
       tier,
       complexity: COMPLEXITY_BY_TIER[tier],
@@ -654,7 +801,9 @@ That is what this branch's brief supports; anything beyond it would need more of
       reason: adjusted.learned ? `${baseReason} ${adjusted.note}` : baseReason,
       overridden: false,
       coveredByBrief: covered,
-      learned: adjusted.learned
+      learned: adjusted.learned,
+      kind,
+      confidence
     });
   }
   async function classify(params, deps) {
@@ -668,7 +817,7 @@ ${params.brief.facts.map((f) => `- ${f}`).join("\n")}` : "";
       messages: [
         {
           role: "system",
-          content: 'You rate how much intelligence a question deserves, and whether the provided brief facts cover it. complexity: 1 = a single fact lookup answerable from the given context. 2 = synthesis or explanation over a few facts. 3 = multi-constraint reasoning, ranking, or weighing trade-offs. covered: whether the brief facts contain what the question needs (true when no facts are provided). Respond with JSON only: {"complexity": 1|2|3, "covered": true|false, "reason": "<8 words>"}.'
+          content: 'You classify a question so a router can pick the right model and effort, and judge whether the provided brief covers it.\ncomplexity: 1 = a single fact lookup answerable straight from the context; 2 = synthesis or explanation over a few facts; 3 = multi-constraint reasoning, ranking, or weighing trade-offs.\nkind: one of lookup | synthesis | comparison | reasoning | code | creative | other \u2014 the shape of the task.\ncovered: whether the brief facts contain what the question needs (true when no facts are provided).\nconfidence: 0.0\u20131.0, how sure you are of this read.\nRespond with JSON only: {"complexity": 1|2|3, "kind": "...", "covered": true|false, "confidence": 0.0-1.0, "reason": "<8 words>"}.'
         },
         {
           role: "user",
@@ -679,8 +828,14 @@ Question: ${params.question}`
     });
     const parsed = parseClassifier(result.text);
     if (parsed) return parsed;
-    console.warn("[router] unparseable classifier output \u2014 defaulting to thoughtful");
-    return { complexity: 2, covered: true, why: "Classifier unclear; defaulted to the middle tier." };
+    logger.warn("[router] unparseable classifier output \u2014 defaulting to thoughtful");
+    return {
+      complexity: 2,
+      covered: true,
+      kind: "other",
+      confidence: 0.3,
+      why: "Classifier unclear; defaulted to the middle tier."
+    };
   }
   function parseClassifier(text) {
     const start = text.indexOf("{");
@@ -693,6 +848,8 @@ Question: ${params.question}`
       return {
         complexity: value,
         covered: typeof json.covered === "boolean" ? json.covered : true,
+        kind: QUESTION_KINDS.includes(json.kind) ? json.kind : "other",
+        confidence: typeof json.confidence === "number" && Number.isFinite(json.confidence) ? Math.max(0, Math.min(1, json.confidence)) : 1,
         why: typeof json.reason === "string" ? `${json.reason}.` : "Classified by the router."
       };
     } catch {
@@ -717,7 +874,9 @@ Question: ${params.question}`
       escalated: params.escalated ?? false,
       overridden: params.overridden,
       ...params.coveredByBrief === void 0 ? {} : { coveredByBrief: params.coveredByBrief },
-      ...params.learned ? { learned: true } : {}
+      ...params.learned ? { learned: true } : {},
+      ...params.kind ? { kind: params.kind } : {},
+      ...params.confidence === void 0 ? {} : { confidence: params.confidence }
     };
   }
 
@@ -858,12 +1017,12 @@ Question: ${params.question}`
       return;
     }
     status.textContent = "Reading the conversation\u2026";
-    const active = await toContent({ type: "GET_ACTIVE" });
-    if (!active?.conversationId) {
+    const active2 = await toContent({ type: "GET_ACTIVE" });
+    if (!active2?.conversationId) {
       status.textContent = "Open a Claude chat first, then compile.";
       return;
     }
-    const treeRes = await toContent({ type: "GET_TREE", conversationId: active.conversationId });
+    const treeRes = await toContent({ type: "GET_TREE", conversationId: active2.conversationId });
     if (!treeRes || !treeRes.ok) {
       status.textContent = `Could not read the chat${treeRes ? `: ${treeRes.reason}` : ""}.`;
       return;
@@ -877,7 +1036,7 @@ Question: ${params.question}`
     });
     lastCompiled = compiled;
     status.textContent = "";
-    renderPreview(compiled, active.conversationId, treeRes.tree.name);
+    renderPreview(compiled, active2.conversationId, treeRes.tree.name);
   }
   function renderPreview(compiled, parentConversationId, parentName) {
     const { brief, routing } = compiled;

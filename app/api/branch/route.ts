@@ -10,6 +10,7 @@ import {
 } from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
 import { BranchRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
+import { resolveSession, withSession } from '@/lib/session';
 import {
   availableTokensFor,
   buildTree,
@@ -27,8 +28,9 @@ import type { BranchResponse, Conversation, Message, RoutingDecision } from '@/l
 const ANSWER_SYSTEM_PROMPT =
   'You answer using only the compiled brief provided. It is deliberately minimal and self-contained. If the brief genuinely lacks what you need, say so plainly rather than guessing.';
 
-export const POST = apiRoute(BranchRequestSchema, async (body) => {
-  const ws = await loadWorkingSet();
+export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
+  const session = resolveSession(request);
+  const ws = await loadWorkingSet(session.id);
   const parent = getConversation(ws, body.parentId);
   if (!parent) return apiError(`unknown parent ${body.parentId}`, 404);
 
@@ -93,7 +95,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body) => {
       brief,
       contextTokens: brief.briefTokens,
       mode: body.mode,
-      profile: await loadProfile(),
+      profile: await loadProfile(session.id),
     });
     const result = await completeWithEscalation({
       routing: initial,
@@ -107,7 +109,8 @@ export const POST = apiRoute(BranchRequestSchema, async (body) => {
       },
     });
     routing = result.routing;
-    if (routing.escalated) escalatedFrom = { tier: initial.tier, kind: initial.kind };
+    if (routing.escalated)
+      escalatedFrom = { tier: initial.classifiedTier ?? initial.tier, kind: initial.kind };
     answer = {
       id: newId('msg'),
       role: 'assistant',
@@ -144,7 +147,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body) => {
   if ((await commit(ws)) === 'failed') return persistenceError();
 
   if (escalatedFrom) {
-    await recordRoutingFeedback({
+    await recordRoutingFeedback(session.id, {
       kind: 'escalation',
       classifiedTier: escalatedFrom.tier,
       questionKind: escalatedFrom.kind,
@@ -152,5 +155,5 @@ export const POST = apiRoute(BranchRequestSchema, async (body) => {
   }
 
   const response: BranchResponse = { node, conversation, brief, message: answer, routing };
-  return Response.json(response);
+  return withSession(Response.json(response), session);
 });

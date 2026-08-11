@@ -144,6 +144,7 @@ export function TreeSidebar({
   onOpenEconomics,
   onReset,
   onNewChat,
+  onLoadDemo,
   flashId,
   stats,
   session,
@@ -152,10 +153,12 @@ export function TreeSidebar({
   activeId: string | null;
   onSelect: (id: string) => void;
   onOpenEconomics: () => void;
-  /** Throws away the current run and re-seeds the demo tree. */
+  /** Empties this session's garden back to a single fresh root. */
   onReset: () => Promise<void>;
   /** Starts an empty root conversation alongside the existing trees. */
   onNewChat: () => Promise<void>;
+  /** Seeds the Berkeley Clubs example tree into this session. */
+  onLoadDemo: () => Promise<void>;
   /** Node a merged insight just landed on — pulses for a beat. */
   flashId: string | null;
   stats: Record<string, NodeStats>;
@@ -166,6 +169,7 @@ export function TreeSidebar({
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [loadingDemo, setLoadingDemo] = useState(false);
 
   const startNewChat = async () => {
     setCreating(true);
@@ -183,6 +187,15 @@ export function TreeSidebar({
     } finally {
       setResetting(false);
       setConfirming(false);
+    }
+  };
+
+  const runLoadDemo = async () => {
+    setLoadingDemo(true);
+    try {
+      await onLoadDemo();
+    } finally {
+      setLoadingDemo(false);
     }
   };
 
@@ -275,9 +288,18 @@ export function TreeSidebar({
           </span>
         </button>
 
+        <button
+          onClick={runLoadDemo}
+          disabled={loadingDemo}
+          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs text-bark transition-colors hover:bg-paper-sunk hover:text-ink-soft disabled:opacity-40"
+        >
+          {loadingDemo ? 'Planting…' : 'Load Berkeley demo'}
+          <span className="ml-auto text-[10px] text-bark">example tree</span>
+        </button>
+
         {/*
          * Two-step rather than a confirm() dialog: a browser modal blocks the page, and this
-         * discards the whole run, so a stray click must not be enough.
+         * discards the current garden, so a stray click must not be enough.
          */}
         <button
           onClick={() => (confirming ? runReset() : setConfirming(true))}
@@ -289,9 +311,9 @@ export function TreeSidebar({
               : 'text-bark hover:bg-paper-sunk hover:text-ink-soft'
           }`}
         >
-          {resetting ? 'Resetting…' : confirming ? 'Discard this run?' : 'Reset demo'}
+          {resetting ? 'Clearing…' : confirming ? 'Empty the garden?' : 'Reset garden'}
           <span className="ml-auto text-[10px] text-bark">
-            {confirming ? 'click again' : 'back to start'}
+            {confirming ? 'click again' : 'back to empty'}
           </span>
         </button>
       </div>
