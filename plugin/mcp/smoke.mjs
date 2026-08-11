@@ -163,8 +163,8 @@ try {
       'This is a deliberately overlong insight that keeps adding words until it sails far past the twenty two word ceiling set by the server for merges.',
   });
   assert.equal(tooLong.result.isError, true);
-  assert.match(toolText(tooLong), /max 22/);
-  check('bonsai_merge rejects an insight over 22 words');
+  assert.match(toolText(tooLong), /max 20/);
+  check('bonsai_merge rejects an insight over 20 words');
 
   const merged = toolJson(
     await callTool('bonsai_merge', {

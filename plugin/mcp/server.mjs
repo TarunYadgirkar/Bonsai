@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -125,6 +125,46 @@ function saveStore(store) {
   renameSync(tmp, storePath());
 }
 
+/**
+ * Cross-process mutex around load→mutate→save. Two Claude sessions running the plugin in the same
+ * cwd would otherwise both load, both save, and the second clobbers the first's tree. mkdir is
+ * atomic across processes; a lock older than STALE_MS is stolen so a crashed holder can't wedge it.
+ */
+const LOCK_STALE_MS = 10_000;
+const LOCK_TIMEOUT_MS = 5_000;
+function withStoreLock(fn) {
+  mkdirSync(dataDir(), { recursive: true });
+  const lockPath = join(dataDir(), 'trees.lock');
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  for (;;) {
+    try {
+      mkdirSync(lockPath);
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      try {
+        if (Date.now() - statSync(lockPath).mtimeMs > LOCK_STALE_MS) {
+          rmSync(lockPath, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        continue; // lock vanished between EEXIST and stat — retry acquire
+      }
+      if (Date.now() > deadline) throw new Error('bonsai-mcp: store lock timeout');
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      rmSync(lockPath, { recursive: true, force: true });
+    } catch {
+      /* best effort */
+    }
+  }
+}
+
 function treeKey(cwd) {
   return cwd || 'default';
 }
@@ -160,6 +200,22 @@ const SUBAGENT_INSTRUCTIONS = [
   'INSIGHT: <one sentence, ≤20 words, referents resolved — the single durable conclusion the parent should learn>',
 ].join('\n');
 
+/**
+ * The subagent's model is fixed by its tier's frontmatter, but effort is not a spawn parameter —
+ * so the router's chosen effort is rendered into the prompt as an explicit reasoning-depth cue,
+ * mirroring how the engine renders effort into the provider prompt.
+ */
+const EFFORT_DEPTH = {
+  low: 'Reasoning depth — low: answer directly and briefly; do not over-deliberate.',
+  medium: 'Reasoning depth — medium: think through the brief before answering.',
+  high: 'Reasoning depth — high: reason carefully through the trade-offs before committing to an answer.',
+  max: 'Reasoning depth — max: reason exhaustively through every constraint and trade-off before answering.',
+};
+function effortInstruction(effort) {
+  const line = EFFORT_DEPTH[effort];
+  return line ? `${line}\n\n` : '';
+}
+
 /* ---------- tool handlers ---------- */
 
 // Rough full-copy counterfactual: what sending the whole parent context would cost,
@@ -167,6 +223,10 @@ const SUBAGENT_INSTRUCTIONS = [
 const AVAILABLE_TOKENS_MULTIPLIER = 20;
 
 function handleFork(args) {
+  return withStoreLock(() => handleForkLocked(args));
+}
+
+function handleForkLocked(args) {
   const key = treeKey(args.cwd);
   const store = loadStore();
   const now = new Date().toISOString();
@@ -195,7 +255,22 @@ function handleFork(args) {
   const parentId = args.parentId ?? root.id;
   if (!nodes[parentId]) throw new Error(`Unknown parentId ${parentId}. Run bonsai_tree to see current branches.`);
 
+  // A re-fork of the same question off the same parent is a coverage retry, not a new branch —
+  // supersede the prior still-open uncovered sibling so retries don't pile up as phantom branches
+  // that inflate the tree's economics.
+  for (const sibling of Object.values(nodes)) {
+    if (
+      sibling.parentId === parentId &&
+      sibling.status === 'open' &&
+      sibling.covered === false &&
+      sibling.question === args.question
+    ) {
+      nodes[sibling.id] = { ...sibling, status: 'abandoned' };
+    }
+  }
+
   const routing = route(args.question, args.pinned);
+  const isCovered = covered(args.question, args.briefFacts);
   const briefMarkdown = renderBrief(args);
   const briefTokens = estimateTokens(briefMarkdown);
   const factTokens = args.briefFacts.reduce((sum, fact) => sum + estimateTokens(fact), 0);
@@ -216,6 +291,7 @@ function handleFork(args) {
     tier: routing.tier,
     model: routing.model,
     effort: routing.effort,
+    covered: isCovered,
     status: 'open',
     createdAt: now,
   };
@@ -229,23 +305,27 @@ function handleFork(args) {
     model: routing.model,
     effort: routing.effort,
     tier: routing.tier,
-    covered: covered(args.question, args.briefFacts),
+    covered: isCovered,
     briefTokens,
     availableTokens,
     availableTokensSource: args.contextTokensEstimate != null ? 'reported' : 'estimated',
     prunedPct: pct,
     briefMarkdown,
-    subagentPrompt: `${briefMarkdown}\n\n---\n\n${SUBAGENT_INSTRUCTIONS}`,
+    subagentPrompt: `${briefMarkdown}\n\n---\n\n${effortInstruction(routing.effort)}${SUBAGENT_INSTRUCTIONS}`,
   };
 }
 
-const INSIGHT_MAX_WORDS = 22;
+const INSIGHT_MAX_WORDS = 20;
 
 function cleanInsight(raw) {
   return raw.trim().replace(/^["'‘’“”]+|["'‘’“”]+$/g, '').trim();
 }
 
 function handleMerge(args) {
+  return withStoreLock(() => handleMergeLocked(args));
+}
+
+function handleMergeLocked(args) {
   const insight = cleanInsight(args.insight);
   if (!insight) throw new Error('Insight is empty. Provide the one durable conclusion this branch reached.');
   const wordCount = insight.split(/\s+/).length;
@@ -270,6 +350,10 @@ function handleMerge(args) {
 }
 
 function handleAbandon(args) {
+  return withStoreLock(() => handleAbandonLocked(args));
+}
+
+function handleAbandonLocked(args) {
   const key = treeKey(args.cwd);
   const store = loadStore();
   const tree = store.trees[key];
@@ -283,6 +367,10 @@ function handleAbandon(args) {
 }
 
 function handleReset(args) {
+  return withStoreLock(() => handleResetLocked(args));
+}
+
+function handleResetLocked(args) {
   const key = treeKey(args.cwd);
   if (args.confirm !== true) {
     return { deleted: false, treeKey: key, note: 'Pass confirm: true to delete this tree. Nothing was changed.' };
@@ -303,8 +391,11 @@ const STATUS_GLYPH = { open: '○', merged: '✓', abandoned: '✕' };
 function summarize(tree) {
   const branches = Object.values(tree.nodes).filter((n) => n.parentId !== null);
   const count = (status) => branches.filter((n) => n.status === status).length;
-  const briefTokens = branches.reduce((sum, n) => sum + n.briefTokens, 0);
-  const availableTokens = branches.reduce((sum, n) => sum + n.availableTokens, 0);
+  // Abandoned branches never spent their tokens on an answer that was kept — exclude them from the
+  // economics sums so a superseded coverage retry doesn't inflate the tree's pruned/available math.
+  const counted = branches.filter((n) => n.status !== 'abandoned');
+  const briefTokens = counted.reduce((sum, n) => sum + n.briefTokens, 0);
+  const availableTokens = counted.reduce((sum, n) => sum + n.availableTokens, 0);
   return {
     branches: branches.length,
     open: count('open'),
@@ -404,10 +495,10 @@ server.registerTool(
   'bonsai_merge',
   {
     description:
-      'Merge a branch back: record its distilled insight (one sentence, ≤22 words, referents resolved) and mark the branch merged. Returns the parent id and tree-wide context economics.',
+      'Merge a branch back: record its distilled insight (one sentence, ≤20 words, referents resolved) and mark the branch merged. Returns the parent id and tree-wide context economics.',
     inputSchema: {
       branchId: z.string().min(1),
-      insight: z.string().min(1).describe('The single durable conclusion, ≤22 words, referents resolved.'),
+      insight: z.string().min(1).describe('The single durable conclusion, ≤20 words, referents resolved.'),
       cwd: cwdParam,
     },
   },

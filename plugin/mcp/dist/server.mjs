@@ -6918,7 +6918,7 @@ var require_dist = __commonJS({
 
 // server.mjs
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -31087,6 +31087,39 @@ function saveStore(store) {
   writeFileSync(tmp, JSON.stringify(store, null, 2));
   renameSync(tmp, storePath());
 }
+var LOCK_STALE_MS = 1e4;
+var LOCK_TIMEOUT_MS = 5e3;
+function withStoreLock(fn) {
+  mkdirSync(dataDir(), { recursive: true });
+  const lockPath = join(dataDir(), "trees.lock");
+  const deadline = Date.now() + LOCK_TIMEOUT_MS;
+  for (; ; ) {
+    try {
+      mkdirSync(lockPath);
+      break;
+    } catch (error51) {
+      if (error51.code !== "EEXIST") throw error51;
+      try {
+        if (Date.now() - statSync(lockPath).mtimeMs > LOCK_STALE_MS) {
+          rmSync(lockPath, { recursive: true, force: true });
+          continue;
+        }
+      } catch {
+        continue;
+      }
+      if (Date.now() > deadline) throw new Error("bonsai-mcp: store lock timeout");
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 25);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    try {
+      rmSync(lockPath, { recursive: true, force: true });
+    } catch {
+    }
+  }
+}
 function treeKey(cwd) {
   return cwd || "default";
 }
@@ -31114,8 +31147,23 @@ var SUBAGENT_INSTRUCTIONS = [
   "End your final message with a line of exactly this form:",
   "INSIGHT: <one sentence, \u226420 words, referents resolved \u2014 the single durable conclusion the parent should learn>"
 ].join("\n");
+var EFFORT_DEPTH = {
+  low: "Reasoning depth \u2014 low: answer directly and briefly; do not over-deliberate.",
+  medium: "Reasoning depth \u2014 medium: think through the brief before answering.",
+  high: "Reasoning depth \u2014 high: reason carefully through the trade-offs before committing to an answer.",
+  max: "Reasoning depth \u2014 max: reason exhaustively through every constraint and trade-off before answering."
+};
+function effortInstruction(effort) {
+  const line = EFFORT_DEPTH[effort];
+  return line ? `${line}
+
+` : "";
+}
 var AVAILABLE_TOKENS_MULTIPLIER = 20;
 function handleFork(args) {
+  return withStoreLock(() => handleForkLocked(args));
+}
+function handleForkLocked(args) {
   const key = treeKey(args.cwd);
   const store = loadStore();
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -31141,7 +31189,13 @@ function handleFork(args) {
   }
   const parentId = args.parentId ?? root.id;
   if (!nodes[parentId]) throw new Error(`Unknown parentId ${parentId}. Run bonsai_tree to see current branches.`);
+  for (const sibling of Object.values(nodes)) {
+    if (sibling.parentId === parentId && sibling.status === "open" && sibling.covered === false && sibling.question === args.question) {
+      nodes[sibling.id] = { ...sibling, status: "abandoned" };
+    }
+  }
   const routing = route(args.question, args.pinned);
+  const isCovered = covered(args.question, args.briefFacts);
   const briefMarkdown = renderBrief(args);
   const briefTokens = estimateTokens(briefMarkdown);
   const factTokens = args.briefFacts.reduce((sum, fact) => sum + estimateTokens(fact), 0);
@@ -31161,6 +31215,7 @@ function handleFork(args) {
     tier: routing.tier,
     model: routing.model,
     effort: routing.effort,
+    covered: isCovered,
     status: "open",
     createdAt: now
   };
@@ -31172,7 +31227,7 @@ function handleFork(args) {
     model: routing.model,
     effort: routing.effort,
     tier: routing.tier,
-    covered: covered(args.question, args.briefFacts),
+    covered: isCovered,
     briefTokens,
     availableTokens,
     availableTokensSource: args.contextTokensEstimate != null ? "reported" : "estimated",
@@ -31182,14 +31237,17 @@ function handleFork(args) {
 
 ---
 
-${SUBAGENT_INSTRUCTIONS}`
+${effortInstruction(routing.effort)}${SUBAGENT_INSTRUCTIONS}`
   };
 }
-var INSIGHT_MAX_WORDS = 22;
+var INSIGHT_MAX_WORDS = 20;
 function cleanInsight(raw) {
   return raw.trim().replace(/^["'‘’“”]+|["'‘’“”]+$/g, "").trim();
 }
 function handleMerge(args) {
+  return withStoreLock(() => handleMergeLocked(args));
+}
+function handleMergeLocked(args) {
   const insight = cleanInsight(args.insight);
   if (!insight) throw new Error("Insight is empty. Provide the one durable conclusion this branch reached.");
   const wordCount = insight.split(/\s+/).length;
@@ -31211,6 +31269,9 @@ function handleMerge(args) {
   };
 }
 function handleAbandon(args) {
+  return withStoreLock(() => handleAbandonLocked(args));
+}
+function handleAbandonLocked(args) {
   const key = treeKey(args.cwd);
   const store = loadStore();
   const tree = store.trees[key];
@@ -31222,6 +31283,9 @@ function handleAbandon(args) {
   return { branchId: node.id, parentId: node.parentId, status: "abandoned" };
 }
 function handleReset(args) {
+  return withStoreLock(() => handleResetLocked(args));
+}
+function handleResetLocked(args) {
   const key = treeKey(args.cwd);
   if (args.confirm !== true) {
     return { deleted: false, treeKey: key, note: "Pass confirm: true to delete this tree. Nothing was changed." };
@@ -31238,8 +31302,9 @@ var STATUS_GLYPH = { open: "\u25CB", merged: "\u2713", abandoned: "\u2715" };
 function summarize(tree) {
   const branches = Object.values(tree.nodes).filter((n) => n.parentId !== null);
   const count = (status) => branches.filter((n) => n.status === status).length;
-  const briefTokens = branches.reduce((sum, n) => sum + n.briefTokens, 0);
-  const availableTokens = branches.reduce((sum, n) => sum + n.availableTokens, 0);
+  const counted = branches.filter((n) => n.status !== "abandoned");
+  const briefTokens = counted.reduce((sum, n) => sum + n.briefTokens, 0);
+  const availableTokens = counted.reduce((sum, n) => sum + n.availableTokens, 0);
   return {
     branches: branches.length,
     open: count("open"),
@@ -31321,10 +31386,10 @@ server.registerTool(
 server.registerTool(
   "bonsai_merge",
   {
-    description: "Merge a branch back: record its distilled insight (one sentence, \u226422 words, referents resolved) and mark the branch merged. Returns the parent id and tree-wide context economics.",
+    description: "Merge a branch back: record its distilled insight (one sentence, \u226420 words, referents resolved) and mark the branch merged. Returns the parent id and tree-wide context economics.",
     inputSchema: {
       branchId: external_exports.string().min(1),
-      insight: external_exports.string().min(1).describe("The single durable conclusion, \u226422 words, referents resolved."),
+      insight: external_exports.string().min(1).describe("The single durable conclusion, \u226420 words, referents resolved."),
       cwd: cwdParam
     }
   },

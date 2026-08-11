@@ -54,9 +54,10 @@ export interface TreeTotals {
 }
 
 const DEV_KEY = 'bonsai-dev-key';
-const LIST_LIMIT = 500;
 /** Per-key cap so one garden key can't grow Neon without bound. */
 const MAX_NODES_PER_KEY = 500;
+/** Above the cap (+ the root) so a within-cap garden is always returned whole, never truncated. */
+const LIST_LIMIT = MAX_NODES_PER_KEY + 8;
 /** After a DB error, fall back to memory only briefly, then retry Neon — never permanently. */
 const DEGRADE_COOLDOWN_MS = 30_000;
 

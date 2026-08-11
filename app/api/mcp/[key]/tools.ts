@@ -72,6 +72,17 @@ function fmt(n: number): string {
   return n.toLocaleString('en-US');
 }
 
+/**
+ * User-controlled text (titles, merged insights) is rendered into the tree the model reads back.
+ * Collapse newlines and control chars to one line so a crafted insight can't forge extra tree
+ * rows or inject instruction-shaped lines into the output.
+ */
+function oneLine(text: string): string {
+  // Control chars only (incl. newlines/tabs/DEL) collapse to a space; hyphens etc. survive.
+  const stripped = Array.from(text, (ch) => (ch.codePointAt(0)! < 0x20 || ch === '\u007f' ? ' ' : ch)).join('');
+  return stripped.replace(/\s{2,}/g, ' ').trim();
+}
+
 function storageNote(): string {
   return storeMode() === 'memory' ? '\n[storage: memory only — not persisted across restarts]' : '';
 }
@@ -119,7 +130,7 @@ function summaryLine(totals: TreeTotals): string {
 }
 
 function nodeLine(node: McpNode): string {
-  const parts = [`${STATUS_GLYPH[node.status]} ${node.title ?? node.id.slice(0, 8)}`];
+  const parts = [`${STATUS_GLYPH[node.status]} ${node.title ? oneLine(node.title) : node.id.slice(0, 8)}`];
   if (node.model) parts.push(`[${node.tier} · ${node.model} · ${node.effort}]`);
   if (node.briefTokens !== null) {
     const avail = node.availableTokens !== null ? fmt(node.availableTokens) : '?';
@@ -136,7 +147,7 @@ function renderSubtree(node: McpNode, childrenOf: Map<string, McpNode[]>, prefix
     lines.push(`${prefix}${isLast ? '└─ ' : '├─ '}${nodeLine(child)}`);
     const childPrefix = `${prefix}${isLast ? '   ' : '│  '}`;
     if (child.status === 'merged' && child.insight) {
-      lines.push(`${childPrefix}↳ "${child.insight}"`);
+      lines.push(`${childPrefix}↳ "${oneLine(child.insight)}"`);
     }
     renderSubtree(child, childrenOf, childPrefix, lines);
   });
