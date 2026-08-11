@@ -48,7 +48,10 @@ async function main() {
 
     console.log(`brief: ${available} -> ${brief.briefTokens} tokens (${brief.prunedPct}% pruned)`);
     console.log(`facts:`);
-    for (const fact of brief.facts) console.log(`  - ${fact}`);
+    for (const [index, fact] of brief.facts.entries()) {
+      const sourceIds = brief.factSourceIds[index] ?? [];
+      console.log(`  - ${fact} [${sourceIds.join(', ')}]`);
+    }
     console.log(`excluded: ${brief.excludedNote}`);
 
     const routing = await route({

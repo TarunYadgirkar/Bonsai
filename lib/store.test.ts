@@ -42,14 +42,15 @@ describe('store context compatibility', () => {
     kvMocks.set.mockReset();
   });
 
-  it('normalizes legacy fixture briefs without mutating imported JSON', async () => {
+  it('loads generated fixture briefs without mutating imported JSON', async () => {
     const importedFixture = structuredClone(tree);
 
     await resetStore();
 
     const branch = listConversations().find((conversation) => conversation.brief);
-    expect(branch?.brief?.sourceRefs).toEqual([]);
-    expect(branch?.brief?.factSourceIds).toEqual(branch?.brief?.facts.map(() => []));
+    const fixtureBranch = tree.branches.find((conversation) => conversation.brief);
+    expect(branch?.brief?.sourceRefs).toEqual(fixtureBranch?.brief?.sourceRefs);
+    expect(branch?.brief?.factSourceIds).toEqual(fixtureBranch?.brief?.factSourceIds);
     expect(tree).toEqual(importedFixture);
   });
 
