@@ -92,44 +92,46 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-11T10:00:00Z by claude session (lane A)
+Updated: 2026-08-11T11:15:00Z by claude session (lane A)
 
-**Done — four subscription-riding surfaces + a designed UI. All BYOK-standalone was ruled
-out; value is riding the session the user already pays for.**
-- Engine `@bonsai/engine`: path-based compile, closed merge loop, context-first escalation,
-  honest live provider + pricing, and the **learning router** (`learning.ts`, `migrations/002`
-  — per-user priors from overrides/escalations/merges; verified live quick→Sonnet after 3
-  upgrades). 124 tests + 8/8 evals; per-package README + metadata (dist build still TODO).
-- **Claude Code plugin** (`plugin/`) — full loop on the CC subscription; marketplace install
-  verified.
-- **Chrome extension** (`extension/`) — MV3 side panel, engine bundled, strictly HITL (GET-only
-  reads + composer prefill, never sends). Verified live vs claude.ai. Own chrome-typed tsconfig,
-  excluded from root tsc, CI runs its typecheck+build+jsdom render tests.
-- **MCP connector** (`app/api/mcp/[key]`) — deployed to **bonsai-connector.vercel.app**,
-  connected + proven in-chat in Tarun’s claude.ai (Max): Claude called `bonsai_tree` live.
-  Neon `mcp_*` (`migrations/003`). URL/key + deploy gotchas in project memory (credential, not
-  in repo): Vercel new-project framework defaults to `None` (set `nextjs`); disable team SSO
-  wall; authless MCP must NOT send `WWW-Authenticate` (else claude.ai attempts OAuth DCR).
-- **Web app redesign** (`DESIGN.md`) — sumi-e ink on rice paper, the garden tree as signature,
-  season cost scale (never cost-purple), Fraunces/Instrument Sans/IBM Plex Mono. Anti-vibecode
-  verified. Deployed live at bonsai-connector.vercel.app. Extension panel restyled to match.
-- Shareable **interactive garden** artifact published (claude.ai/code/artifact); OSS docs
-  (engine/connector READMEs, CONTRIBUTING); PRODUCT.md/AGENTS truth reconciled.
+**Bonsai is a four-surface product with a defensible engine, a designed UI, and OSS-grade docs.**
 
-**In flight:** nothing — the /goal (extension + MCP + more surfaces, great non-vibecoded UI)
-is delivered.
+Engine `@bonsai/engine` (dependency-free, 168 unit tests + 10/10 evals, npm-publishable via
+`pnpm publish` → tsup `dist`; injectable logger; live-provider tests):
+- Path-based compile (briefs compose; depth-2 referents proven), closed merge loop,
+  context-first escalation, honest per-model pricing.
+- **Salience compiler**: rarity + recency + role + topic scoring (a raw keyword count would drop
+  the answer — see the stipend eval), and a strengthened live compile prompt.
+- **Learning router v2**: PER-QUESTION-KIND priors + classifier `kind`+`confidence` (confidence
+  gates shifts, blocks risky down-shifts) + `mergeProfiles()` **community cold-start** (the
+  network-effect moat). Routes feed `questionKind`; RoutingChip shows kind/confidence/learned.
+- **Rigorous stats** (`stats.ts`): tokenizer-generation 1.3x correction, measured-vs-modeled
+  provenance, per-purpose/per-model spend, savings curve.
+
+Surfaces (all ride subscriptions, zero API keys):
+- Claude Code **plugin** — full loop; marketplace install verified.
+- Chrome **extension** — MV3, strictly HITL (reads + prefills, never sends); light-theme panel.
+- **MCP connector** — deployed bonsai-connector.vercel.app, connected + proven in-chat in Tarun's
+  claude.ai (Max). Neon `mcp_*`.
+- **Web app** — REDESIGNED (sumi-e ink on rice paper, the garden signature, season cost scale;
+  see DESIGN.md), deployed live. Shareable interactive garden artifact published.
+
+Docs / OSS: recruiter README (live screenshot), `MOAT.md` (per-user + cross-user routing flywheel
++ owning the brief-fidelity benchmark), `BENCHMARK.md`, CONTRIBUTING, engine README+CHANGELOG,
+PRODUCT.md reconciled. CI gates typecheck (root+extension), tests, evals, both builds, engine dist
+smoke.
+
+**In flight:** nothing.
 
 **Blocked:** nothing.
 
-**Next (candidates; Tarun picks):**
-1. Promote the redesign + connector to `main`/the live demo when Tarun is ready (currently
-   copy-a only; bonsai-lac still runs the old build).
-2. MCP Apps interactive tree INLINE in claude.ai — the connector returns `structuredContent`
-   so it slots in; deferred (draft spec, don’t risk the live connector). The garden artifact
-   is the design reference.
-3. Live-key eval grading (ANTHROPIC_API_KEY in .env.local, hook-blocked — hand Tarun the cmd).
-4. Publishable `@bonsai/engine` (dist build + exports conditions) for a real `npm publish`.
-5. Streaming chat; connector OAuth; dogfound-driven plugin polish.
+**Next (Tarun picks):**
+1. Promote copy-a → `main`/the live demo when ready (bonsai-lac still runs the old build).
+2. Ship the population-prior aggregation pipeline server-side (the `mergeProfiles` mechanism is
+   built + tested; the anonymized cross-user data plumbing is the moat's remaining work).
+3. Publish the brief-fidelity benchmark publicly; expand scenarios.
+4. `pnpm publish` `@bonsai/engine`; MCP Apps interactive tree inline in claude.ai (connector
+   already returns structuredContent); connector OAuth; streaming chat.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
