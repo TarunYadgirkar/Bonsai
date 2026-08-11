@@ -116,18 +116,33 @@ Updated: 2026-08-11T07:30:00Z by claude session (lane A)
 - Positioning: on the loop (compiled briefs + per-branch routing + distilled merge-back —
   unclaimed by any shipped product), not the tree (commoditized).
 
-**In flight:** lane A (claude) — segment 4: relational persistence on the lane's Neon branch
-(`br-old-fog-avfznwqu`), zod-validated routes, guarded reset.
+**Done (continued, same session):**
+- Segment 4 (`abdc262`): relational Neon store (per-row, migrations/, restart-survival PROVEN,
+  commit failures 503), zod route boundary, guarded reset. Security review: no HIGH/CRITICAL;
+  its two LOW fixes applied.
+- Segment 5 (`837c805`): eval harness — 7/7 incl. the depth-2 referent proof through composed
+  briefs; GitHub Actions CI gating typecheck+tests+evals+build.
+- Segment 6 (`2d3d03d`): **working Claude Code plugin** in `plugin/` + root marketplace.json —
+  verified end-to-end headless (fork → honest punt → widen → merge at 97.6% pruned) on
+  subscription auth. MCP tree server smoke 12/12.
+- Segment 7 (`32076e1`..`3362e64`): web demo truth pass (visible errors, server-truth pins,
+  markdown, insights strip, truth badges, honest economics), PRODUCT.md rewritten as
+  spec+roadmap, README/AGENTS updated, DEMO.md comment sweep. React+TS reviews: both HIGHs
+  fixed (pending-mode race, alert semantics) + both MEDIUMs (memoized markdown bubbles,
+  focusable routing card). CI green.
+
+**In flight:** nothing — all planned segments shipped.
 
 **Blocked:** nothing.
 
-**Next:**
-1. Segment 4 — relational schema (conversations/messages/insights/logs) replacing the one-blob
-   `store_snapshot`; migration SQL committed; in-memory backend stays for keyless dev.
-2. Segment 5 — eval harness proving referent resolution (the moat; `try-engine.ts` is the germ).
-3. Segment 6 — Claude Code plugin: branch = subagent with compiled brief (model+effort via
-   agent frontmatter), merge = distilled report, tree via bundled MCP server.
-4. Segment 7 — web demo truth pass + PRODUCT.md rewrite (still carries hackathon framing).
+**Next (candidates for a fresh session, Tarun picks):**
+1. Dogfood the plugin in real Claude Code sessions; polish the skill flow from friction found.
+2. Live-key eval grading (needs ANTHROPIC_API_KEY in .env.local — hook-blocked for agents,
+   hand Tarun the command) to grade real compiler output vs the mock gate.
+3. claude.ai connector (remote MCP + MCP Apps tree UI) — hosting + OAuth groundwork.
+4. Extract `@bonsai/engine` publishable (add exports conditions/build), marketplace repo split
+   for the plugin, skillrank.dev listing.
+5. Streaming chat for the web demo.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
