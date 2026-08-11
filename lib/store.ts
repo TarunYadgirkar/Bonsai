@@ -209,19 +209,19 @@ function isStoreSnapshot(value: unknown): value is StoreSnapshot {
   const snapshot = value as unknown as StoreSnapshot;
   const ids = snapshot.conversations.map((conversation) => conversation.id);
   if (new Set(ids).size !== ids.length || !ids.includes(value.rootId)) return false;
-  if (!hasValidTree(snapshot.conversations, snapshot.rootId)) return false;
+  if (!hasValidForest(snapshot.conversations, snapshot.rootId)) return false;
   return snapshot.seq >= maxGeneratedSequence(snapshot);
 }
 
-function hasValidTree(conversations: StoredConversation[], rootId: string): boolean {
+function hasValidForest(conversations: StoredConversation[], rootId: string): boolean {
   const byId = new Map(conversations.map((conversation) => [conversation.id, conversation]));
   if (byId.get(rootId)?.parentId !== null) return false;
 
   return conversations.every((conversation) => {
     const visited = new Set<string>();
     let cursor: StoredConversation | undefined = conversation;
-    while (cursor.id !== rootId) {
-      if (visited.has(cursor.id) || cursor.parentId === null) return false;
+    while (cursor.parentId !== null) {
+      if (visited.has(cursor.id)) return false;
       visited.add(cursor.id);
       cursor = byId.get(cursor.parentId);
       if (!cursor) return false;

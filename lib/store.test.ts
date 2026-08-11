@@ -19,8 +19,10 @@ import {
   getConversation,
   listConversations,
   loadStore,
+  nextId,
   putConversation,
   resetStore,
+  saveStore,
   visibleContextFor,
 } from './store';
 
@@ -155,6 +157,42 @@ describe('store context compatibility', () => {
     expect(visibleContextFor('missing-conversation')).toBeUndefined();
   });
 
+  it('round-trips a persisted forest with multiple independent roots', async () => {
+    await resetStore();
+    const independentRootId = nextId('conv');
+    const independentChildId = nextId('branch');
+    const independentRoot: Conversation = {
+      id: independentRootId,
+      title: 'Independent root',
+      parentId: null,
+      messages: [],
+      insights: [],
+      pinnedTier: null,
+      archived: false,
+    };
+    const independentChild: Conversation = {
+      id: independentChildId,
+      title: 'Independent child',
+      parentId: independentRootId,
+      messages: [],
+      insights: [],
+      pinnedTier: null,
+      archived: false,
+    };
+    putConversation(independentRoot);
+    putConversation(independentChild);
+    await saveStore();
+    const savedSnapshot = kvMocks.set.mock.calls.at(-1)?.[1] as string | undefined;
+    if (!savedSnapshot) throw new Error('missing saved snapshot');
+
+    await resetStore();
+    kvMocks.get.mockResolvedValueOnce({ status: 'hit', value: savedSnapshot });
+    await loadStore();
+
+    expect(getConversation(independentRootId)).toEqual(independentRoot);
+    expect(getConversation(independentChildId)).toEqual(independentChild);
+  });
+
   it.each([
     {
       name: 'nested factSourceIds',
@@ -184,7 +222,22 @@ describe('store context compatibility', () => {
       name: 'parent cycle',
       mutate: (snapshot: Record<string, unknown>) => {
         const conversations = snapshot.conversations as Array<Record<string, unknown>>;
+        conversations[1].parentId = 'invalid-child';
+      },
+    },
+    {
+      name: 'orphan parent',
+      mutate: (snapshot: Record<string, unknown>) => {
+        const conversations = snapshot.conversations as Array<Record<string, unknown>>;
+        conversations[1].parentId = 'missing-parent';
+      },
+    },
+    {
+      name: 'non-root primary root',
+      mutate: (snapshot: Record<string, unknown>) => {
+        const conversations = snapshot.conversations as Array<Record<string, unknown>>;
         conversations[0].parentId = 'invalid-child';
+        conversations[1].parentId = null;
       },
     },
     {
