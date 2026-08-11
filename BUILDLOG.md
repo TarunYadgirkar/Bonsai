@@ -3,6 +3,32 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Engine intelligence + moat + OSS A- (advanced-features round)
+
+Driven by "make the advanced stuff insane; explore the moat; A+ open source; recruiter-grade."
+Four subagents in file-partitioned waves; I owned the router/learning/moat core by hand.
+
+- **Salience compiler** (`llm.ts` mock + `compiler.ts` live prompt): brief facts now ranked by
+  term rarity (inverse sentence-frequency) + recency + speaker role + topic mention, not flat
+  keyword count. Differential eval: a rare-term stipend sentence ("Hertz … $55,000") among
+  common-word noise — a raw count drops it from the brief; salience ranks it first.
+- **Learning router v2** (`learning.ts`, `types.ts`, `router.ts`): PER-QUESTION-KIND priors
+  (lookup/synthesis/comparison/reasoning/code/creative/other); classifier emits `kind` +
+  `confidence`; confidence gates the shift and blocks risky down-shifts; **`mergeProfiles()`
+  community cold-start** — the network-effect moat (a population prior new users inherit). Routes
+  feed `questionKind` into feedback; RoutingChip surfaces kind/confidence/learned.
+- **Rigorous stats** (`stats.ts`, `tokens.ts`, `accounting.ts`): tokenizer-generation 1.3x
+  correction for 5-family, measured-vs-modeled `TokenFigure` provenance (routes pass
+  `measured: !mock`), per-purpose/per-model spend, savings curve. Economics panel surfaces it.
+- **Moat**: `MOAT.md` — honest read (engine/tree are NOT moats; the per-user→cross-user routing
+  flywheel + owning the brief-fidelity benchmark ARE). `BENCHMARK.md` formalizes the eval.
+- **OSS A-**: `@bonsai/engine` publishable via `pnpm publish` (tsup `dist` + `publishConfig`
+  swap; workspace source resolution untouched so build stays green); injectable logger
+  (`logger.ts`, `setEngineLogger`/`silenceEngine`); live-provider mocked-fetch tests; CHANGELOG;
+  CI dist-build smoke. Recruiter README with live screenshot (assets/generated/).
+- Gates: 168 unit tests, 10/10 evals, root build, extension build, engine tsup dist — all green
+  in CI. `pnpm publish` is the publish path (npm doesn't honor the `publishConfig` field-swap).
+
 ## 2026-08-11 — Web app redesign: "sumi-e ink on rice paper"
 
 The hackathon dark theme (and its relics — "Person B owns app/api") replaced by a genuinely

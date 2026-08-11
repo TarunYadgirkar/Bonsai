@@ -19,20 +19,44 @@ Lane A's bet: **make the pitch true, then put it on a surface that rides the use
 Claude subscription.** The engine (tree model + path-based context assembly + honest routing
 economics) is the durable asset; every surface is thin once it is solid.
 
-## Segments
+## Current state (2026-08-11) — READ AGENTS.md `## Ongoing` first
+
+Everything below is **DONE and on `copy-a`** (not promoted to `main`; bonsai-lac still runs the
+old build). Full state + "next" live in `AGENTS.md → ## Ongoing`; the record is `BUILDLOG.md`.
+168 unit tests, 10/10 evals, CI green.
+
+## Segments — Phase 1 (make the pitch true, put it on subscription surfaces) — ALL DONE
 
 | # | Segment | State |
 |---|---------|-------|
-| 0 | Toolchain (tsx, vitest, typecheck) + this memo | in progress |
-| 1 | Extract `@bonsai/engine` package — injected LLM fn, Store interface, split types, unit tests | pending |
-| 2 | True semantics — path-based compile, closed merge loop, context-first escalation, brief budgeting | pending |
-| 3 | Live provider fixed — per-model param policy, real effort mapping, streaming, honest accounting, correct pricing | pending |
-| 4 | Relational persistence on Neon (per-row writes, ULIDs) + API hardening (zod, error wrapper, guarded reset) | pending |
-| 5 | Eval harness — referent-resolution assertions, routing evals, cost benchmark from the fixture pipeline | pending |
-| 6 | Subscription-riding surface — chosen after research (leading: CLI/TUI on Claude Agent SDK, which rides `claude` login; Chrome extension and remote-MCP connector under evaluation) | research running |
-| 7 | Web demo truth pass — streaming, error surfacing, markdown, persisted pins, honest economics; PRODUCT.md rewrite | pending |
+| 0 | Toolchain (tsx, vitest, typecheck) + this memo | done |
+| 1 | Extract `@bonsai/engine` package — injected LLM fn, Store interface, split types, unit tests | done |
+| 2 | True semantics — path-based compile, closed merge loop, context-first escalation, brief budgeting | done |
+| 3 | Live provider fixed — per-model param policy, real effort mapping, honest accounting, correct pricing | done |
+| 4 | Relational persistence on Neon (per-row, random ids) + API hardening (zod, error wrapper, guarded reset) | done |
+| 5 | Eval harness — referent-resolution + routing + salience benchmark (`BENCHMARK.md`) | done |
+| 6 | Subscription surfaces: **plugin** (primary) + **MCP connector** (deployed+wired live) + **Chrome extension** (HITL) | done |
+| 7 | Web demo truth pass — error surfacing, markdown, persisted pins, honest economics; PRODUCT.md rewrite | done |
+
+## Segments — Phase 2 (recruiter-grade, moat, insane engine) — ALL DONE
+
+| # | Segment | State |
+|---|---------|-------|
+| 8 | Web app **redesign** — sumi-e ink on rice paper, garden signature, season cost scale (`DESIGN.md`); deployed | done |
+| 9 | **Learning router v2** — per-question-kind priors + classifier confidence + `mergeProfiles()` community cold-start | done |
+| 10 | **Salience compiler** + **rigorous stats** (tokenizer-gen correction, measured-vs-modeled provenance) | done |
+| 11 | **Moat** (`MOAT.md`) + recruiter README + **`@bonsai/engine` publishable** (tsup dist, `pnpm publish`) + logger + provider tests | done |
 
 Each segment: build clean → commit → push. Reviews per repo auto-routing.
+
+## Next (a fresh session picks; nothing in flight)
+
+1. Promote `copy-a` → `main`/live demo when Tarun is ready.
+2. **Population-prior data pipeline** (the moat's remaining work) — server-side anonymized
+   aggregation feeding `mergeProfiles`; the engine mechanism is built + tested, the plumbing isn't.
+3. Publish the brief-fidelity benchmark publicly; expand scenarios.
+4. `pnpm publish @bonsai/engine`; MCP Apps interactive tree inline in claude.ai (connector already
+   returns `structuredContent`); connector OAuth; streaming chat.
 
 ## Surface decision (segment 6) — DECIDED 2026-08-11
 
