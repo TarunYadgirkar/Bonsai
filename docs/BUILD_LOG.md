@@ -236,3 +236,19 @@ Verification evidence:
 Next:
 
 - enforce fixture isolation in Task 6, then prove independent-process restart survival in Task 7.
+
+## 2026-08-11 — Independent-process restart survival
+
+Completed:
+
+- added a bounded two-process harness that invokes the exported conversation, chat, branch, merge, state, persistence, and economics route handlers with real `Request` objects;
+- process A persisted an independent root and root chat, an answered branch, an active merged insight with archival, and a nested branch; process B loaded the exact normalized checkpoint, chatted on the nested branch, and reread authoritative state;
+- isolated child processes with an explicit environment allowlist, an absolute temporary data directory, explicit file selection, cleared fixture, hosting, KV, and inference-provider variables, safe worker failures, bounded execution, and exact cleanup;
+- proved immutable parent and nested briefs, nested source references, merged evidence and source-message IDs, independent tree depth and archive state, fixture preservation, exact completion-purpose order, manual Fable/max routing, contiguous global sequence allocation, and ready durable revisions 5 then 6.
+
+Verification evidence:
+
+- the initial focused RED failed only because `scripts/persistence-restart-worker.ts` did not exist;
+- review-strengthened RED proved the test rejected missing complete published-state capture after the post-restart chat;
+- the focused restart test passed across two actual Node processes; full Vitest passed 248 tests, and strict TypeScript, full ESLint, the webpack production build, fixture contract, diff check, and focused secret/debug scans passed;
+- code and TypeScript review findings about incomplete accepted-state comparisons and selector documentation were fixed, then both re-reviews approved with no remaining Critical or Important findings; security review also approved with no Critical or Important findings.

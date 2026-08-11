@@ -23,7 +23,9 @@ Originally a one-day hackathon build; now being rebuilt into something people ca
 
 ## Stack
 
-Next.js (App Router) + TypeScript + Tailwind, deployed on Vercel. Inference goes through `lib/provider.ts` — set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` and it is live; set none and a grounded mock with realistic token math takes over, so the app runs with zero configuration. A configured provider failure is explicit and never masquerades as mock success. Store persistence is Neon Postgres via `lib/kv.ts`; missing storage configuration uses memory.
+Next.js (App Router) + TypeScript + Tailwind, deployed on Vercel. Inference goes through `lib/provider.ts` — set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` and it is live; set none and a grounded mock with realistic token math takes over, so the app runs with zero configuration. A configured provider failure is explicit and never masquerades as mock success. Local development uses the manifest-last file backend in `BONSAI_DATA_DIR` (default `.bonsai`); Vercel or an explicit KV selection uses configured Neon or Upstash storage and never falls back on failure. Tests and the supported non-production root-only fixture workflow use memory, which can also be selected explicitly in non-production with `BONSAI_PERSISTENCE_BACKEND=memory`.
+
+`lib/persistence/restart.test.ts` launches two independent Node processes against one temporary file store. The first creates a second root tree, chats, branches, merges and archives, creates a nested branch, and reads state, persistence, and economics. The second reloads the exact accepted snapshot, chats on the nested branch, and rereads it. The contract locks immutable briefs and evidence references, tree depth and archive state, exact inference-purpose order and sequence continuation, manual routing, fixture preservation, and ready durable revisions 5 then 6.
 
 ## Regenerate the demo fixture
 

@@ -34,7 +34,7 @@ That is the interesting problem and the thing worth getting right. Surfaces are 
 
 - Next.js (App Router) + TypeScript + Tailwind. Vercel deploys `main` only (`vercel.json` → `git.deploymentEnabled`).
 - Inference: `lib/provider.ts`. One of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` makes it live; none means the mock in `lib/llm.ts`. A configured provider failure returns a safe error and never silently switches to mock.
-- Store persistence: Neon Postgres via `lib/kv.ts`, table `store_snapshot`.
+- Store persistence: manifest-last local files by default; Neon Postgres or Upstash through the explicit/Vercel KV backend.
 
 There is deliberately **no durable-memory layer** right now. The hackathon one was a sponsor integration and was removed; whether cross-conversation memory is needed at all, and what should provide it, is an open question. Do not add one back without deciding that first.
 
@@ -52,9 +52,9 @@ Connection strings come from the Neon console. Put the one for your lane in `.en
 
 ## Mock-first rule
 
-Every external dependency sits behind an interface with a mock that activates automatically when its env vars are missing. `lib/llm.ts` returns canned-but-realistic responses with real token math; `lib/kv.ts` falls back to in-memory. The app must fully run with zero keys configured.
+Every external dependency sits behind an interface. `lib/llm.ts` returns canned-but-realistic responses with real token math when provider keys are missing. Persistence defaults to local files outside production; tests, the non-production root-only fixture workflow, or an explicit non-production `BONSAI_PERSISTENCE_BACKEND=memory` selection use memory. The app must fully run with zero keys configured.
 
-**`lib/kv.ts` swallows errors by design.** A wrong `DATABASE_URL` degrades to in-memory *silently* and looks identical to no config. Confirm persistence with a restart-survival test, never by assuming.
+Persistence failures are typed: local launches default to the file backend, and configured KV failures do not fall back to memory. `lib/persistence/restart.test.ts` proves accepted local mutations survive a fresh Node process and preserve the generated fixture alongside an independent root tree. Confirm persistence with that process-boundary contract, never by assuming from a successful write response.
 
 ## Working rules
 
