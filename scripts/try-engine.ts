@@ -4,12 +4,15 @@
  * Run:  npx tsx --env-file=.env.local scripts/try-engine.ts
  * With no provider keys this exercises mock mode, which is a valid pass.
  */
+import {
+  MODEL_TIERS,
+  compileBrief,
+  completeWithEscalation,
+  messagesTokens,
+  providerName,
+  route,
+} from '@bonsai/engine';
 import seed from '../fixtures/seed-conversation.json';
-import { compileBrief } from '../lib/compiler';
-import { MODEL_TIERS } from '../lib/models';
-import { providerName } from '../lib/provider';
-import { completeWithEscalation, route } from '../lib/router';
-import { messagesTokens } from '../lib/tokens';
 import type { SeedConversation } from '../lib/types';
 
 const fixture = seed as SeedConversation;

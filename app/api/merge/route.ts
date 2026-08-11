@@ -1,5 +1,5 @@
-import { complete } from '@/lib/llm';
-import { INTERNAL_TIER, buildLog, mockInsight } from '@/lib/mock';
+import { INTERNAL_TIER, complete, estimateTokens, messagesTokens } from '@bonsai/engine';
+import { buildLog } from '@/lib/accounting';
 import {
   appendInsight,
   flushLogs,
@@ -10,7 +10,6 @@ import {
   saveStore,
   updateConversation,
 } from '@/lib/store';
-import { estimateTokens, messagesTokens } from '@/lib/tokens';
 import type {
   ApiError,
   Conversation,
@@ -83,7 +82,7 @@ export async function POST(request: Request) {
  * Cheapest tier, per AGENTS.md rule 7 — we are demoing cost discipline.
  */
 async function distill(branch: Conversation): Promise<string> {
-  if (!branch.messages.length) return mockInsight(branch.brief?.selection ?? branch.title);
+  if (!branch.messages.length) return fallbackInsight(branch.brief?.selection ?? branch.title);
 
   const result = await complete({
     tier: INTERNAL_TIER,
@@ -104,5 +103,10 @@ async function distill(branch: Conversation): Promise<string> {
   });
 
   const line = result.text.trim().split('\n')[0]?.replace(/^["']|["']$/g, '') ?? '';
-  return line || mockInsight(branch.brief?.selection ?? branch.title);
+  return line || fallbackInsight(branch.brief?.selection ?? branch.title);
+}
+
+/** Last resort when the branch is empty or the distiller returns nothing. */
+function fallbackInsight(topic: string): string {
+  return `No durable conclusion reached on ${topic || 'this branch'}.`;
 }

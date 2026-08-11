@@ -9,8 +9,7 @@
  * change. Any failure at runtime degrades to the mock, so a red line here means "that rung will be
  * mock on stage", not "the app is broken".
  */
-import { MODELS } from '../lib/models';
-import { providerComplete, providerSummary } from '../lib/provider';
+import { MODELS, providerComplete, providerSummary } from '@bonsai/engine';
 
 async function main(): Promise<void> {
   const summary = providerSummary();

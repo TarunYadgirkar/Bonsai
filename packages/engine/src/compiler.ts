@@ -6,7 +6,7 @@
  * knowing that "apps" means Free Ventures applications. If the brief leaves a dangling
  * pronoun, a small model cannot answer it and the cheap route becomes unsafe.
  */
-import { complete } from './llm';
+import { complete as defaultComplete, type CompleteFn } from './llm';
 import { INTERNAL_TIER } from './models';
 import { estimateTokens, prunedPct } from './tokens';
 import type { ContextBrief, Message, UserProfile } from './types';
@@ -23,15 +23,22 @@ export interface CompileParams {
   availableTokens: number;
 }
 
+export interface EngineDeps {
+  complete: CompleteFn;
+}
+
 interface CompilerOutput {
   facts: string[];
   excludedNote: string;
 }
 
-export async function compileBrief(params: CompileParams): Promise<ContextBrief> {
+export async function compileBrief(
+  params: CompileParams,
+  deps: EngineDeps = { complete: defaultComplete },
+): Promise<ContextBrief> {
   const { briefId, branchId, selection, question, availableTokens } = params;
 
-  const parsed = await runCompiler(params);
+  const parsed = await runCompiler(params, deps);
   const facts = parsed.facts.slice(0, MAX_FACTS);
   const markdown = renderBrief({ selection, question, facts, profile: params.profile });
   const briefTokens = estimateTokens(markdown);
@@ -49,7 +56,7 @@ export async function compileBrief(params: CompileParams): Promise<ContextBrief>
   };
 }
 
-async function runCompiler(params: CompileParams): Promise<CompilerOutput> {
+async function runCompiler(params: CompileParams, deps: EngineDeps): Promise<CompilerOutput> {
   const transcript = params.parentMessages
     .map((m) => `${m.role}: ${m.content}`)
     .join('\n\n');
@@ -58,7 +65,7 @@ async function runCompiler(params: CompileParams): Promise<CompilerOutput> {
     ? `${params.profile.name} — ${params.profile.context} Goals: ${params.profile.goals.join('; ')}.`
     : 'unknown';
 
-  const result = await complete({
+  const result = await deps.complete({
     tier: INTERNAL_TIER,
     maxTokens: 600,
     messages: [

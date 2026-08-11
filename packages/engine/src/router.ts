@@ -5,7 +5,7 @@
  * already minimized context by the time we get here, so this decides effort + model, and
  * escalates only when the cheap answer fails a sanity check.
  */
-import { complete } from './llm';
+import { complete as defaultComplete, type CompleteFn } from './llm';
 import {
   INTERNAL_TIER,
   CEILING_MODEL,
@@ -48,7 +48,16 @@ export interface RouteParams {
   mode?: ModeSelection;
 }
 
-export async function route(params: RouteParams): Promise<RoutingDecision> {
+export interface RouterDeps {
+  complete: CompleteFn;
+}
+
+const DEFAULT_DEPS: RouterDeps = { complete: defaultComplete };
+
+export async function route(
+  params: RouteParams,
+  deps: RouterDeps = DEFAULT_DEPS,
+): Promise<RoutingDecision> {
   const { question, contextTokens, pinnedTier, mode } = params;
 
   // An explicit pick is the user's own labelled example — skip the classifier entirely.
@@ -76,7 +85,7 @@ export async function route(params: RouteParams): Promise<RoutingDecision> {
     });
   }
 
-  const { complexity, why } = await classify(question, contextTokens);
+  const { complexity, why } = await classify(question, contextTokens, deps);
   const tier = TIER_BY_COMPLEXITY[complexity];
 
   return decision({
@@ -92,8 +101,9 @@ export async function route(params: RouteParams): Promise<RoutingDecision> {
 async function classify(
   question: string,
   contextTokens: number,
+  deps: RouterDeps,
 ): Promise<{ complexity: Complexity; why: string }> {
-  const result = await complete({
+  const result = await deps.complete({
     tier: INTERNAL_TIER,
     maxTokens: 120,
     messages: [
@@ -173,17 +183,20 @@ export function answerFailsSanityCheck(answer: string): boolean {
   return answer.trim().length < 40 || PUNT.test(answer);
 }
 
-export async function completeWithEscalation(params: {
-  routing: RoutingDecision;
-  systemPrompt: string;
-  userPrompt: string;
-}): Promise<{ text: string; routing: RoutingDecision; inputTokens: number; outputTokens: number }> {
+export async function completeWithEscalation(
+  params: {
+    routing: RoutingDecision;
+    systemPrompt: string;
+    userPrompt: string;
+  },
+  deps: RouterDeps = DEFAULT_DEPS,
+): Promise<{ text: string; routing: RoutingDecision; inputTokens: number; outputTokens: number }> {
   const messages = [
     { role: 'system' as const, content: params.systemPrompt },
     { role: 'user' as const, content: params.userPrompt },
   ];
 
-  const first = await complete({
+  const first = await deps.complete({
     tier: params.routing.tier,
     model: params.routing.model,
     effort: params.routing.effort,
@@ -218,7 +231,7 @@ export async function completeWithEscalation(params: {
   const upgradedTier = upgraded ?? params.routing.tier;
   const upgradedModel = upgraded ? TIER_DEFAULTS[upgraded].model : CEILING_MODEL;
   const upgradedEffort = upgraded ? TIER_DEFAULTS[upgraded].effort : params.routing.effort ?? 'high';
-  const second = await complete({
+  const second = await deps.complete({
     tier: upgradedTier,
     model: upgradedModel,
     effort: upgradedEffort,

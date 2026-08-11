@@ -1,0 +1,11 @@
+{
+  "name": "@bonsai/engine",
+  "version": "0.1.0",
+  "description": "Tree-structured conversation engine: path-based context compilation, model+effort routing, cherry-pick merge.",
+  "type": "module",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "sideEffects": false
+}

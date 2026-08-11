@@ -8,18 +8,14 @@ import {
   rootId,
   saveStore,
 } from '@/lib/store';
-import type { ApiError, Conversation, BranchNode } from '@/lib/types';
+import type {
+  ApiError,
+  Conversation,
+  NewConversationRequest,
+  NewConversationResponse,
+} from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
-
-export interface NewConversationRequest {
-  title?: string;
-}
-
-export interface NewConversationResponse {
-  node: BranchNode;
-  conversation: Conversation;
-}
 
 /**
  * Start a fresh root conversation — a second tree, not a branch of the first.

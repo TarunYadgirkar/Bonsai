@@ -1,4 +1,4 @@
-import { EFFORTS, MODELS, TIER_DEFAULTS, TIER_LABEL } from '@/lib/models';
+import { EFFORTS, MODELS, TIER_DEFAULTS, TIER_LABEL } from '@bonsai/engine';
 
 /**
  * The mode picker's catalog: three models × four effort levels, plus Auto. Additive route (M5) so

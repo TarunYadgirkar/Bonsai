@@ -34,16 +34,34 @@ economics) is the durable asset; every surface is thin once it is solid.
 
 Each segment: build clean → commit → push. Reviews per repo auto-routing.
 
-## Surface decision (segment 6) — criteria
+## Surface decision (segment 6) — DECIDED 2026-08-11
 
-- Must draw on the user's existing monthly subscription, not an API key.
-- Must be legitimate — no fragile reverse-engineering of private endpoints as the primary bet.
-- Must exercise the engine (briefs, routing, merge), not just decorate a chat window.
+Research (5-agent sweep, sources in BUILDLOG) settled it:
 
-Current lean: **Claude Agent SDK CLI/plugin** — Agent SDK sessions authenticate via the local
-`claude` login (subscription-backed), fork/branch maps naturally onto sessions, and a Claude
-Code plugin can make "branch = subagent with a compiled brief, merge = distilled insight back"
-real inside coding sessions. Extension/MCP findings may revise this.
+**Primary: Claude Code plugin.** The one surface where the full Bonsai loop runs on the user's
+existing Pro/Max subscription, sanctioned: branch = plugin subagent spawned with a compiled
+brief (model + effort are literal agent-frontmatter fields — Bonsai's router maps 1:1), merge =
+the subagent's distilled report returning to the parent (a SubagentStop prompt-hook can enforce
+the one-insight contract), tree persisted by a bundled MCP server. Distribution = GitHub
+marketplace repo, `/plugin install`. Zero hosting.
+
+**Fast-follow: claude.ai custom connector (remote MCP) + MCP Apps tree UI.** claude.ai/Desktop
+audience on their own subscription — but no MCP sampling exists there, so the connector can only
+hold tree state, compile briefs, and render the tree (MCP Apps GA'd Jan 2026); reasoning stays
+in the visible conversation. Needs public hosting + OAuth. Same engine core.
+
+**Cut: Chrome extension over claude.ai.** Auto-sending through the consumer session is the
+exact "automated or non-human means" pattern Anthropic banned accounts for (April 2026,
+OpenClaw wave) — the risk lands on the user's account. Read-only tree viewers survive, but they
+don't deliver the loop. Revisit only as a human-in-the-loop visualizer later.
+
+**Positioning (from the competitive sweep):** branching is commoditized — ChatGPT, Gemini,
+LibreChat, Msty, TypingMind all ship full-copy "Save-As" branches, and nobody ships compiled
+briefs, per-branch auto-routing, or a distilled merge-back contract. Position on the loop, not
+the tree. On subscription surfaces the economics pitch is rate-limit headroom + no context
+poisoning, not dollars. Sherlock risk is real (native /fork rewritten twice in June 2026;
+anthropics/claude-code#32631 specs fork+merge+tree) — the moat is brief quality + merge
+contract, so the segment-5 eval harness is strategic, not hygiene.
 
 ## Non-goals for this lane (for now)
 

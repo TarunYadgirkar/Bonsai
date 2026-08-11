@@ -40,6 +40,12 @@ export interface CompleteResult {
   servedBy?: string;
 }
 
+/**
+ * The engine's inference seam. The default implementation below chains live provider → mock;
+ * surfaces (CLI, tests) can inject their own — the compiler and router take one as a dependency.
+ */
+export type CompleteFn = (params: CompleteParams) => Promise<CompleteResult>;
+
 export async function complete(params: CompleteParams): Promise<CompleteResult> {
   const { tier, messages } = params;
   const model = params.model ?? MODEL_TIERS[tier];

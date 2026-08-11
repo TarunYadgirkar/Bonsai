@@ -1,18 +1,20 @@
+import {
+  availableTokensFor as availableTokensForIn,
+  buildTree as buildTreeOf,
+  prunedPct,
+} from '@bonsai/engine';
 import seed from '@/fixtures/seed-conversation.json';
 import tree from '@/fixtures/seed-tree.json';
 import { kvEnabled, kvGet, kvSet } from './kv';
 import { appendInferenceLogs } from './inference-log';
-import { messagesTokens, prunedPct } from './tokens';
 import type {
   BranchNode,
   Conversation,
-  ContextBrief,
   InferenceLog,
   Insight,
   Message,
   SeedConversation,
   StateResponse,
-  Tier,
 } from './types';
 
 /**
@@ -219,61 +221,12 @@ export function listLogs(): InferenceLog[] {
 
 /** Full parent history a branch could have inherited — the baseline every saving is measured against. */
 export function availableTokensFor(parentId: string | null): number {
-  if (!parentId) return 0;
-  const parent = getConversation(parentId);
-  if (!parent) return 0;
-  const profileTokens = parent.profile
-    ? messagesTokens([
-        {
-          id: 'profile',
-          role: 'user',
-          content: [parent.profile.name, parent.profile.context, ...parent.profile.goals].join(' '),
-        },
-      ])
-    : 0;
-  return messagesTokens(parent.messages) + profileTokens + availableTokensFor(parent.parentId);
-}
-
-function lastTier(c: Conversation): Tier | null {
-  for (let i = c.messages.length - 1; i >= 0; i -= 1) {
-    const routing = c.messages[i].routing;
-    if (routing) return routing.tier;
-  }
-  return null;
-}
-
-function depthOf(c: Conversation): number {
-  let depth = 0;
-  let cursor = c.parentId;
-  while (cursor) {
-    const parent = getConversation(cursor);
-    if (!parent) break;
-    depth += 1;
-    cursor = parent.parentId;
-  }
-  return depth;
+  return availableTokensForIn(parentId, (id) => store().conversations.get(id));
 }
 
 /** Derived projection for the sidebar. Never stored — always recomputed. */
 export function buildTree(): BranchNode[] {
-  const all = listConversations();
-  return all.map((c) => {
-    const brief: ContextBrief | undefined = c.brief;
-    return {
-      id: c.id,
-      title: c.title,
-      parentId: c.parentId,
-      childIds: all.filter((x) => x.parentId === c.id).map((x) => x.id),
-      depth: depthOf(c),
-      messageCount: c.messages.length,
-      pinnedTier: c.pinnedTier,
-      archived: c.archived,
-      availableTokens: brief ? brief.availableTokens : null,
-      inheritedTokens: brief ? brief.briefTokens : null,
-      prunedPct: brief ? brief.prunedPct : null,
-      lastTier: lastTier(c),
-    };
-  });
+  return buildTreeOf(listConversations());
 }
 
 export { prunedPct };
