@@ -3,6 +3,26 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Learning router (the pitched differentiator, now real)
+
+The one feature the deck sold that the rebuild had stripped (was the EverOS sponsor integration):
+the router that **learns**. `packages/engine/src/learning.ts` — a transparent, explainable
+per-user profile:
+- Signals, all already logged, all real behavior: override (manual pick moved off the branch's
+  last auto tier), escalation (cheap answer failed → started too low), merge (answer kept → tier
+  sufficient), abandon (weak, confidence-only).
+- Once ≥3 directional samples agree ≥60% on a classified tier, the router pre-empts the
+  classifier and shifts that tier, with a one-sentence reason ("You've upgraded quick picks 7/7
+  times, so this one starts at thoughtful").
+- Wired into `route()` (auto path only, after classification); chat/branch/merge routes emit
+  feedback; profile persisted to Neon (`routing_profiles`, `migrations/002`) with memory
+  fallback. **Verified live**: 3 manual upgrades → an auto lookup shifted quick→Sonnet 5 with
+  the learned explanation, persisted across the request.
+- Also fixed a real bug found in testing: an explicit "auto" pick now unpins the branch THIS
+  turn (route() was reading a stale pre-update `pinnedMode`).
+- Coverage: 15 new unit tests + an eval case (cold=quick → warm=thoughtful, learned=true). 114
+  tests, 8/8 evals.
+
 ## 2026-08-11 — Segment 7: web demo truth pass + docs made honest
 
 - UI: after-load errors now visible (dismissible banner) and a failed send restores the draft
