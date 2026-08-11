@@ -72,22 +72,42 @@ Every external dependency sits behind an interface with a mock that activates au
 
 ## Ongoing
 
-Updated: 2026-08-10
+Updated: 2026-08-11T07:30:00Z by claude session (lane A)
 
-**Done this session:**
-- History rewritten so every commit is authored by Tarun Yadgirkar; all `Co-Authored-By: Claude` trailers stripped.
-- Repo is private. Branch layout above created.
-- The dead sponsor integration was removed (`98e91d0`) — barred on the trial account and inert behind an unset flag, so it was entirely dead code. Do not reintroduce it. The local JSON log writer it contained survives as `lib/inference-log.ts`; the integration itself remains only in `hackathon-copy`.
-- Vercel restricted to deploying `main` (`b3ddd26`).
-- New Neon project `bonsai` (`wild-feather-67393800`) with per-lane branches.
-- Hackathon-only docs (`PLAN.md`, `PROMPTS.md`, `DEMO.md`, `docs/`) deleted here; they remain in `hackathon-copy`.
-- The durable-memory sponsor integration removed along with its types (`ContextBrief.memoryIds`, `Insight.memoryId`) and the "· durable memory" tag.
+**Done:**
+- Toolchain + lane plan: tsx/vitest/typecheck, `PLAN.md`, `BUILDLOG.md` (`8e9acc8`).
+- Engine extracted to `@bonsai/engine` npm-workspace package (packages/engine) with injectable
+  inference seam and 59-test suite; dead M0 stubs deleted (`26f64b2`). Review: no HIGH/CRITICAL.
+- Engine semantics made true (`ded8651`): path-based compile (parent brief + insights +
+  anchor-scoped transcript — briefs compose recursively, depth≥2 referents verified live),
+  merge loop closed (insights enter chat context + sibling compiles), context-first escalation
+  (classifier judges brief coverage; widen-before-upgrade; manual picks never overridden),
+  brief token budget, anchored forks, persisted branch pins. 93 tests.
+- Live provider fixed + honest accounting (`1f768b3`): per-model param policy (sampling 400s on
+  5-family — 3 of 4 rungs were silently mocking with a live key), real `output_config.effort`,
+  effort-keyed max_tokens/timeouts, Fable refusal handling, verified pricing (old table
+  overstated savings ~3x), servedBy-rate pricing for OpenAI/xAI. 99 tests.
 
-**Open:**
-- Surface direction undecided — extension vs CLI plugin vs something else. `copy-a` and `copy-b` exist to explore it.
-- Provider strategy unresolved. The goal is to draw on a user's existing monthly subscription rather than requiring an API key, which pulls toward surfaces that ride an already-authenticated session.
-- Whether Bonsai needs durable cross-conversation memory, and what should provide it, is undecided.
-- `PRODUCT.md` still carries the hackathon framing and needs a rewrite.
+**Decided (research-backed, sources in BUILDLOG):**
+- Surface: **Claude Code plugin primary** (full loop on the user's Pro/Max subscription —
+  sanctioned), claude.ai remote-MCP connector fast-follow (state+briefs+MCP-Apps tree UI only;
+  no sampling there), Chrome extension **cut** (auto-send = the pattern behind the April 2026
+  account bans).
+- Positioning: on the loop (compiled briefs + per-branch routing + distilled merge-back —
+  unclaimed by any shipped product), not the tree (commoditized).
+
+**In flight:** lane A (claude) — segment 4: relational persistence on the lane's Neon branch
+(`br-old-fog-avfznwqu`), zod-validated routes, guarded reset.
+
+**Blocked:** nothing.
+
+**Next:**
+1. Segment 4 — relational schema (conversations/messages/insights/logs) replacing the one-blob
+   `store_snapshot`; migration SQL committed; in-memory backend stays for keyless dev.
+2. Segment 5 — eval harness proving referent resolution (the moat; `try-engine.ts` is the germ).
+3. Segment 6 — Claude Code plugin: branch = subagent with compiled brief (model+effort via
+   agent frontmatter), merge = distilled report, tree via bundled MCP server.
+4. Segment 7 — web demo truth pass + PRODUCT.md rewrite (still carries hackathon framing).
 
 <!-- BEGIN:nextjs-agent-rules -->
 
