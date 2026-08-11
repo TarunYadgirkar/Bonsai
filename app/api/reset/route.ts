@@ -1,17 +1,20 @@
+import { apiError, apiRoute } from '@/lib/api';
 import { resetStore } from '@/lib/store';
 import type { StateResponse } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Put the demo back to its opening state: the seeded root plus the pre-built scenario tree,
- * nothing a rehearsal added.
+ * Put the demo back to its opening state: the seeded root plus the pre-built scenario tree.
  *
- * Deleting the KV snapshot by hand is NOT equivalent — a warm lambda still holds the old tree in
- * globalThis and writes it straight back on the next request. This clears both, in that order,
- * and returns the fresh state so the caller can render it without a second round trip.
+ * A destructive wipe of shared state, so it is gateable: set BONSAI_RESET_TOKEN and the route
+ * requires a matching x-reset-token header. Unset (dev, keyless demo) keeps the open behavior.
  */
-export async function POST() {
+export const POST = apiRoute(null, async (_body, request) => {
+  const required = process.env.BONSAI_RESET_TOKEN;
+  if (required && request.headers.get('x-reset-token') !== required) {
+    return apiError('reset requires a valid x-reset-token header', 403);
+  }
   const state = await resetStore();
   return Response.json(state satisfies StateResponse);
-}
+});

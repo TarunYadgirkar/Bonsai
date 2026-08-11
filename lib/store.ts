@@ -1,3 +1,17 @@
+/**
+ * Working-set store over two backends:
+ *
+ * - Neon (`DATABASE_URL`): rows per conversation/message/insight/log. Each request loads the
+ *   working set, mutates it locally, and `commit()` flushes only what changed — two requests on
+ *   different branches can no longer clobber each other the way the old whole-snapshot blob
+ *   did. Same-row races resolve last-write-wins; message inserts retry past seq collisions so
+ *   a racing append shifts position instead of vanishing.
+ * - Memory (no env): a module-global working set seeded from the fixtures, exactly the old
+ *   behavior. `commit()` is a no-op — the map IS the store. Keyless dev stays zero-config.
+ *
+ * Failure honesty: `commit()` reports 'failed' instead of swallowing, so mutating routes can
+ * stop returning 200 for writes that evaporated (the old silent-degrade trap).
+ */
 import {
   availableTokensFor as availableTokensForIn,
   buildTree as buildTreeOf,
@@ -5,8 +19,7 @@ import {
 } from '@bonsai/engine';
 import seed from '@/fixtures/seed-conversation.json';
 import tree from '@/fixtures/seed-tree.json';
-import { kvEnabled, kvGet, kvSet } from './kv';
-import { appendInferenceLogs } from './inference-log';
+import { dbEnabled, sql } from './db';
 import type {
   BranchNode,
   Conversation,
@@ -17,23 +30,21 @@ import type {
   StateResponse,
 } from './types';
 
-/**
- * In-memory store, seeded from the fixture, optionally mirrored to Upstash.
- *
- * globalThis alone survives Next's dev hot-reload but NOT a Vercel cold start or a second
- * serverless instance — a branch created on stage would vanish on the next request. With KV env
- * vars present, `loadStore()` re-reads the snapshot on every request and `saveStore()` writes it
- * back, so globalThis degrades to a per-request cache and any instance sees the same tree.
- * Without them the behavior is unchanged.
- */
-interface StoreShape {
-  conversations: Map<string, Conversation>;
-  logs: InferenceLog[];
+export interface WorkingSet {
+  byId: Map<string, Conversation>;
   rootId: string;
-  seq: number;
+  logs: InferenceLog[];
+  /** Message ids already persisted, per conversation — commit() inserts only the delta. */
+  persistedMessages: Map<string, Set<string>>;
+  persistedInsights: Set<string>;
+  dirty: Set<string>;
+  newLogs: InferenceLog[];
 }
 
-/** Shape of fixtures/seed-tree.json. Generated, never hand-edited. */
+export type CommitOutcome = 'memory' | 'persisted' | 'failed';
+
+/* ---------- fixture seed ---------- */
+
 interface SeedTree {
   rootInsights?: Insight[];
   branches?: Conversation[];
@@ -41,192 +52,370 @@ interface SeedTree {
   seq?: number;
 }
 
-interface StoreSnapshot {
-  conversations: Conversation[];
-  logs: InferenceLog[];
-  rootId: string;
-  seq: number;
-}
-
-const GLOBAL_KEY = Symbol.for('bonsai.store');
-const KV_KEY = 'bonsai:store:v1';
-
-/** Logs written this request, waiting to be flushed to the local mirror by flushLogs(). */
-const pending: InferenceLog[] = [];
-
-/**
- * Boots the pre-built demo tree: the root transcript from `seed-conversation.json` plus the
- * scenario branches, insights and inference logs frozen in `seed-tree.json` (regenerate with
- * scripts/build-seed-tree.ts). The root's messages live in one file only — the tree fixture
- * carries what the branches added, never a copy of the transcript.
- */
-function build(): StoreShape {
+function buildSeedState(): { conversations: Conversation[]; logs: InferenceLog[]; rootId: string } {
   const fixture = seed as SeedConversation;
-  // Clone: an imported JSON module is a live singleton, and `logs` is pushed to in place by
-  // logInference. Without this, rehearsal logs stayed in the fixture array for the life of the
-  // process and every reset handed them straight back.
+  // Clone: an imported JSON module is a live singleton and must never be mutated in place.
   const preloaded = structuredClone(tree) as SeedTree;
   const root: Conversation = {
     id: fixture.id,
     title: fixture.title,
     parentId: null,
     profile: fixture.profile,
-    messages: fixture.messages,
+    messages: structuredClone(fixture.messages),
     insights: preloaded.rootInsights ?? [],
     pinnedTier: null,
     archived: false,
   };
-  const branches = (preloaded.branches ?? []) as Conversation[];
   return {
-    conversations: new Map([root, ...branches].map((c) => [c.id, c])),
-    logs: (preloaded.logs ?? []) as InferenceLog[],
+    conversations: [root, ...(preloaded.branches ?? [])],
+    logs: preloaded.logs ?? [],
     rootId: root.id,
-    seq: preloaded.seq ?? 0,
   };
 }
 
-function store(): StoreShape {
-  const g = globalThis as typeof globalThis & { [GLOBAL_KEY]?: StoreShape };
-  if (!g[GLOBAL_KEY]) g[GLOBAL_KEY] = build();
+/* ---------- memory backend ---------- */
+
+const GLOBAL_KEY = Symbol.for('bonsai.store.v2');
+
+interface MemoryState {
+  byId: Map<string, Conversation>;
+  rootId: string;
+  logs: InferenceLog[];
+}
+
+function memoryState(): MemoryState {
+  const g = globalThis as typeof globalThis & { [GLOBAL_KEY]?: MemoryState };
+  if (!g[GLOBAL_KEY]) {
+    const seeded = buildSeedState();
+    g[GLOBAL_KEY] = {
+      byId: new Map(seeded.conversations.map((c) => [c.id, c])),
+      rootId: seeded.rootId,
+      logs: seeded.logs,
+    };
+  }
   return g[GLOBAL_KEY];
 }
 
-function setStore(next: StoreShape): void {
-  (globalThis as typeof globalThis & { [GLOBAL_KEY]?: StoreShape })[GLOBAL_KEY] = next;
+function resetMemory(): void {
+  (globalThis as typeof globalThis & { [GLOBAL_KEY]?: MemoryState })[GLOBAL_KEY] = undefined;
 }
 
-function toSnapshot(s: StoreShape): StoreSnapshot {
-  return {
-    conversations: [...s.conversations.values()],
-    logs: s.logs,
-    rootId: s.rootId,
-    seq: s.seq,
-  };
+/* ---------- neon backend ---------- */
+
+interface ConversationRow {
+  id: string;
+  title: string;
+  parent_id: string | null;
+  profile: Conversation['profile'];
+  brief: Conversation['brief'];
+  pinned_tier: Conversation['pinnedTier'];
+  pinned_mode: Conversation['pinnedMode'];
+  archived: boolean;
+  is_root: boolean;
 }
 
-function fromSnapshot(snapshot: StoreSnapshot): StoreShape {
-  return {
-    conversations: new Map(snapshot.conversations.map((c) => [c.id, c])),
-    logs: snapshot.logs,
-    rootId: snapshot.rootId,
-    seq: snapshot.seq,
-  };
+interface MessageRow {
+  id: string;
+  conversation_id: string;
+  role: Message['role'];
+  content: string;
+  routing: Message['routing'];
+  created_at: string;
 }
 
-/**
- * Call at the top of every route. No-op without KV env vars. Re-reads on every request rather
- * than caching, because a warm instance holding a stale tree is exactly the failure this fixes.
- */
-export async function loadStore(): Promise<void> {
-  if (!kvEnabled()) return;
-  const read = await kvGet(KV_KEY);
+interface InsightRow {
+  id: string;
+  branch_id: string;
+  parent_id: string;
+  text: string;
+  created_at: string;
+}
 
-  // Only an empty store may be seeded. On a read error, keep memory and write nothing —
-  // seeding here would overwrite a live tree with the fixture.
-  if (read.status === 'error') return;
-  if (read.status === 'miss') {
-    await saveStore();
-    return;
+async function loadFromDb(withLogs: boolean): Promise<WorkingSet | null> {
+  const q = sql();
+  const conversations = (await q`SELECT * FROM conversations`) as unknown as ConversationRow[];
+  if (!conversations.length) {
+    await seedDb();
+    return loadAssembled(withLogs);
+  }
+  return loadAssembled(withLogs);
+}
+
+async function loadAssembled(withLogs: boolean): Promise<WorkingSet> {
+  const q = sql();
+  const [convRows, msgRows, insightRows, logRows] = await Promise.all([
+    q`SELECT * FROM conversations` as unknown as Promise<ConversationRow[]>,
+    q`SELECT * FROM messages ORDER BY conversation_id, seq` as unknown as Promise<MessageRow[]>,
+    q`SELECT * FROM insights ORDER BY created_at` as unknown as Promise<InsightRow[]>,
+    withLogs
+      ? (q`SELECT payload FROM inference_logs ORDER BY ts` as unknown as Promise<
+          { payload: InferenceLog }[]
+        >)
+      : Promise.resolve([]),
+  ]);
+
+  const byId = new Map<string, Conversation>();
+  let rootId = '';
+  for (const row of convRows) {
+    if (row.is_root && !rootId) rootId = row.id;
+    byId.set(row.id, {
+      id: row.id,
+      title: row.title,
+      parentId: row.parent_id,
+      ...(row.profile ? { profile: row.profile } : {}),
+      messages: [],
+      ...(row.brief ? { brief: row.brief } : {}),
+      insights: [],
+      pinnedTier: row.pinned_tier ?? null,
+      pinnedMode: row.pinned_mode ?? null,
+      archived: row.archived,
+    });
   }
 
+  const persistedMessages = new Map<string, Set<string>>();
+  for (const m of msgRows) {
+    const c = byId.get(m.conversation_id);
+    if (!c) continue;
+    c.messages.push({
+      id: m.id,
+      role: m.role,
+      content: m.content,
+      ...(m.routing ? { routing: m.routing } : {}),
+      createdAt: new Date(m.created_at).toISOString(),
+    });
+    const set = persistedMessages.get(m.conversation_id) ?? new Set();
+    set.add(m.id);
+    persistedMessages.set(m.conversation_id, set);
+  }
+
+  const persistedInsights = new Set<string>();
+  for (const i of insightRows) {
+    byId.get(i.parent_id)?.insights.push({
+      id: i.id,
+      branchId: i.branch_id,
+      parentId: i.parent_id,
+      text: i.text,
+      createdAt: new Date(i.created_at).toISOString(),
+    });
+    persistedInsights.add(i.id);
+  }
+
+  return {
+    byId,
+    rootId: rootId || convRows[0]?.id || '',
+    logs: logRows.map((r) => r.payload),
+    persistedMessages,
+    persistedInsights,
+    dirty: new Set(),
+    newLogs: [],
+  };
+}
+
+async function upsertConversationRow(c: Conversation, isRoot: boolean): Promise<void> {
+  const q = sql();
+  await q`
+    INSERT INTO conversations (id, title, parent_id, profile, brief, pinned_tier, pinned_mode, archived, is_root, updated_at)
+    VALUES (${c.id}, ${c.title}, ${c.parentId}, ${JSON.stringify(c.profile ?? null)}::jsonb,
+            ${JSON.stringify(c.brief ?? null)}::jsonb, ${c.pinnedTier},
+            ${JSON.stringify(c.pinnedMode ?? null)}::jsonb, ${c.archived}, ${isRoot}, now())
+    ON CONFLICT (id) DO UPDATE SET
+      title = EXCLUDED.title, brief = EXCLUDED.brief, pinned_tier = EXCLUDED.pinned_tier,
+      pinned_mode = EXCLUDED.pinned_mode, archived = EXCLUDED.archived, updated_at = now()
+  `;
+}
+
+/** Insert at the local index; on a seq race, land after whatever got there first. */
+async function insertMessageRow(conversationId: string, m: Message, seq: number): Promise<void> {
+  const q = sql();
   try {
-    setStore(fromSnapshot(JSON.parse(read.value) as StoreSnapshot));
+    await q`
+      INSERT INTO messages (id, conversation_id, seq, role, content, routing)
+      VALUES (${m.id}, ${conversationId}, ${seq}, ${m.role}, ${m.content},
+              ${JSON.stringify(m.routing ?? null)}::jsonb)
+      ON CONFLICT (id) DO NOTHING
+    `;
   } catch {
-    console.warn('[store] unreadable KV snapshot — keeping in-memory state');
+    const rows = (await q`
+      SELECT COALESCE(MAX(seq), -1) + 1 AS next FROM messages WHERE conversation_id = ${conversationId}
+    `) as unknown as { next: number }[];
+    await q`
+      INSERT INTO messages (id, conversation_id, seq, role, content, routing)
+      VALUES (${m.id}, ${conversationId}, ${rows[0]?.next ?? seq + 100}, ${m.role}, ${m.content},
+              ${JSON.stringify(m.routing ?? null)}::jsonb)
+      ON CONFLICT (id) DO NOTHING
+    `;
   }
 }
 
-/** Call before responding from any route that mutated state. Awaited: a frozen lambda drops it. */
-export async function saveStore(): Promise<void> {
-  if (!kvEnabled()) return;
-  await kvSet(KV_KEY, JSON.stringify(toSnapshot(store())));
+async function seedDb(): Promise<void> {
+  const seeded = buildSeedState();
+  // Parents before children so the FK holds: root first, then by depth.
+  const ordered = [...seeded.conversations].sort((a, b) => depthIn(seeded.conversations, a) - depthIn(seeded.conversations, b));
+  for (const c of ordered) {
+    await upsertConversationRow(c, c.id === seeded.rootId);
+    for (const [i, m] of c.messages.entries()) await insertMessageRow(c.id, m, i);
+    for (const ins of c.insights) await insertInsightRow(ins);
+  }
+  const q = sql();
+  for (const log of seeded.logs) {
+    await q`INSERT INTO inference_logs (id, branch_id, payload) VALUES (${log.id}, ${log.branchId}, ${JSON.stringify(log)}::jsonb) ON CONFLICT (id) DO NOTHING`;
+  }
 }
 
-/**
- * Back to the opening state: rebuild from the fixtures, then overwrite the snapshot.
- *
- * Order matters. Clearing the snapshot row alone leaves a warm lambda holding the old tree in
- * globalThis, and its next request writes that tree straight back — so the in-memory store is
- * replaced first, then persisted over the top.
- */
-export async function resetStore(): Promise<StateResponse> {
-  setStore(build());
-  pending.length = 0;
-  await saveStore();
-  return { rootId: rootId(), tree: buildTree(), conversations: listConversations() };
+function depthIn(all: Conversation[], c: Conversation): number {
+  let depth = 0;
+  let cursor = c.parentId;
+  const byId = new Map(all.map((x) => [x.id, x]));
+  while (cursor) {
+    depth += 1;
+    cursor = byId.get(cursor)?.parentId ?? null;
+  }
+  return depth;
 }
 
-export function nextId(prefix: string): string {
-  const s = store();
-  s.seq += 1;
-  return `${prefix}_${s.seq}`;
+async function insertInsightRow(i: Insight): Promise<void> {
+  const q = sql();
+  await q`
+    INSERT INTO insights (id, branch_id, parent_id, text)
+    VALUES (${i.id}, ${i.branchId}, ${i.parentId}, ${i.text})
+    ON CONFLICT (id) DO NOTHING
+  `;
 }
 
-export function rootId(): string {
-  return store().rootId;
+/* ---------- public API ---------- */
+
+export async function loadWorkingSet(opts?: { withLogs?: boolean }): Promise<WorkingSet> {
+  const withLogs = opts?.withLogs ?? false;
+  if (dbEnabled()) {
+    try {
+      const ws = await loadFromDb(withLogs);
+      if (ws) return ws;
+    } catch (err) {
+      console.warn(`[store] db load failed (${(err as Error).message}) — memory working set`);
+    }
+  }
+  const mem = memoryState();
+  return {
+    byId: mem.byId,
+    rootId: mem.rootId,
+    logs: mem.logs,
+    persistedMessages: new Map(),
+    persistedInsights: new Set(),
+    dirty: new Set(),
+    newLogs: [],
+  };
 }
 
-export function getConversation(id: string): Conversation | undefined {
-  return store().conversations.get(id);
+export function newId(prefix: string): string {
+  return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 10)}`;
 }
 
-export function listConversations(): Conversation[] {
-  return [...store().conversations.values()];
+export function getConversation(ws: WorkingSet, id: string): Conversation | undefined {
+  return ws.byId.get(id);
 }
 
-export function putConversation(conversation: Conversation): void {
-  store().conversations.set(conversation.id, conversation);
+export function listConversations(ws: WorkingSet): Conversation[] {
+  return [...ws.byId.values()];
 }
 
-/** Immutable update — replaces the stored node rather than mutating it. */
+export function putConversation(ws: WorkingSet, conversation: Conversation): void {
+  ws.byId.set(conversation.id, conversation);
+  ws.dirty.add(conversation.id);
+}
+
 export function updateConversation(
+  ws: WorkingSet,
   id: string,
   patch: (c: Conversation) => Conversation,
 ): Conversation | undefined {
-  const current = store().conversations.get(id);
+  const current = ws.byId.get(id);
   if (!current) return undefined;
   const next = patch(current);
-  store().conversations.set(id, next);
+  ws.byId.set(id, next);
+  ws.dirty.add(id);
   return next;
 }
 
-export function appendMessage(id: string, message: Message): Conversation | undefined {
-  return updateConversation(id, (c) => ({ ...c, messages: [...c.messages, message] }));
+export function appendMessage(
+  ws: WorkingSet,
+  id: string,
+  message: Message,
+): Conversation | undefined {
+  return updateConversation(ws, id, (c) => ({ ...c, messages: [...c.messages, message] }));
 }
 
-export function appendInsight(parentId: string, insight: Insight): Conversation | undefined {
-  return updateConversation(parentId, (c) => ({ ...c, insights: [...c.insights, insight] }));
+export function appendInsight(
+  ws: WorkingSet,
+  parentId: string,
+  insight: Insight,
+): Conversation | undefined {
+  return updateConversation(ws, parentId, (c) => ({ ...c, insights: [...c.insights, insight] }));
 }
 
-export function logInference(log: InferenceLog): InferenceLog {
-  store().logs.push(log);
-  pending.push(log);
+export function logInference(ws: WorkingSet, log: InferenceLog): InferenceLog {
+  ws.logs.push(log);
+  ws.newLogs.push(log);
   return log;
 }
 
-/**
- * Mirror everything logged during this request into the local JSON file.
- * Awaited by the routes after saveStore: a frozen lambda drops floating promises. Queued per
- * process rather than per store, so a snapshot reload can't resurrect already-written rows.
- */
-export async function flushLogs(): Promise<void> {
-  if (!pending.length) return;
-  const batch = pending.splice(0, pending.length);
-  await appendInferenceLogs(batch);
+/** Flush local mutations. 'failed' means a configured database did not take the writes. */
+export async function commit(ws: WorkingSet): Promise<CommitOutcome> {
+  if (!dbEnabled()) return 'memory';
+  try {
+    const q = sql();
+    for (const id of ws.dirty) {
+      const c = ws.byId.get(id);
+      if (!c) continue;
+      await upsertConversationRow(c, id === ws.rootId);
+      const persisted = ws.persistedMessages.get(id) ?? new Set();
+      for (const [i, m] of c.messages.entries()) {
+        if (persisted.has(m.id)) continue;
+        await insertMessageRow(id, m, i);
+        persisted.add(m.id);
+      }
+      ws.persistedMessages.set(id, persisted);
+      for (const ins of c.insights) {
+        if (ws.persistedInsights.has(ins.id)) continue;
+        await insertInsightRow(ins);
+        ws.persistedInsights.add(ins.id);
+      }
+    }
+    for (const log of ws.newLogs) {
+      await q`INSERT INTO inference_logs (id, branch_id, payload) VALUES (${log.id}, ${log.branchId}, ${JSON.stringify(log)}::jsonb) ON CONFLICT (id) DO NOTHING`;
+    }
+    ws.dirty.clear();
+    ws.newLogs = [];
+    return 'persisted';
+  } catch (err) {
+    console.warn(`[store] commit failed (${(err as Error).message}) — writes not persisted`);
+    return 'failed';
+  }
 }
 
-export function listLogs(): InferenceLog[] {
-  return [...store().logs];
+/** Back to the opening state: truncate (db) or rebuild (memory), then reseed. */
+export async function resetStore(): Promise<StateResponse> {
+  if (dbEnabled()) {
+    try {
+      const q = sql();
+      await q`TRUNCATE conversations, messages, insights, inference_logs`;
+      await seedDb();
+    } catch (err) {
+      console.warn(`[store] reset failed (${(err as Error).message})`);
+    }
+  }
+  resetMemory();
+  const ws = await loadWorkingSet();
+  return { rootId: ws.rootId, tree: buildTree(ws), conversations: listConversations(ws) };
 }
 
-/** Full parent history a branch could have inherited — the baseline every saving is measured against. */
-export function availableTokensFor(parentId: string | null): number {
-  return availableTokensForIn(parentId, (id) => store().conversations.get(id));
+/* ---------- derived ---------- */
+
+export function availableTokensFor(ws: WorkingSet, parentId: string | null): number {
+  return availableTokensForIn(parentId, (id) => ws.byId.get(id));
 }
 
-/** Derived projection for the sidebar. Never stored — always recomputed. */
-export function buildTree(): BranchNode[] {
-  return buildTreeOf(listConversations());
+export function buildTree(ws: WorkingSet): BranchNode[] {
+  return buildTreeOf(listConversations(ws));
 }
 
 export { prunedPct };

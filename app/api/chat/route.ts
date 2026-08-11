@@ -5,48 +5,37 @@ import {
   widenedChatContext,
 } from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
+import { ChatRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
 import {
   appendMessage,
   availableTokensFor,
-  flushLogs,
+  commit,
   getConversation,
-  loadStore,
+  loadWorkingSet,
   logInference,
-  nextId,
-  saveStore,
+  newId,
   updateConversation,
 } from '@/lib/store';
-import type { ApiError, ChatRequest, ChatResponse } from '@/lib/types';
+import type { ChatResponse } from '@/lib/types';
 
 const ANSWER_SYSTEM_PROMPT =
   'You answer using only the context provided. If it is a compiled brief, it is deliberately minimal and self-contained; if it genuinely lacks what you need, say so plainly rather than guessing.';
 
-export async function POST(request: Request) {
-  const body = (await request.json()) as Partial<ChatRequest>;
-  if (!body.branchId || !body.content) {
-    return Response.json({ error: 'branchId and content are required' } satisfies ApiError, {
-      status: 400,
-    });
-  }
-
-  await loadStore();
-  const conversation = getConversation(body.branchId);
-  if (!conversation) {
-    return Response.json({ error: `unknown branch ${body.branchId}` } satisfies ApiError, {
-      status: 404,
-    });
-  }
+export const POST = apiRoute(ChatRequestSchema, async (body) => {
+  const ws = await loadWorkingSet();
+  const conversation = getConversation(ws, body.branchId);
+  if (!conversation) return apiError(`unknown branch ${body.branchId}`, 404);
 
   // A manual pick pins the branch; an explicit switch back to auto unpins it. Pin-per-branch
   // (not per message) also keeps the provider prompt cache warm across the branch.
   if (body.mode?.mode === 'manual') {
-    updateConversation(conversation.id, (c) => ({ ...c, pinnedMode: body.mode }));
+    updateConversation(ws, conversation.id, (c) => ({ ...c, pinnedMode: body.mode }));
   } else if (body.mode?.mode === 'auto') {
-    updateConversation(conversation.id, (c) => ({ ...c, pinnedMode: null }));
+    updateConversation(ws, conversation.id, (c) => ({ ...c, pinnedMode: null }));
   }
 
-  appendMessage(conversation.id, {
-    id: nextId('msg'),
+  appendMessage(ws, conversation.id, {
+    id: newId('msg'),
     role: 'user',
     content: body.content,
     createdAt: new Date().toISOString(),
@@ -71,7 +60,7 @@ export async function POST(request: Request) {
     systemPrompt: ANSWER_SYSTEM_PROMPT,
     userPrompt: `${context}\n\n---\n${body.content}`,
     widen: () => {
-      const wider = widenedChatContext(conversation, getConversation);
+      const wider = widenedChatContext(conversation, (id) => getConversation(ws, id));
       return wider
         ? { userPrompt: `${wider.context}\n\n---\n${body.content}`, addedTokens: wider.addedTokens }
         : null;
@@ -79,15 +68,16 @@ export async function POST(request: Request) {
   });
 
   const message = {
-    id: nextId('msg'),
+    id: newId('msg'),
     role: 'assistant' as const,
     content: result.text,
     routing: result.routing,
     createdAt: new Date().toISOString(),
   };
-  appendMessage(conversation.id, message);
+  appendMessage(ws, conversation.id, message);
 
   const log = logInference(
+    ws,
     buildLog({
       branchId: conversation.id,
       purpose: 'chat',
@@ -98,14 +88,13 @@ export async function POST(request: Request) {
       outputTokens: result.outputTokens,
       baselineInputTokens: conversation.brief
         ? conversation.brief.availableTokens + contextTokens
-        : contextTokens + availableTokensFor(conversation.parentId),
+        : contextTokens + availableTokensFor(ws, conversation.parentId),
       escalated: result.routing.escalated,
       overridden: result.routing.overridden,
     }),
   );
 
-  await saveStore();
-  await flushLogs();
+  if ((await commit(ws)) === 'failed') return persistenceError();
 
   const response: ChatResponse = {
     branchId: conversation.id,
@@ -114,4 +103,4 @@ export async function POST(request: Request) {
     log,
   };
   return Response.json(response);
-}
+});

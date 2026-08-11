@@ -1,19 +1,13 @@
+import { NewConversationRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
 import {
   buildTree,
-  flushLogs,
+  commit,
   getConversation,
-  loadStore,
-  nextId,
+  loadWorkingSet,
+  newId,
   putConversation,
-  rootId,
-  saveStore,
 } from '@/lib/store';
-import type {
-  ApiError,
-  Conversation,
-  NewConversationRequest,
-  NewConversationResponse,
-} from '@/lib/types';
+import type { Conversation, NewConversationResponse } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,12 +17,10 @@ export const dynamic = 'force-dynamic';
  * It carries the seeded profile so anything branched off it still compiles a brief that knows
  * who the user is; `parentId` is null, so it inherits no transcript and no tokens.
  */
-export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as NewConversationRequest;
-
-  await loadStore();
-  const id = nextId('conv');
-  const seedProfile = getConversation(rootId())?.profile;
+export const POST = apiRoute(NewConversationRequestSchema, async (body) => {
+  const ws = await loadWorkingSet();
+  const id = newId('conv');
+  const seedProfile = getConversation(ws, ws.rootId)?.profile;
 
   const conversation: Conversation = {
     id,
@@ -38,20 +30,16 @@ export async function POST(request: Request) {
     messages: [],
     insights: [],
     pinnedTier: null,
+    pinnedMode: null,
     archived: false,
   };
-  putConversation(conversation);
+  putConversation(ws, conversation);
 
-  const node = buildTree().find((n) => n.id === id);
-  if (!node) {
-    return Response.json({ error: 'conversation missing after write' } satisfies ApiError, {
-      status: 500,
-    });
-  }
+  const node = buildTree(ws).find((n) => n.id === id);
+  if (!node) return apiError('conversation missing after write', 500);
 
-  await saveStore();
-  await flushLogs();
+  if ((await commit(ws)) === 'failed') return persistenceError();
 
   const response: NewConversationResponse = { node, conversation };
   return Response.json(response);
-}
+});

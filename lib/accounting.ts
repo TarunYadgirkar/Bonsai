@@ -12,7 +12,7 @@ import {
   type InferencePurpose,
   type Tier,
 } from '@bonsai/engine';
-import { nextId } from './store';
+import { newId } from './store';
 
 export function buildLog(params: {
   branchId: string;
@@ -30,7 +30,7 @@ export function buildLog(params: {
   const { branchId, purpose, tier, inputTokens, outputTokens, baselineInputTokens } = params;
   const model = params.model ?? MODEL_TIERS[tier];
   return {
-    id: nextId('log'),
+    id: newId('log'),
     ts: new Date().toISOString(),
     branchId,
     purpose,

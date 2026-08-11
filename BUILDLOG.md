@@ -3,6 +3,25 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Segment 4: relational persistence + hardened API boundary
+
+- One-blob `store_snapshot` replaced by relational rows (conversations / messages / insights /
+  inference_logs) — schema in `migrations/001_relational_store.sql`, applied to the lane's Neon
+  branch (`br-old-fog-avfznwqu`). `lib/store.ts` rewritten as a request-scoped working set:
+  load → mutate locally → `commit()` flushes only the delta. Kills the race class: per-row
+  writes (no cross-branch clobber), random ids via `newId` (no seq-counter collisions), message
+  seq conflicts retry past each other instead of overwriting, no globalThis swap mid-request.
+  Memory backend (keyless dev) unchanged in behavior; fixtures seed an empty database.
+- **Restart-survival test passed live**: branch created → server killed → restarted → branch
+  reloaded from Neon with brief + messages intact. The kv.ts silent-degrade trap is gone —
+  `commit()` reports failure and mutating routes return 503 instead of a lying 200.
+- API boundary: zod schemas on every mutating route (malformed JSON → 400, oversized/wrong
+  fields → field-named 400s), one `apiRoute` wrapper catching everything as ApiError JSON.
+  `/api/reset` gateable via BONSAI_RESET_TOKEN (unset keeps open demo behavior). Stray DTOs
+  moved into `lib/types.ts`.
+- Deleted: `lib/kv.ts` (both backends), `lib/inference-log.ts` local JSON mirror — logs live in
+  the database now. Upstash alternate path retired with it.
+
 ## 2026-08-11 — Segment 3: live provider fixed, accounting honest
 
 - `provider.ts` rebuilt on per-model capability records: sampling params only on Haiku 4.5

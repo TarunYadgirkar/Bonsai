@@ -1,4 +1,5 @@
-import { listLogs, loadStore } from '@/lib/store';
+import { apiRoute } from '@/lib/api';
+import { loadWorkingSet } from '@/lib/store';
 import type { EconomicsBaseline, EconomicsResponse, EconomicsTotals } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -8,9 +9,9 @@ function pctSaved(baseline: number, actual: number): number {
   return Math.round(((baseline - actual) / baseline) * 1000) / 10;
 }
 
-export async function GET() {
-  await loadStore();
-  const logs = listLogs();
+export const GET = apiRoute(null, async () => {
+  const ws = await loadWorkingSet({ withLogs: true });
+  const logs = ws.logs;
 
   const totals: EconomicsTotals = logs.reduce<EconomicsTotals>(
     (acc, l) => ({
@@ -35,4 +36,4 @@ export async function GET() {
 
   const response: EconomicsResponse = { logs, totals, baseline };
   return Response.json(response);
-}
+});
