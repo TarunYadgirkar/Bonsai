@@ -92,7 +92,31 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-11T07:30:00Z by claude session (lane A)
+Updated: 2026-08-11T09:20:00Z by claude session (lane A)
+
+**Three subscription-riding surfaces now live (BYOK standalone is the dead path):**
+- Claude Code **plugin** (`plugin/`) — full loop on the Claude Code subscription; local
+  marketplace install verified.
+- Chrome **extension** (`extension/`) — MV3 side panel + content script, engine bundled
+  (esbuild), strictly human-in-the-loop (reads claude.ai same-origin, pre-fills composers, never
+  sends). Verified live against claude.ai. Its own `chrome`-typed tsconfig; excluded from the
+  root `tsc` gate; CI runs its typecheck + build.
+- Remote **MCP connector** (`app/api/mcp/[key]`) — **deployed to bonsai-connector.vercel.app and
+  connected in Tarun's claude.ai (Max)**, all 4 tools discovered + permission-gated. Neon
+  `mcp_*` tables (`migrations/003`). Connector URL/key + deploy gotchas are in the project
+  memory (a credential — not in the repo). Deploy notes: new Vercel projects default framework
+  `None` (set `nextjs`); disable the team SSO protection wall; an authless MCP server must NOT
+  send `WWW-Authenticate` (triggers OAuth DCR).
+
+**Learning router** (`packages/engine/src/learning.ts`, `migrations/002`) — the pitched "learns
+from what you kept", rebuilt from the stripped EverOS integration: per-user priors from
+overrides/escalations/merges shift routing, persisted to Neon, verified live. Feeds `route()` on
+the auto path; chat/branch/merge routes emit feedback.
+
+Engine test count is 118 + 8/8 evals; CI gates typecheck (root + extension), tests, evals, and
+both builds.
+
+--- earlier this session ---
 
 **Done:**
 - Toolchain + lane plan: tsx/vitest/typecheck, `PLAN.md`, `BUILDLOG.md` (`8e9acc8`).
