@@ -9,6 +9,7 @@ import { compileBrief } from '../lib/compiler';
 import { MODEL_TIERS } from '../lib/models';
 import { providerName } from '../lib/provider';
 import { completeWithEscalation, route } from '../lib/router';
+import { getConversation, rootId, visibleContextFor } from '../lib/store';
 import { messagesTokens } from '../lib/tokens';
 import type { SeedConversation } from '../lib/types';
 
@@ -26,6 +27,10 @@ const CASES = [
 
 async function main() {
   console.log(`provider: ${providerName()}  models: ${JSON.stringify(MODEL_TIERS)}`);
+  const parent = getConversation(rootId());
+  if (!parent) throw new Error('root conversation unavailable');
+  const parentContext = visibleContextFor(parent.id);
+  if (!parentContext) throw new Error('parent context unavailable');
   const available = messagesTokens(fixture.messages);
   console.log(`parent history: ${fixture.messages.length} messages, ~${available} tokens\n`);
 
@@ -35,8 +40,7 @@ async function main() {
     const brief = await compileBrief({
       briefId: `brief_${i}`,
       branchId: `branch_${i}`,
-      parentMessages: fixture.messages,
-      profile: fixture.profile,
+      parentContext,
       selection: testCase.selection,
       question: testCase.question,
       availableTokens: available,

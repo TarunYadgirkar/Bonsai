@@ -36,7 +36,13 @@ export interface UserProfile {
   goals: string[];
 }
 
-export type ContextSourceKind = 'profile' | 'brief' | 'message' | 'insight';
+export type ContextSourceKind =
+  | 'profile'
+  | 'brief'
+  | 'message'
+  | 'insight'
+  | 'selection'
+  | 'question';
 
 export interface ContextSourceRef {
   kind: ContextSourceKind;
@@ -81,8 +87,8 @@ export interface ContextBrief {
   briefTokens: number;
   /** 0-100, rounded to one decimal. Rendered on the tree edge. */
   prunedPct: number;
-  sourceRefs?: ContextSourceRef[];
-  factSourceIds?: string[][];
+  sourceRefs: ContextSourceRef[];
+  factSourceIds: string[][];
 }
 
 export interface RoutingDecision {

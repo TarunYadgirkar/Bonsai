@@ -12,6 +12,7 @@ import {
   nextId,
   putConversation,
   saveStore,
+  visibleContextFor,
 } from '@/lib/store';
 import { estimateTokens } from '@/lib/tokens';
 import type {
@@ -21,7 +22,6 @@ import type {
   Conversation,
   Message,
   RoutingDecision,
-  UserProfile,
 } from '@/lib/types';
 
 const ANSWER_SYSTEM_PROMPT =
@@ -42,6 +42,12 @@ export async function POST(request: Request) {
       status: 404,
     });
   }
+  const parentContext = visibleContextFor(parent.id);
+  if (!parentContext) {
+    return Response.json({ error: 'parent context unavailable' } satisfies ApiError, {
+      status: 500,
+    });
+  }
 
   const branchId = nextId('branch');
   const question = body.question ?? '';
@@ -50,8 +56,7 @@ export async function POST(request: Request) {
   const brief = await compileBrief({
     briefId: nextId('brief'),
     branchId,
-    parentMessages: parent.messages,
-    profile: profileFor(parent),
+    parentContext,
     selection: body.selection,
     question,
     availableTokens,
@@ -135,14 +140,4 @@ export async function POST(request: Request) {
 
   const response: BranchResponse = { node, conversation, brief, message: answer, routing };
   return Response.json(response);
-}
-
-/** Only the root carries the profile; a branch off a branch still needs it. */
-function profileFor(conversation: Conversation): UserProfile | undefined {
-  let cursor: Conversation | undefined = conversation;
-  while (cursor) {
-    if (cursor.profile) return cursor.profile;
-    cursor = cursor.parentId ? getConversation(cursor.parentId) : undefined;
-  }
-  return undefined;
 }

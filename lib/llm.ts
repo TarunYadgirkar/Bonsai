@@ -88,15 +88,6 @@ function mockComplexity(prompt: string): 1 | 2 | 3 {
   return 1;
 }
 
-const MOCK_FACTS = [
-  'Free Ventures is a student-run startup accelerator at Berkeley; you apply with your own startup.',
-  'Free Ventures applications close September 11, with an info session on September 3.',
-  'Tarun is an incoming Berkeley freshman in applied math, CS-focused, already building a startup with a cofounder.',
-  'Tarun wants at most two clubs, builder-first and startup-adjacent over resume-padding.',
-  'Tarun has a hard cap of 8-10 hours per week across all clubs.',
-  'Berkeley Consulting was ruled out because of its case-interview recruiting process.',
-];
-
 const MOCK_FACT_COUNT = 6;
 
 const STOPWORDS = new Set(
@@ -154,24 +145,62 @@ function rankByRelevance(
 }
 
 /**
- * Extractive stand-in for the compiler. Pulls the sentences that actually mention the branch
- * topic out of the real parent transcript, so branching on anything other than the two scripted
- * demo selections still produces a brief about the thing that was highlighted. The constant
- * fact list is only the last resort.
+ * Extractive stand-in for the compiler. Pulls relevant sentences from marked parent sources and
+ * returns the same cited fact shape expected from a live model.
  */
-function mockCompilerJson(prompt: string): string {
-  const selection = /Branch topic \(highlighted text\):\s*(.*)$/m.exec(prompt)?.[1] ?? '';
-  const question = /Branch question:\s*(.*)$/m.exec(prompt)?.[1] ?? '';
-  const transcript = prompt.split(/^Parent conversation:$/m)[1] ?? '';
+interface MockCompilerSource {
+  kind: string;
+  sourceId: string;
+  content: string;
+}
 
-  const terms = keywords(`${selection} ${question}`);
-  const facts = rankByRelevance(sentencesOf(transcript), terms, MOCK_FACT_COUNT, selection);
+function compilerSources(prompt: string): MockCompilerSource[] {
+  const sources: MockCompilerSource[] = [];
+  const marker = /\[source:([^:\]]+):([^\]]+)\]\n([\s\S]*?)(?=\n\n\[source:|$)/g;
+  for (const match of prompt.matchAll(marker)) {
+    sources.push({ kind: match[1], sourceId: match[2], content: match[3].trim() });
+  }
+  return sources;
+}
+
+function mockCompilerJson(prompt: string): string {
+  const sources = compilerSources(prompt);
+  const selection = sources.find((source) => source.kind === 'selection');
+  const question = sources.find((source) => source.kind === 'question');
+  const terms = keywords(`${selection?.content ?? ''} ${question?.content ?? ''}`);
+  const facts = sources
+    .filter((source) => source.kind !== 'selection' && source.kind !== 'question')
+    .flatMap((source, sourceIndex) =>
+      sentencesOf(source.content).map((text, sentenceIndex) => ({
+        text,
+        sourceId: source.sourceId,
+        sourceIndex,
+        sentenceIndex,
+        score: relevance(text, terms),
+      })),
+    )
+    .filter((fact) => fact.score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.sourceIndex - right.sourceIndex ||
+        left.sentenceIndex - right.sentenceIndex,
+    )
+    .slice(0, MOCK_FACT_COUNT)
+    .map((fact) => ({ text: fact.text, sourceIds: [fact.sourceId] }));
 
   return JSON.stringify({
-    facts: facts.length ? facts : MOCK_FACTS,
+    facts: facts.length
+      ? facts
+      : [
+          {
+            text: `Topic in focus: ${selection?.content ?? 'this branch'}.`,
+            sourceIds: selection ? [selection.sourceId] : [],
+          },
+        ],
     excludedNote: facts.length
-      ? `Excluded: the rest of the parent thread — everything not bearing on ${selection || 'this branch'}.`
-      : 'Excluded: the club-by-club comparison, workload math, decision tree, and interview prep from the parent thread.',
+      ? `Excluded: the rest of the parent thread — everything not bearing on ${selection?.content || 'this branch'}.`
+      : 'Excluded: no relevant parent source was found (degraded mock compiler fallback).',
   });
 }
 

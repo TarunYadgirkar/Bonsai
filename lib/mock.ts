@@ -69,14 +69,7 @@ export function mockBrief(
   question: string,
 ): ContextBrief {
   const available = availableTokensFor(parentId);
-  const facts = [
-    `Topic in focus: ${selection}.`,
-    'User: Tarun, incoming Berkeley freshman, applied math, CS-focused, running a startup with a cofounder.',
-    'Goal: join at most two clubs; builder-first and startup-adjacent over resume-padding.',
-    'Hard constraint: 8-10 hrs/week total across all clubs.',
-    'Free Ventures is priority one — applications close Sept 11, info session Sept 3.',
-    'Berkeley Consulting already ruled out (case-interview recruiting).',
-  ];
+  const facts = [`Topic in focus: ${selection}.`];
   const markdown = [
     `# Branch brief — ${selection}`,
     '',
@@ -96,6 +89,23 @@ export function mockBrief(
     availableTokens: available,
     briefTokens,
     prunedPct: prunedPct(available, briefTokens),
+    sourceRefs: [
+      {
+        kind: 'selection',
+        conversationId: branchId,
+        sourceId: `selection:${branchId}`,
+      },
+      ...(question.trim()
+        ? [
+            {
+              kind: 'question' as const,
+              conversationId: branchId,
+              sourceId: `question:${branchId}`,
+            },
+          ]
+        : []),
+    ],
+    factSourceIds: [[`selection:${branchId}`]],
   };
 }
 
