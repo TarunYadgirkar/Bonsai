@@ -94,7 +94,7 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-11T20:10:00Z by claude session (lane A)
+Updated: 2026-08-11T21:30:00Z by claude session (lane A)
 
 **Session 2026-08-11 PM — audit + fixes (7 commits on copy-a, all gates green: 172 tests, 10/10
 evals, build clean). A 56-agent adversarial review surfaced 36 verified bugs; the load-bearing
@@ -114,8 +114,23 @@ ones are fixed:**
 - **Accounting**: `buildLog` persists the engine's real per-attempt cost (`routing.estCostUsd`,
   which includes escalation passes + `costForServedBy`) instead of a catalog reprice.
 - **Plugin** MCP server is bundled self-contained (`plugin/mcp/dist/server.mjs`); install needs no
-  npm step. Rebuild with `node plugin/mcp/build.mjs` after editing `server.mjs`.
+  npm step. Rebuild with `node plugin/mcp/build.mjs` after editing `server.mjs`. Also: cross-process
+  store lock, coverage retry supersedes phantom siblings, routed effort rendered into the subagent
+  prompt, insight cap 20 everywhere.
+- **Engine** (2nd pass): fork anchors honoured + fail closed on unknown anchor; mock compiler
+  carries the inherited brief forward instead of injecting the Berkeley fixture (depth-2 proof is
+  genuine now); non-string facts filtered before the empty-brief gate; provider propagates a caller
+  abort; baseline scaled onto the strong model's 1.3x tokenizer.
+- **Extension**: session storage opened to the content script (prefill worked-around no-op), fresh-
+  chat link guard, selection-tab guard, orgId UUID validation, per-kind feedback, **structural
+  never-send** (esbuild stub — zero model-POST code in the bundle), dropped `tabs` permission.
+- **Web UI**: failed-send draft survives a branch switch; routing chip no longer flickers to Auto.
 - **Garden artifact** reworked into a real left-to-right tree diagram (same URL b1b44d60).
+
+All 36 adversarially-verified findings from the audit are now fixed on copy-a (192 tests, 10/10
+evals, plugin smoke 12/12, both builds green). Two were left deliberately, documented in place: the
+MCP connector's open CORS/origin (claude.ai's initialize breaks with strict validation) and the
+per-session routing-profile read-modify-write (last-write-wins; negligible contention per session).
 
 **BLOCKED — deploy the above to the live connector (needs Tarun; the auto-mode classifier blocked
 me from running DDL on the live Neon branch):**
@@ -127,12 +142,10 @@ me from running DDL on the live Neon branch):**
 3. Re-verify: fresh web session is empty; `bonsai-dev-key` → 401; real key still inits + fork/merge.
 Migration MUST land before the deploy or new-code writes 503 (no session_id column yet).
 
-**Also flagged, not yet fixed** (need live retest or a judgment call): extension prefill uses
-`chrome.storage.session` the content script can't read (prefill no-ops) + a stale PendingBranch can
-target the wrong conversation + never-send isn't structural (POST code in the bundle) + `tabs`
-permission too broad; plugin `trees.json` cross-process race + coverage-runs-after-persist phantom
-branches; baseline savings ignore the deep model's 1.3x tokenizer (understates ~23% — left alone so
-as not to inflate the headline without your call).
+**Extension caveat:** its fixes typecheck + build + unit-test clean and the never-send stub is
+verified, but the prefill/session-storage and tab-guard changes were NOT retested against live
+claude.ai (needs a human-watched load-unpacked smoke). Worth a quick manual pass before relying on
+the extension in a demo.
 
 **Bonsai is a four-surface product with a defensible engine, a designed UI, and OSS-grade docs.**
 
