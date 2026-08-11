@@ -3,6 +3,7 @@ import type { CompleteParams, CompleteResult } from '@/lib/llm';
 import { CEILING_MODEL, MODEL_TIERS, TIER_DEFAULTS, costForModel } from '@/lib/models';
 import { ProviderUnavailableError } from '@/lib/provider';
 import { MemoryPersistenceBackend } from '@/lib/persistence/memory';
+import type { StoreSnapshot } from '@/lib/store-schema';
 import { estimateTokens } from '@/lib/tokens';
 import type { Conversation, InferenceLog } from '@/lib/types';
 
@@ -256,6 +257,74 @@ describe('exact inference logging', () => {
         outputTokens: 4,
         estCostUsd: 0.000051,
         status: 'failed',
+        baselineInputTokens: 0,
+        baselineCostUsd: 0,
+      }),
+    ]);
+  });
+
+  it('preserves manual routing metadata when a new branch escalation rejects', async () => {
+    const committedSnapshots: StoreSnapshot[] = [];
+    configureStorePersistenceForTests(
+      new MemoryPersistenceBackend({
+        initialSnapshot: { conversations: [root()], logs: [], rootId: ROOT_ID, seq: 0 },
+        beforeCommit: (_previous, next) => {
+          committedSnapshots.push(next);
+        },
+      }),
+    );
+    await loadStore();
+    llmMocks.complete
+      .mockImplementationOnce(async (params) =>
+        result(
+          params,
+          JSON.stringify({
+            facts: [{ text: 'Use SQLite for local storage.', sourceIds: ['root-message'] }],
+            excludedNote: 'Excluded unrelated context.',
+          }),
+          { input: 61, output: 6, cost: 0.000061, servedBy: 'provider-compiler' },
+        ),
+      )
+      .mockImplementationOnce(async (params) =>
+        result(params, 'tiny', {
+          input: 62,
+          output: 2,
+          cost: 0.000062,
+          servedBy: 'provider-quick',
+        }),
+      )
+      .mockRejectedValueOnce(new ProviderUnavailableError('provider unavailable'));
+
+    const response = await branchPost(
+      request('/api/branch', {
+        parentId: ROOT_ID,
+        selection: 'SQLite',
+        question: 'Should we use it?',
+        mode: { mode: 'manual', model: 'claude-haiku-4-5', effort: 'low' },
+      }),
+    );
+
+    expect(response.status).toBe(502);
+    expect(listConversations()).toEqual([root()]);
+    expect(committedSnapshots).toHaveLength(1);
+    expect(committedSnapshots[0].conversations).toEqual([root()]);
+    expect(committedSnapshots[0].logs).toEqual([
+      expect.objectContaining({
+        purpose: 'compile',
+        servedBy: 'provider-compiler',
+        status: 'succeeded',
+      }),
+      expect.objectContaining({
+        purpose: 'chat',
+        model: 'claude-haiku-4-5',
+        effort: 'low',
+        servedBy: 'provider-quick',
+        inputTokens: 62,
+        outputTokens: 2,
+        estCostUsd: 0.000062,
+        status: 'failed',
+        escalated: true,
+        overridden: true,
         baselineInputTokens: 0,
         baselineCostUsd: 0,
       }),

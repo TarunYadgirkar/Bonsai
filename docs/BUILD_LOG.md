@@ -262,3 +262,9 @@ Spec-review follow-up:
 - corrected the durability plan milestone status and Task 6 completion heading.
 - streamed fingerprint directory entries so the 512-entry bound applies before allocation, not after an unbounded directory read.
 - fresh code, TypeScript, and security re-reviews approved the final follow-up with no Critical or Important findings.
+
+Routing-telemetry correction:
+
+- corrected the Task 5 provider-failure accounting claim for the case where a manual branch answer completes but fails sanity and its escalation provider rejects;
+- a route-level RED first proved the compiler and failed answer were committed atomically without publishing the branch, but the failed answer lost `escalated` and `overridden`; the corrected event preserves both as `true`;
+- focused branch, context, inference, and persistence tests passed 152 tests; full Vitest passed 255 tests, and strict TypeScript, full ESLint, the webpack production build, fixture regeneration contract, diff check, and focused secret/debug scans passed.

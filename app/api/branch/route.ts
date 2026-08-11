@@ -99,6 +99,7 @@ export async function POST(request: Request): Promise<Response> {
           logFailedBranchInference(
             branchId,
             compiled.compiler,
+            routed.routing,
             routed.classifier,
             error instanceof CompletionPipelineError ? error.attempts : [],
           );
@@ -179,6 +180,7 @@ export async function POST(request: Request): Promise<Response> {
 function logFailedBranchInference(
   branchId: string,
   compiler: CompletionEvent,
+  routing?: RoutingDecision,
   classifier?: CompletionEvent,
   attempts: CompletionEvent[] = [],
 ): void {
@@ -187,7 +189,15 @@ function logFailedBranchInference(
     logInference(buildLog({ branchId, purpose: 'classify', ...classifier }));
   }
   for (const attempt of attempts) {
-    logInference(buildLog({ branchId, purpose: 'chat', ...attempt }));
+    logInference(
+      buildLog({
+        branchId,
+        purpose: 'chat',
+        ...attempt,
+        escalated: true,
+        overridden: routing?.overridden,
+      }),
+    );
   }
 }
 
