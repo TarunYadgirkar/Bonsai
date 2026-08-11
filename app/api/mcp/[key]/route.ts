@@ -31,10 +31,10 @@ async function handle(req: Request, ctx: { params: Promise<{ key: string }> }): 
   const { key: pathKey } = await ctx.params;
   const key = bearerKey(req) ?? pathKey;
   if (!(await validateKey(key))) {
-    return Response.json(
-      { error: 'unauthorized' },
-      { status: 401, headers: { 'WWW-Authenticate': 'Bearer' } },
-    );
+    // Plain 401, NO WWW-Authenticate: this is an authless connector whose key rides in the URL.
+    // A WWW-Authenticate: Bearer header makes claude.ai treat the server as OAuth-protected and
+    // attempt Dynamic Client Registration, which then fails ("couldn't register with sign-in").
+    return Response.json({ error: 'unauthorized' }, { status: 401 });
   }
   return buildHandler(key)(req);
 }

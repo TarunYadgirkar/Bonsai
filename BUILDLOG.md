@@ -17,6 +17,17 @@ future MCP Apps UI slots in free). Auth v1: garden-key path segment validated ag
 unknown key rejected. MCP Apps tree UI deferred to v2 (draft spec; and the iframe can't spawn new
 chats — that's the extension's job).
 
+**DEPLOYED + WIRED LIVE (2026-08-11):** new Vercel project `bonsai-connector`
+(bonsai-connector.vercel.app), isolated from the `bonsai`/main demo, on the lane's Neon branch.
+Gotchas hit and fixed: (1) new project defaulted to framework `None` → all routes 404; set
+`framework: nextjs` via API. (2) team default SSO deployment-protection wall 401'd Anthropic's
+egress; disabled via API. (3) the route's `WWW-Authenticate: Bearer` on 401 made claude.ai attempt
+OAuth DCR instead of authless — removed (authless connectors must not advertise auth). (4) a digit
+dropped while typing the key into claude.ai's dialog → persistent 401; caught it in the Vercel
+runtime logs and registered the key claude.ai actually holds. **The connector is now connected in
+Tarun's claude.ai (Max) account** with all 4 tools discovered and permission-gated. Connector URL +
+key recorded in the project memory (not committed to the repo).
+
 Toolchain: extension excluded from the root `tsc` gate (it has its own `chrome`-typed tsconfig +
 typecheck); CI now runs the extension typecheck + build too. `@types/chrome` at root.
 
