@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { compileBrief, type CompileParams } from '../src/compiler';
 import { estimateTokens, prunedPct } from '../src/tokens';
-import type { Message, UserProfile } from '../src/types';
+import type { UserProfile } from '../src/types';
 import { fakeComplete, llmResult } from './helpers';
 
 const profile: UserProfile = {
@@ -10,15 +10,17 @@ const profile: UserProfile = {
   goals: ['ship Bonsai', 'join two clubs'],
 };
 
-const parentMessages: Message[] = [
-  { id: 'p1', role: 'user', content: 'Which clubs should I join this fall?' },
-  { id: 'p2', role: 'assistant', content: 'Free Ventures applications close September 11.' },
-];
+const pathMarkdown = [
+  '## Conversation',
+  'user: Which clubs should I join this fall?',
+  '',
+  'assistant: Free Ventures applications close September 11.',
+].join('\n');
 
 const baseParams: CompileParams = {
   briefId: 'brief-1',
   branchId: 'b1',
-  parentMessages,
+  pathMarkdown,
   profile,
   selection: 'Free Ventures',
   question: 'When do applications close?',
@@ -35,7 +37,7 @@ describe('compileBrief', () => {
     const { complete } = fakeComplete([
       llmResult(JSON.stringify({ facts, excludedNote: 'Excluded: everything else.' })),
     ]);
-    const brief = await compileBrief(baseParams, { complete });
+    const { brief } = await compileBrief(baseParams, { complete });
 
     expect(brief.facts).toEqual(facts.slice(0, 8));
     expect(brief.excludedNote).toBe('Excluded: everything else.');
@@ -53,10 +55,88 @@ describe('compileBrief', () => {
     expect(brief.prunedPct).toBe(prunedPct(4000, brief.briefTokens));
   });
 
+  it('trims facts from the tail until the markdown fits the token budget', async () => {
+    const facts = Array.from(
+      { length: 8 },
+      (_, i) => `Fact ${i + 1} ${'lorem '.repeat(20)}stands alone in full.`,
+    );
+    const { complete } = fakeComplete([
+      llmResult(JSON.stringify({ facts, excludedNote: 'Excluded: everything else.' })),
+    ]);
+    const { brief } = await compileBrief({ ...baseParams, budgetTokens: 150 }, { complete });
+
+    expect(brief.facts.length).toBeGreaterThanOrEqual(1);
+    expect(brief.facts.length).toBeLessThan(8);
+    expect(brief.facts).toEqual(facts.slice(0, brief.facts.length));
+    expect(estimateTokens(brief.markdown)).toBeLessThanOrEqual(150);
+    expect(brief.briefTokens).toBe(estimateTokens(brief.markdown));
+  });
+
+  it('never trims below one fact even when the budget is unreachable', async () => {
+    const facts = Array.from(
+      { length: 5 },
+      (_, i) => `Fact ${i + 1} ${'lorem '.repeat(20)}stands alone in full.`,
+    );
+    const { complete } = fakeComplete([
+      llmResult(JSON.stringify({ facts, excludedNote: 'Excluded: everything else.' })),
+    ]);
+    const { brief } = await compileBrief({ ...baseParams, budgetTokens: 1 }, { complete });
+
+    expect(brief.facts).toEqual([facts[0]]);
+    expect(estimateTokens(brief.markdown)).toBeGreaterThan(1);
+  });
+
+  it('carries anchorMessageId onto the brief and omits it when absent', async () => {
+    const { complete } = fakeComplete([
+      llmResult(JSON.stringify({ facts: ['A fact.'], excludedNote: 'Excluded: x.' })),
+      llmResult(JSON.stringify({ facts: ['A fact.'], excludedNote: 'Excluded: x.' })),
+    ]);
+    const anchored = await compileBrief({ ...baseParams, anchorMessageId: 'p2' }, { complete });
+    const unanchored = await compileBrief(baseParams, { complete });
+
+    expect(anchored.brief.anchorMessageId).toBe('p2');
+    expect(unanchored.brief.anchorMessageId).toBeUndefined();
+    expect('anchorMessageId' in unanchored.brief).toBe(false);
+  });
+
+  it('reports usage straight off the complete result', async () => {
+    const { complete } = fakeComplete([
+      llmResult(JSON.stringify({ facts: ['A fact.'], excludedNote: 'Excluded: x.' }), {
+        inputTokens: 321,
+        outputTokens: 87,
+        estCostUsd: 0.000756,
+        model: 'claude-haiku-4-5',
+        mock: false,
+        servedBy: 'claude-haiku-4-5-20251001',
+      }),
+    ]);
+    const { usage } = await compileBrief(baseParams, { complete });
+
+    expect(usage).toEqual({
+      inputTokens: 321,
+      outputTokens: 87,
+      estCostUsd: 0.000756,
+      model: 'claude-haiku-4-5',
+      mock: false,
+      servedBy: 'claude-haiku-4-5-20251001',
+    });
+  });
+
+  it('omits servedBy from usage on mock results', async () => {
+    const { complete } = fakeComplete([
+      llmResult(JSON.stringify({ facts: ['A fact.'], excludedNote: 'Excluded: x.' })),
+    ]);
+    const { usage } = await compileBrief(baseParams, { complete });
+
+    expect(usage.mock).toBe(true);
+    expect(usage.servedBy).toBeUndefined();
+    expect('servedBy' in usage).toBe(false);
+  });
+
   it('falls back to a single topic fact on unparseable output', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { complete } = fakeComplete([llmResult('the compiler rambled, no json')]);
-    const brief = await compileBrief(baseParams, { complete });
+    const { brief } = await compileBrief(baseParams, { complete });
 
     expect(brief.facts).toEqual(['Topic in focus: Free Ventures.']);
     expect(brief.excludedNote).toBe(
@@ -70,7 +150,7 @@ describe('compileBrief', () => {
     const { complete } = fakeComplete([
       llmResult('{"facts": [], "excludedNote": "kept nothing"}'),
     ]);
-    const brief = await compileBrief(baseParams, { complete });
+    const { brief } = await compileBrief(baseParams, { complete });
 
     expect(brief.facts).toEqual(['Topic in focus: Free Ventures.']);
     expect(brief.excludedNote).toBe(
@@ -78,7 +158,7 @@ describe('compileBrief', () => {
     );
   });
 
-  it('prompts with the profile line, selection, question, and full parent transcript', async () => {
+  it('prompts with purpose compile, the profile line, and the path markdown', async () => {
     const { complete, calls } = fakeComplete([
       llmResult(JSON.stringify({ facts: ['A fact.'], excludedNote: 'Excluded: x.' })),
     ]);
@@ -86,6 +166,7 @@ describe('compileBrief', () => {
 
     expect(calls).toHaveLength(1);
     expect(calls[0].tier).toBe('quick');
+    expect(calls[0].purpose).toBe('compile');
     expect(calls[0].maxTokens).toBe(600);
     const [system, user] = calls[0].messages;
     expect(system.role).toBe('system');
@@ -96,8 +177,6 @@ describe('compileBrief', () => {
     );
     expect(user.content).toContain('Branch topic (highlighted text): Free Ventures');
     expect(user.content).toContain('Branch question: When do applications close?');
-    expect(user.content).toContain(
-      'Parent conversation:\nuser: Which clubs should I join this fall?\n\nassistant: Free Ventures applications close September 11.',
-    );
+    expect(user.content).toContain(`Parent conversation:\n${pathMarkdown}`);
   });
 });

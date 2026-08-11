@@ -1,9 +1,12 @@
 import {
   INTERNAL_TIER,
+  assemblePath,
   compileBrief,
   completeWithEscalation,
   estimateTokens,
+  profileFor,
   route,
+  widenedChatContext,
 } from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
 import {
@@ -24,7 +27,6 @@ import type {
   Conversation,
   Message,
   RoutingDecision,
-  UserProfile,
 } from '@/lib/types';
 
 const ANSWER_SYSTEM_PROMPT =
@@ -50,28 +52,49 @@ export async function POST(request: Request) {
   const question = body.question ?? '';
   const availableTokens = availableTokensFor(parent.id) + estimateTokens(body.selection);
 
-  const brief = await compileBrief({
+  // Compile off the assembled path: the parent's own brief + merged insights + the transcript
+  // up to the fork anchor. Referents an ancestor already resolved arrive pre-resolved.
+  const path = assemblePath({
+    parent,
+    byId: getConversation,
+    anchorMessageId: body.anchorMessageId,
+  });
+  const compiled = await compileBrief({
     briefId: nextId('brief'),
     branchId,
-    parentMessages: parent.messages,
-    profile: profileFor(parent),
+    pathMarkdown: path.markdown,
+    profile: profileFor(parent, getConversation),
     selection: body.selection,
     question,
     availableTokens,
+    anchorMessageId: body.anchorMessageId,
   });
+  const brief = compiled.brief;
 
   logInference(
     buildLog({
       branchId,
       purpose: 'compile',
       tier: INTERNAL_TIER,
-      inputTokens: availableTokens,
-      outputTokens: brief.briefTokens,
+      model: compiled.usage.model,
+      inputTokens: compiled.usage.inputTokens,
+      outputTokens: compiled.usage.outputTokens,
       baselineInputTokens: availableTokens,
     }),
   );
 
-  let messages: Message[] = [];
+  const conversation: Conversation = {
+    id: branchId,
+    title: body.title ?? body.selection.slice(0, 48),
+    parentId: parent.id,
+    messages: [],
+    brief,
+    insights: [],
+    pinnedTier: null,
+    pinnedMode: body.mode?.mode === 'manual' ? body.mode : null,
+    archived: false,
+  };
+
   let routing: RoutingDecision | undefined;
   let answer: Message | undefined;
 
@@ -86,6 +109,12 @@ export async function POST(request: Request) {
       routing: initial,
       systemPrompt: ANSWER_SYSTEM_PROMPT,
       userPrompt: `${brief.markdown}\n\n---\n${question}`,
+      widen: () => {
+        const wider = widenedChatContext(conversation, getConversation);
+        return wider
+          ? { userPrompt: `${wider.context}\n\n---\n${question}`, addedTokens: wider.addedTokens }
+          : null;
+      },
     });
     routing = result.routing;
     answer = {
@@ -95,7 +124,7 @@ export async function POST(request: Request) {
       routing,
       createdAt: new Date().toISOString(),
     };
-    messages = [
+    conversation.messages = [
       { id: nextId('msg'), role: 'user', content: question, createdAt: new Date().toISOString() },
       answer,
     ];
@@ -114,16 +143,6 @@ export async function POST(request: Request) {
     );
   }
 
-  const conversation: Conversation = {
-    id: branchId,
-    title: body.title ?? body.selection.slice(0, 48),
-    parentId: parent.id,
-    messages,
-    brief,
-    insights: [],
-    pinnedTier: null,
-    archived: false,
-  };
   putConversation(conversation);
 
   const node = buildTree().find((n) => n.id === branchId);
@@ -138,14 +157,4 @@ export async function POST(request: Request) {
 
   const response: BranchResponse = { node, conversation, brief, message: answer, routing };
   return Response.json(response);
-}
-
-/** Only the root carries the profile; a branch off a branch still needs it. */
-function profileFor(conversation: Conversation): UserProfile | undefined {
-  let cursor: Conversation | undefined = conversation;
-  while (cursor) {
-    if (cursor.profile) return cursor.profile;
-    cursor = cursor.parentId ? getConversation(cursor.parentId) : undefined;
-  }
-  return undefined;
 }

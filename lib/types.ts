@@ -71,6 +71,8 @@ export interface BranchRequest {
   title?: string;
   /** Mode picker, same semantics as ChatRequest. */
   mode?: ModeSelection;
+  /** Parent message the selection was made in; scopes compilation to the fork point. */
+  anchorMessageId?: string;
 }
 
 export interface BranchResponse {

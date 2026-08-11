@@ -1,4 +1,9 @@
-import { completeWithEscalation, messagesTokens, route } from '@bonsai/engine';
+import {
+  completeWithEscalation,
+  renderChatContext,
+  route,
+  widenedChatContext,
+} from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
 import {
   appendMessage,
@@ -9,6 +14,7 @@ import {
   logInference,
   nextId,
   saveStore,
+  updateConversation,
 } from '@/lib/store';
 import type { ApiError, ChatRequest, ChatResponse } from '@/lib/types';
 
@@ -31,6 +37,14 @@ export async function POST(request: Request) {
     });
   }
 
+  // A manual pick pins the branch; an explicit switch back to auto unpins it. Pin-per-branch
+  // (not per message) also keeps the provider prompt cache warm across the branch.
+  if (body.mode?.mode === 'manual') {
+    updateConversation(conversation.id, (c) => ({ ...c, pinnedMode: body.mode }));
+  } else if (body.mode?.mode === 'auto') {
+    updateConversation(conversation.id, (c) => ({ ...c, pinnedMode: null }));
+  }
+
   appendMessage(conversation.id, {
     id: nextId('msg'),
     role: 'user',
@@ -38,15 +52,9 @@ export async function POST(request: Request) {
     createdAt: new Date().toISOString(),
   });
 
-  // A branch answers off its compiled brief plus its own turns; the root carries full history.
-  const priorTurns = messagesTokens(conversation.messages);
-  const contextTokens = conversation.brief
-    ? conversation.brief.briefTokens + priorTurns
-    : priorTurns + availableTokensFor(conversation.parentId);
-
-  const context = conversation.brief
-    ? `${conversation.brief.markdown}\n\n---\n## This branch so far\n${renderTurns(conversation.messages)}`
-    : renderTurns(conversation.messages);
+  // Context = brief + merged insights + own turns (root: transcript + insights). The question
+  // rides after the divider, so `conversation` staying pre-append is deliberate.
+  const { context, contextTokens } = renderChatContext(conversation);
 
   const pinnedTier = body.pinnedTier ?? conversation.pinnedTier;
   const initial = await route({
@@ -55,12 +63,19 @@ export async function POST(request: Request) {
     contextTokens,
     pinnedTier,
     mode: body.mode,
+    pinnedMode: conversation.pinnedMode,
   });
 
   const result = await completeWithEscalation({
     routing: initial,
     systemPrompt: ANSWER_SYSTEM_PROMPT,
     userPrompt: `${context}\n\n---\n${body.content}`,
+    widen: () => {
+      const wider = widenedChatContext(conversation, getConversation);
+      return wider
+        ? { userPrompt: `${wider.context}\n\n---\n${body.content}`, addedTokens: wider.addedTokens }
+        : null;
+    },
   });
 
   const message = {
@@ -82,8 +97,8 @@ export async function POST(request: Request) {
       inputTokens: result.inputTokens,
       outputTokens: result.outputTokens,
       baselineInputTokens: conversation.brief
-        ? conversation.brief.availableTokens + priorTurns
-        : contextTokens,
+        ? conversation.brief.availableTokens + contextTokens
+        : contextTokens + availableTokensFor(conversation.parentId),
       escalated: result.routing.escalated,
       overridden: result.routing.overridden,
     }),
@@ -99,8 +114,4 @@ export async function POST(request: Request) {
     log,
   };
   return Response.json(response);
-}
-
-function renderTurns(messages: { role: string; content: string }[]): string {
-  return messages.map((m) => `${m.role}: ${m.content}`).join('\n\n');
 }

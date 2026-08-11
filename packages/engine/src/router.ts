@@ -2,8 +2,10 @@
  * Routes intelligence, not just models.
  *
  * Order of optimization per PRODUCT.md: context -> effort -> model -> retry. The compiler has
- * already minimized context by the time we get here, so this decides effort + model, and
- * escalates only when the cheap answer fails a sanity check.
+ * already minimized context by the time we get here, so this decides effort + model — and when
+ * an answer fails, the ladder pulls the CONTEXT lever (widen the brief with parent turns)
+ * before it pulls the model lever. A manual pick is never silently upgraded: the user's choice
+ * is their own labelled example, and overriding it would destroy the signal.
  */
 import { complete as defaultComplete, type CompleteFn } from './llm';
 import {
@@ -44,8 +46,10 @@ export interface RouteParams {
   brief?: ContextBrief;
   contextTokens: number;
   pinnedTier?: Tier | null;
-  /** Mode picker. 'manual' names a model and an effort; 'auto' (or absent) classifies. */
+  /** Per-request mode picker. 'manual' names a model and an effort; 'auto' (or absent) classifies. */
   mode?: ModeSelection;
+  /** Branch-level persisted pin. Loses to a per-request manual mode, beats pinnedTier. */
+  pinnedMode?: ModeSelection | null;
 }
 
 export interface RouterDeps {
@@ -58,12 +62,18 @@ export async function route(
   params: RouteParams,
   deps: RouterDeps = DEFAULT_DEPS,
 ): Promise<RoutingDecision> {
-  const { question, contextTokens, pinnedTier, mode } = params;
+  const { question, contextTokens, pinnedTier } = params;
 
   // An explicit pick is the user's own labelled example — skip the classifier entirely.
-  if (mode?.mode === 'manual' && mode.model) {
-    const model = modelSpec(mode.model);
-    const effort = mode.effort ?? TIER_DEFAULTS[model.tier].effort;
+  const manual =
+    params.mode?.mode === 'manual' && params.mode.model
+      ? params.mode
+      : params.pinnedMode?.mode === 'manual' && params.pinnedMode.model
+        ? params.pinnedMode
+        : null;
+  if (manual?.model) {
+    const model = modelSpec(manual.model);
+    const effort = manual.effort ?? TIER_DEFAULTS[model.tier].effort;
     return decision({
       tier: model.tier,
       model: model.id,
@@ -78,14 +88,14 @@ export async function route(
   if (pinnedTier) {
     return decision({
       tier: pinnedTier,
-      complexity: TIER_BY_COMPLEXITY[3] === pinnedTier ? 3 : 2,
+      complexity: pinnedTier === 'deep' ? 3 : pinnedTier === 'thoughtful' ? 2 : 1,
       contextTokens,
       reason: `Branch pinned to ${TIER_LABEL[pinnedTier]} by you; classification skipped.`,
       overridden: true,
     });
   }
 
-  const { complexity, why } = await classify(question, contextTokens, deps);
+  const { complexity, covered, why } = await classify(params, deps);
   const tier = TIER_BY_COMPLEXITY[complexity];
 
   return decision({
@@ -94,27 +104,35 @@ export async function route(
     contextTokens,
     reason: `${why} Complexity ${complexity}/3 against a ${contextTokens}-token compiled brief.`,
     overridden: false,
+    coveredByBrief: covered,
   });
 }
 
-/** One cheap call. Cost discipline is the product — the classifier never runs on a big model. */
+/**
+ * One cheap call. Cost discipline is the product — the classifier never runs on a big model.
+ * It reads the brief's facts, so "does the brief cover this question" is judged before any
+ * spend on an answer that was doomed to punt.
+ */
 async function classify(
-  question: string,
-  contextTokens: number,
+  params: RouteParams,
   deps: RouterDeps,
-): Promise<{ complexity: Complexity; why: string }> {
+): Promise<{ complexity: Complexity; covered: boolean; why: string }> {
+  const factsBlock = params.brief?.facts.length
+    ? `\nBrief facts:\n${params.brief.facts.map((f) => `- ${f}`).join('\n')}`
+    : '';
   const result = await deps.complete({
     tier: INTERNAL_TIER,
+    purpose: 'classify',
     maxTokens: 120,
     messages: [
       {
         role: 'system',
         content:
-          'You rate how much intelligence a question deserves. 1 = a single fact lookup answerable from the given context. 2 = synthesis or explanation over a few facts. 3 = multi-constraint reasoning, ranking, or weighing trade-offs. Respond with JSON only: {"complexity": 1|2|3, "reason": "<8 words>"}.',
+          'You rate how much intelligence a question deserves, and whether the provided brief facts cover it. complexity: 1 = a single fact lookup answerable from the given context. 2 = synthesis or explanation over a few facts. 3 = multi-constraint reasoning, ranking, or weighing trade-offs. covered: whether the brief facts contain what the question needs (true when no facts are provided). Respond with JSON only: {"complexity": 1|2|3, "covered": true|false, "reason": "<8 words>"}.',
       },
       {
         role: 'user',
-        content: `Context size: ${contextTokens} tokens.\nQuestion: ${question}`,
+        content: `Context size: ${params.contextTokens} tokens.${factsBlock}\nQuestion: ${params.question}`,
       },
     ],
   });
@@ -123,19 +141,26 @@ async function classify(
   if (parsed) return parsed;
 
   console.warn('[router] unparseable classifier output — defaulting to thoughtful');
-  return { complexity: 2, why: 'Classifier unclear; defaulted to the middle tier.' };
+  return { complexity: 2, covered: true, why: 'Classifier unclear; defaulted to the middle tier.' };
 }
 
-function parseClassifier(text: string): { complexity: Complexity; why: string } | null {
+function parseClassifier(
+  text: string,
+): { complexity: Complexity; covered: boolean; why: string } | null {
   const start = text.indexOf('{');
   const end = text.lastIndexOf('}');
   if (start === -1 || end <= start) return null;
   try {
-    const json = JSON.parse(text.slice(start, end + 1)) as { complexity?: number; reason?: string };
+    const json = JSON.parse(text.slice(start, end + 1)) as {
+      complexity?: number;
+      covered?: boolean;
+      reason?: string;
+    };
     const value = Number(json.complexity);
     if (value !== 1 && value !== 2 && value !== 3) return null;
     return {
       complexity: value as Complexity,
+      covered: typeof json.covered === 'boolean' ? json.covered : true,
       why: typeof json.reason === 'string' ? `${json.reason}.` : 'Classified by the router.',
     };
   } catch {
@@ -152,6 +177,7 @@ function decision(params: {
   escalated?: boolean;
   model?: string;
   effort?: Effort;
+  coveredByBrief?: boolean;
 }): RoutingDecision {
   const model = params.model ?? MODEL_TIERS[params.tier];
   const effort = params.effort ?? TIER_DEFAULTS[params.tier].effort;
@@ -170,91 +196,140 @@ function decision(params: {
     complexity: params.complexity,
     escalated: params.escalated ?? false,
     overridden: params.overridden,
+    ...(params.coveredByBrief === undefined ? {} : { coveredByBrief: params.coveredByBrief }),
   };
 }
 
 /**
- * Start cheap, escalate on failure. Answers that punt ("I don't have enough context") are the
- * signal that the brief was too small — which is a context problem the next tier can absorb.
+ * Punts signal a context problem first, a capability problem second. The short-answer check
+ * only counts against synthesis questions — a complexity-1 lookup answered in three words is
+ * a success, not a failure.
  */
-const PUNT = /\b(i (don'?t|do not) (have|know)|not enough (context|information)|cannot determine|unclear from)/i;
+const PUNT =
+  /\b(i (don'?t|do not) (have|know)|not enough (context|information)|cannot determine|unclear from|(brief|context)[^.]{0,60}does not cover)/i;
 
-export function answerFailsSanityCheck(answer: string): boolean {
-  return answer.trim().length < 40 || PUNT.test(answer);
+export function answerFailsSanityCheck(answer: string, complexity: Complexity = 2): boolean {
+  if (PUNT.test(answer)) return true;
+  return complexity >= 2 && answer.trim().length < 40;
 }
 
-export async function completeWithEscalation(
-  params: {
-    routing: RoutingDecision;
-    systemPrompt: string;
-    userPrompt: string;
-  },
-  deps: RouterDeps = DEFAULT_DEPS,
-): Promise<{ text: string; routing: RoutingDecision; inputTokens: number; outputTokens: number }> {
-  const messages = [
-    { role: 'system' as const, content: params.systemPrompt },
-    { role: 'user' as const, content: params.userPrompt },
-  ];
-
-  const first = await deps.complete({
-    tier: params.routing.tier,
-    model: params.routing.model,
-    effort: params.routing.effort,
-    messages,
-  });
-  if (!answerFailsSanityCheck(first.text)) {
-    return {
-      text: first.text,
-      routing: { ...params.routing, estCostUsd: first.estCostUsd, servedBy: first.servedBy },
-      inputTokens: first.inputTokens,
-      outputTokens: first.outputTokens,
-    };
-  }
-
-  const upgraded = NEXT_TIER[params.routing.tier];
-
-  /*
-   * Above deep there is no higher tier, but there is a higher model: a deep answer that still
-   * fails the check escalates onto the ceiling model rather than giving up. Only once — if the
-   * ceiling itself punts, more spend is not the answer, and the brief is what's wrong.
+export interface EscalationParams {
+  routing: RoutingDecision;
+  systemPrompt: string;
+  userPrompt: string;
+  /**
+   * The context lever: returns a replacement user prompt with parent turns pulled in beside
+   * the brief, or null when there is nothing to widen with. Called at most once.
    */
-  const atCeiling = params.routing.model === CEILING_MODEL;
-  if (!upgraded && atCeiling) {
-    return {
-      text: first.text,
-      routing: { ...params.routing, estCostUsd: first.estCostUsd, servedBy: first.servedBy },
-      inputTokens: first.inputTokens,
-      outputTokens: first.outputTokens,
+  widen?: () => { userPrompt: string; addedTokens: number } | null;
+}
+
+export interface EscalationResult {
+  text: string;
+  routing: RoutingDecision;
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/**
+ * The ladder, in the product's stated order: context first, model second, never past the
+ * ceiling, and never over a user's explicit pick.
+ *
+ *   1. If the classifier already judged the brief insufficient, widen before the first call.
+ *   2. Answer. Passes the sanity check → done.
+ *   3. Punt with an unused widen available → widen, retry on the SAME model.
+ *   4. Still punting → upgrade the model (next tier, then the ceiling) — unless the routing
+ *      was a manual pick or pin, which the ladder must not override.
+ */
+export async function completeWithEscalation(
+  params: EscalationParams,
+  deps: RouterDeps = DEFAULT_DEPS,
+): Promise<EscalationResult> {
+  let routing = params.routing;
+  let userPrompt = params.userPrompt;
+  let widened = false;
+  let totalInput = 0;
+  let totalOutput = 0;
+  let totalCost = 0;
+
+  const tryWiden = (): boolean => {
+    if (widened || !params.widen) return false;
+    const wider = params.widen();
+    if (!wider) return false;
+    userPrompt = wider.userPrompt;
+    widened = true;
+    routing = {
+      ...routing,
+      widened: true,
+      contextTokens: routing.contextTokens + wider.addedTokens,
+      reason: `${routing.reason} Widened with parent turns: the brief did not cover the question.`,
     };
+    return true;
+  };
+
+  if (routing.coveredByBrief === false) tryWiden();
+
+  const call = async (model: string, tier: Tier, effort: Effort | undefined) => {
+    const result = await deps.complete({
+      tier,
+      model,
+      effort,
+      purpose: 'chat',
+      messages: [
+        { role: 'system' as const, content: params.systemPrompt },
+        { role: 'user' as const, content: userPrompt },
+      ],
+    });
+    totalInput += result.inputTokens;
+    totalOutput += result.outputTokens;
+    totalCost += result.estCostUsd;
+    return result;
+  };
+
+  const finish = (text: string, servedBy?: string): EscalationResult => ({
+    text,
+    routing: { ...routing, estCostUsd: totalCost, ...(servedBy ? { servedBy } : {}) },
+    inputTokens: totalInput,
+    outputTokens: totalOutput,
+  });
+
+  let result = await call(routing.model, routing.tier, routing.effort);
+  if (!answerFailsSanityCheck(result.text, routing.complexity)) {
+    return finish(result.text, result.servedBy);
   }
 
-  const upgradedTier = upgraded ?? params.routing.tier;
+  // Context lever: same model, wider prompt.
+  if (tryWiden()) {
+    result = await call(routing.model, routing.tier, routing.effort);
+    if (!answerFailsSanityCheck(result.text, routing.complexity)) {
+      return finish(result.text, result.servedBy);
+    }
+  }
+
+  // Model lever — never over an explicit user pick, never past the ceiling.
+  if (routing.overridden) return finish(result.text, result.servedBy);
+
+  const upgraded = NEXT_TIER[routing.tier];
+  const atCeiling = routing.model === CEILING_MODEL;
+  if (!upgraded && atCeiling) return finish(result.text, result.servedBy);
+
+  const upgradedTier = upgraded ?? routing.tier;
   const upgradedModel = upgraded ? TIER_DEFAULTS[upgraded].model : CEILING_MODEL;
-  const upgradedEffort = upgraded ? TIER_DEFAULTS[upgraded].effort : params.routing.effort ?? 'high';
-  const second = await deps.complete({
+  const upgradedEffort = upgraded ? TIER_DEFAULTS[upgraded].effort : (routing.effort ?? 'high');
+  const before = routing;
+  routing = {
+    ...routing,
     tier: upgradedTier,
     model: upgradedModel,
     effort: upgradedEffort,
-    messages,
-  });
-  return {
-    text: second.text,
-    routing: {
-      ...params.routing,
-      tier: upgradedTier,
-      model: upgradedModel,
-      effort: upgradedEffort,
-      modelLabel: modelSpec(upgradedModel).label,
-      label: routingLabel(upgradedModel, upgradedEffort),
-      effortNote: effortNote(upgradedModel, upgradedEffort),
-      servedBy: second.servedBy,
-      escalated: true,
-      reason: `${params.routing.reason} Escalated to ${routingLabel(upgradedModel, upgradedEffort)}: the ${
-        params.routing.label ?? params.routing.modelLabel
-      } answer failed the sanity check.`,
-      estCostUsd: first.estCostUsd + second.estCostUsd,
-    },
-    inputTokens: first.inputTokens + second.inputTokens,
-    outputTokens: first.outputTokens + second.outputTokens,
+    modelLabel: modelSpec(upgradedModel).label,
+    label: routingLabel(upgradedModel, upgradedEffort),
+    effortNote: effortNote(upgradedModel, upgradedEffort),
+    escalated: true,
+    reason: `${before.reason} Escalated to ${routingLabel(upgradedModel, upgradedEffort)}: the ${
+      before.label ?? before.modelLabel
+    } answer failed the sanity check.`,
   };
+  const second = await call(upgradedModel, upgradedTier, upgradedEffort);
+  return finish(second.text, second.servedBy);
 }

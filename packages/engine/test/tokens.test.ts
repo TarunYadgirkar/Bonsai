@@ -39,9 +39,8 @@ describe('prunedPct', () => {
     expect(prunedPct(-10, 50)).toBe(0);
   });
 
-  // Current behavior: kept > available goes negative. Segment 2 changes this.
-  it('goes negative when kept exceeds available', () => {
-    expect(prunedPct(100, 150)).toBe(-50);
-    expect(prunedPct(200, 250)).toBe(-25);
+  it('floors at 0 when kept exceeds available', () => {
+    expect(prunedPct(100, 150)).toBe(0);
+    expect(prunedPct(200, 250)).toBe(0);
   });
 });

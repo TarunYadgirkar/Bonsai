@@ -15,8 +15,11 @@ export function messagesTokens(messages: Message[]): number {
   );
 }
 
-/** Rounded to one decimal so the tree edge reads "96.8%" rather than "96.83527%". */
+/**
+ * Rounded to one decimal so the tree edge reads "96.8%" rather than "96.83527%".
+ * Floored at 0: a brief larger than a tiny parent is "nothing pruned", not negative pruning.
+ */
 export function prunedPct(available: number, kept: number): number {
   if (available <= 0) return 0;
-  return Math.round(((available - kept) / available) * 1000) / 10;
+  return Math.max(0, Math.round(((available - kept) / available) * 1000) / 10);
 }

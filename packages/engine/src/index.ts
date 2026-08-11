@@ -36,14 +36,29 @@ export {
   type ProviderName,
   type ProviderResult,
 } from './provider';
-export { compileBrief, type CompileParams, type EngineDeps } from './compiler';
+export {
+  compileBrief,
+  type CompileParams,
+  type CompileResult,
+  type CompileUsage,
+  type EngineDeps,
+} from './compiler';
 export {
   answerFailsSanityCheck,
   completeWithEscalation,
   route,
+  type EscalationParams,
+  type EscalationResult,
   type RouteParams,
   type RouterDeps,
 } from './router';
+export {
+  assemblePath,
+  profileFor,
+  renderChatContext,
+  widenedChatContext,
+  type AssembledPath,
+} from './context';
 export {
   availableTokensFor,
   buildTree,

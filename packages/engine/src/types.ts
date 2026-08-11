@@ -60,6 +60,11 @@ export interface ContextBrief {
   briefTokens: number;
   /** 0-100, rounded to one decimal. Rendered on the tree edge. */
   prunedPct: number;
+  /**
+   * Parent message the fork was anchored to. Messages after it were out of scope at fork time —
+   * compilation and later widening both respect this boundary. Absent on pre-anchor briefs.
+   */
+  anchorMessageId?: string;
 }
 
 export interface RoutingDecision {
@@ -86,6 +91,14 @@ export interface RoutingDecision {
   escalated: boolean;
   /** True when a pinned tier or explicit user choice bypassed the classifier. */
   overridden: boolean;
+  /**
+   * Classifier's judgment of whether the compiled brief actually covers the question. False
+   * pre-widens context before the first answer instead of paying for a doomed completion.
+   * Absent when classification was skipped.
+   */
+  coveredByBrief?: boolean;
+  /** True when the escalation ladder pulled parent context in beside the brief. */
+  widened?: boolean;
 }
 
 export interface Insight {
@@ -107,6 +120,12 @@ export interface Conversation {
   brief?: ContextBrief;
   insights: Insight[];
   pinnedTier: Tier | null;
+  /**
+   * Persisted branch-level mode pin. Routing precedence: per-request manual mode >
+   * pinnedMode > pinnedTier (legacy) > classifier. Pinning per branch — not per message —
+   * also keeps the provider prompt cache warm, since resolved effort is part of the prompt.
+   */
+  pinnedMode?: ModeSelection | null;
   archived: boolean;
 }
 

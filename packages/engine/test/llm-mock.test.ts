@@ -31,10 +31,15 @@ describe('mock provider path', () => {
   it('answers classifier prompts with JSON complexity 1-3 and realistic token math', async () => {
     const messages = classifierMessages('What is the application deadline?', 120);
     const result = await complete({ tier: 'quick', messages });
-    const parsed = JSON.parse(result.text) as { complexity: number; reason: string };
+    const parsed = JSON.parse(result.text) as {
+      complexity: number;
+      covered: boolean;
+      reason: string;
+    };
 
     expect([1, 2, 3]).toContain(parsed.complexity);
     expect(parsed.complexity).toBe(1);
+    expect(parsed.covered).toBe(true);
     expect(typeof parsed.reason).toBe('string');
     expect(result.mock).toBe(true);
     expect(result.servedBy).toBeUndefined();
@@ -65,6 +70,43 @@ describe('mock provider path', () => {
       ),
     });
     expect((JSON.parse(medium.text) as { complexity: number }).complexity).toBe(2);
+  });
+
+  it('judges covered against the brief facts pasted into the classifier prompt', async () => {
+    const classifierWithFacts = (facts: string[], question: string): LlmMessage[] => [
+      {
+        role: 'system',
+        content:
+          'Rate the question. Respond with JSON only: {"complexity": 1|2|3, "covered": true|false, "reason": "<8 words>"}.',
+      },
+      {
+        role: 'user',
+        content: [
+          'Context size: 200 tokens.',
+          'Brief facts:',
+          ...facts.map((f) => `- ${f}`),
+          `Question: ${question}`,
+        ].join('\n'),
+      },
+    ];
+
+    const covered = await complete({
+      tier: 'quick',
+      messages: classifierWithFacts(
+        ['Free Ventures applications close September 11.'],
+        'When do Free Ventures applications close?',
+      ),
+    });
+    expect((JSON.parse(covered.text) as { covered: boolean }).covered).toBe(true);
+
+    const uncovered = await complete({
+      tier: 'quick',
+      messages: classifierWithFacts(
+        ['Blueprint builds software for nonprofits.'],
+        'When do Free Ventures applications close?',
+      ),
+    });
+    expect((JSON.parse(uncovered.text) as { covered: boolean }).covered).toBe(false);
   });
 
   it('answers compiler prompts with facts extracted from transcript sentences on the topic', async () => {
@@ -181,5 +223,53 @@ describe('mock provider path', () => {
       ],
     });
     expect(result.text).toBe(PUNT_SENTENCE);
+  });
+
+  it('dispatches on purpose merge even when the prompt looks like a chat answer', async () => {
+    const conclusion =
+      'Free Ventures applications close September 11 so draft the application early.';
+    const result = await complete({
+      tier: 'quick',
+      purpose: 'merge',
+      messages: [
+        { role: 'system', content: 'Answer using only the brief.' },
+        {
+          role: 'user',
+          content: [
+            'Branch topic: Free Ventures',
+            '',
+            'user: Should I apply this cycle even though recruiting is busy?',
+            '',
+            `assistant: ${conclusion}`,
+          ].join('\n'),
+        },
+      ],
+    });
+    expect(result.text).toBe(conclusion);
+  });
+
+  it('dispatches on purpose chat even when the prompt looks like classifier JSON', async () => {
+    const result = await complete({
+      tier: 'quick',
+      purpose: 'chat',
+      messages: [
+        { role: 'system', content: 'Respond with JSON only: {"complexity": 1|2|3}.' },
+        {
+          role: 'user',
+          content: [
+            'Context size: 200 tokens.',
+            '## Relevant facts',
+            '- Blueprint builds software for nonprofits and needs around ten hours weekly.',
+            '',
+            '---',
+            'How many hours does Blueprint need weekly?',
+          ].join('\n'),
+        },
+      ],
+    });
+    expect(result.text).toBe(
+      'Blueprint builds software for nonprofits and needs around ten hours weekly.',
+    );
+    expect(result.text).not.toContain('"complexity"');
   });
 });

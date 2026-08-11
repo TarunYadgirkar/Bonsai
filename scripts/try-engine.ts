@@ -35,17 +35,19 @@ async function main() {
   for (const [i, testCase] of CASES.entries()) {
     console.log(`--- case ${i + 1}: "${testCase.question}"`);
 
-    const brief = await compileBrief({
+    const { brief, usage } = await compileBrief({
       briefId: `brief_${i}`,
       branchId: `branch_${i}`,
-      parentMessages: fixture.messages,
+      pathMarkdown: fixture.messages.map((m) => `${m.role}: ${m.content}`).join('\n\n'),
       profile: fixture.profile,
       selection: testCase.selection,
       question: testCase.question,
       availableTokens: available,
     });
 
-    console.log(`brief: ${available} -> ${brief.briefTokens} tokens (${brief.prunedPct}% pruned)`);
+    console.log(
+      `brief: ${available} -> ${brief.briefTokens} tokens (${brief.prunedPct}% pruned; compile cost $${usage.estCostUsd})`,
+    );
     console.log(`facts:`);
     for (const fact of brief.facts) console.log(`  - ${fact}`);
     console.log(`excluded: ${brief.excludedNote}`);

@@ -3,6 +3,33 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Segment 2: engine semantics made true
+
+The three headline gaps closed:
+
+- **Path-based assembly** (`engine/src/context.ts`): compile input for a fork = parent's brief
+  (+ its merged insights) + transcript up to the fork anchor. Briefs compose recursively, so
+  referents resolved at depth N stay resolved at depth N+1 — verified live: a depth-2 branch's
+  facts carry the parent brief's resolved referents. Forks are anchored
+  (`ContextBrief.anchorMessageId`); messages after the anchor are out of scope.
+- **Merge loop closed**: `renderChatContext` puts a conversation's insights into every answer
+  prompt ("Learned from branches"), and `assemblePath` carries them into sibling compiles.
+  Merge output now reaches models, not just the sidebar.
+- **Context-first escalation** (`router.ts` rewrite): classifier now reads the brief's facts and
+  returns `covered`; uncovered questions pre-widen (pull parent turns in) before the first
+  answer. Punts retry once on the SAME model with widened context before any model upgrade.
+  Manual picks and pins are never silently upgraded. Terse answers to complexity-1 lookups no
+  longer trigger paid escalation.
+- Supporting: brief token budget (800 default, tail-trim), `prunedPct` floored at 0, compile
+  calls return real usage (fabricated compile log rows gone), typed `purpose` on CompleteParams
+  (mock dispatches on intent, not prompt-sniffing), branch-level `pinnedMode` persisted
+  server-side (chat with manual mode pins the branch; auto unpins — also keeps provider prompt
+  cache warm per the effort/cache finding).
+- Suite: 93 tests green, incl. new context.test.ts. Test agent caught a real bug (mock
+  classifier read the wrong facts header — zero-key mode could never report uncovered); fixed.
+- Segment-1 extraction review (typescript-reviewer): approve, no HIGH/CRITICAL; one intentional
+  MEDIUM (engine package ships TS source via `exports` — revisit when publishing standalone).
+
 ## 2026-08-11 — Segment 1: engine extracted to `@bonsai/engine`
 
 - npm workspaces; `packages/engine` holds types, tokens, models, llm (provider→mock chain,

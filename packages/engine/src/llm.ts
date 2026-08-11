@@ -8,7 +8,7 @@
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, effortSpec } from './models';
 import { providerComplete } from './provider';
 import { estimateTokens } from './tokens';
-import type { Effort, Tier } from './types';
+import type { Effort, InferencePurpose, Tier } from './types';
 
 export interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
@@ -18,6 +18,11 @@ export interface LlmMessage {
 export interface CompleteParams {
   tier: Tier;
   messages: LlmMessage[];
+  /**
+   * What this call is for. The mock dispatches on it (typed intent instead of prompt-sniffing);
+   * live providers may use it for per-purpose defaults. Callers should always set it.
+   */
+  purpose?: InferencePurpose;
   /** ModelSpec.id. Defaults to the tier's model, so callers that only know a tier still work. */
   model?: string;
   /** Reasoning effort. Priced and capped as an output-token ceiling. */
@@ -75,7 +80,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
     };
   }
 
-  return mockComplete(tier, model, messages, inputTokens);
+  return mockComplete(tier, model, messages, inputTokens, params.purpose);
 }
 
 /* ---------- mock ---------- */
@@ -186,10 +191,11 @@ function mockComplete(
   model: string,
   messages: LlmMessage[],
   inputTokens: number,
+  purpose?: InferencePurpose,
 ): CompleteResult {
   // The JSON instruction lives in the system message, so match against the whole exchange.
   const prompt = messages.map((m) => m.content).join('\n');
-  const text = mockText(tier, prompt);
+  const text = mockText(tier, prompt, purpose);
   const outputTokens = estimateTokens(text);
   return {
     text,
@@ -266,11 +272,42 @@ function mockDistill(prompt: string): string {
     : `${words.slice(0, INSIGHT_MAX_WORDS).join(' ')}…`;
 }
 
-function mockText(tier: Tier, prompt: string): string {
-  // Internal calls ask for JSON; returning prose would break every caller's parse.
+/** Facts as the router's classifier prompt renders them — a `Brief facts:` block of bullets. */
+function classifierFacts(prompt: string): string[] {
+  const section = /Brief facts:\n([\s\S]*?)(?:\nQuestion:|$)/.exec(prompt)?.[1] ?? '';
+  return section
+    .split('\n')
+    .filter((l) => l.startsWith('- '))
+    .map((l) => l.slice(2).trim());
+}
+
+function mockClassifierJson(prompt: string): string {
+  const complexity = mockComplexity(prompt);
+  const question = /Question:\s*(.*)$/m.exec(prompt)?.[1] ?? '';
+  const facts = classifierFacts(prompt);
+  // No facts in the prompt means there is no brief to judge — a root or a briefless call.
+  const covered =
+    !facts.length ||
+    rankByRelevance(facts, keywords(question), 1, undefined, ANSWER_MIN_SCORE).length > 0;
+  return `{"complexity": ${complexity}, "covered": ${covered}, "reason": "heuristic mock classifier"}`;
+}
+
+function mockText(tier: Tier, prompt: string, purpose?: InferencePurpose): string {
+  // Typed intent first; prompt-sniffing only for callers that predate the purpose field.
+  switch (purpose) {
+    case 'classify':
+      return mockClassifierJson(prompt);
+    case 'compile':
+      return mockCompilerJson(prompt);
+    case 'merge':
+      return mockDistill(prompt);
+    case 'chat':
+      return mockAnswer(tier, prompt);
+    default:
+      break;
+  }
   if (/"complexity"/i.test(prompt) || /^Context size:/m.test(prompt)) {
-    const complexity = mockComplexity(prompt);
-    return `{"complexity": ${complexity}, "reason": "heuristic mock classifier"}`;
+    return mockClassifierJson(prompt);
   }
   if (/"facts"/i.test(prompt) || /compile minimal context/i.test(prompt)) {
     return mockCompilerJson(prompt);

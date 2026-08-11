@@ -86,6 +86,7 @@ async function distill(branch: Conversation): Promise<string> {
 
   const result = await complete({
     tier: INTERNAL_TIER,
+    purpose: 'merge',
     maxTokens: 120,
     messages: [
       {
