@@ -1,4 +1,9 @@
 import * as esbuild from 'esbuild';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+
+// Resolve entry points relative to this file, not the caller's cwd — CI runs it from the repo root.
+const root = dirname(fileURLToPath(import.meta.url));
 
 // The engine reads process.env for provider keys; in the browser there are none, so define them
 // as undefined — providerName() resolves to 'mock' and the extractive compiler runs locally with
@@ -14,6 +19,7 @@ const common = {
   bundle: true,
   target: 'chrome116',
   outdir: 'dist',
+  absWorkingDir: root,
   sourcemap: true,
   define,
   logLevel: 'info',
