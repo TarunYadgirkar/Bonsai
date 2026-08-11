@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompleteParams, CompleteResult } from '@/lib/llm';
 import { TIER_DEFAULTS } from '@/lib/models';
 import { ProviderUnavailableError } from '@/lib/provider';
+import { MemoryPersistenceBackend } from '@/lib/persistence/memory';
 import { estimateTokens } from '@/lib/tokens';
 import type { ContextBrief, Conversation } from '@/lib/types';
 
@@ -9,22 +10,8 @@ const llmMocks = vi.hoisted(() => ({
   complete: vi.fn<(params: CompleteParams) => Promise<CompleteResult>>(),
 }));
 
-const inferenceLogMocks = vi.hoisted(() => ({
-  appendInferenceLogs: vi.fn().mockResolvedValue(undefined),
-}));
-
 vi.mock('@/lib/llm', () => ({
   complete: llmMocks.complete,
-}));
-
-vi.mock('@/lib/inference-log', () => ({
-  appendInferenceLogs: inferenceLogMocks.appendInferenceLogs,
-}));
-
-vi.mock('@/lib/kv', () => ({
-  kvEnabled: () => false,
-  kvGet: vi.fn(),
-  kvSet: vi.fn(),
 }));
 
 import { POST as branchPost } from '@/app/api/branch/route';
@@ -32,11 +19,13 @@ import { POST as chatPost } from '@/app/api/chat/route';
 import { POST as mergePost } from '@/app/api/merge/route';
 import {
   availableTokensFor,
+  configureStorePersistenceForTests,
   getConversation,
   listConversations,
   listLogs,
   putConversation,
   resetStore,
+  saveStore,
   visibleContextFor,
 } from '@/lib/store';
 
@@ -110,8 +99,7 @@ function sourceId(prompt: string, kind: 'brief' | 'insight'): string {
 describe('route context flow', () => {
   beforeEach(async () => {
     llmMocks.complete.mockReset();
-    inferenceLogMocks.appendInferenceLogs.mockReset();
-    inferenceLogMocks.appendInferenceLogs.mockResolvedValue(undefined);
+    configureStorePersistenceForTests(new MemoryPersistenceBackend());
     await resetStore();
 
     llmMocks.complete.mockImplementation(async (params) => {
@@ -172,6 +160,7 @@ describe('route context flow', () => {
     };
     putConversation(root);
     putConversation(child);
+    await saveStore();
 
     const mergeResponse = await mergePost(request('/api/merge', { branchId: CHILD_ID }));
     expect(mergeResponse.status).toBe(200);
@@ -265,7 +254,7 @@ describe('route context flow', () => {
     expect(
       getConversation(ROOT_ID)?.messages.filter((message) => message.content === question),
     ).toHaveLength(1);
-    expect(inferenceLogMocks.appendInferenceLogs).toHaveBeenCalled();
+    expect(listLogs().length).toBeGreaterThan(0);
   });
 
   it('records a blank merge completion as failed without mutating either conversation', async () => {
@@ -273,7 +262,7 @@ describe('route context flow', () => {
       id: ROOT_ID,
       title: 'Context flow root',
       parentId: null,
-      messages: [],
+      messages: [{ id: 'root-relevant', role: 'user', content: RELEVANT_TEXT }],
       insights: [],
       pinnedTier: null,
       archived: false,
@@ -291,6 +280,7 @@ describe('route context flow', () => {
     };
     putConversation(root);
     putConversation(child);
+    await saveStore();
     llmMocks.complete.mockImplementationOnce(async (params) => ({
       ...completion(params, '"   "'),
       inputTokens: 321,
@@ -306,18 +296,16 @@ describe('route context flow', () => {
     expect(body).toEqual({ error: 'merge produced no durable insight' });
     expect(getConversation(ROOT_ID)?.insights).toEqual([]);
     expect(getConversation(CHILD_ID)?.archived).toBe(false);
-    expect(inferenceLogMocks.appendInferenceLogs).toHaveBeenCalledWith([
-      expect.objectContaining({
-        purpose: 'merge',
-        status: 'failed',
-        inputTokens: 321,
-        outputTokens: 99,
-        estCostUsd: 0.004321,
-        servedBy: 'merge-provider',
-        baselineInputTokens: 0,
-        baselineCostUsd: 0,
-      }),
-    ]);
+    expect(listLogs().at(-1)).toMatchObject({
+      purpose: 'merge',
+      status: 'failed',
+      inputTokens: 321,
+      outputTokens: 99,
+      estCostUsd: 0.004321,
+      servedBy: 'merge-provider',
+      baselineInputTokens: 0,
+      baselineCostUsd: 0,
+    });
   });
 
   it('does not append a chat turn when answer completion rejects', async () => {
@@ -331,6 +319,7 @@ describe('route context flow', () => {
       archived: false,
     };
     putConversation(root);
+    await saveStore();
     llmMocks.complete.mockRejectedValueOnce(new ProviderUnavailableError('provider unavailable'));
 
     const response = await chatPost(
@@ -356,6 +345,7 @@ describe('route context flow', () => {
       archived: false,
     };
     putConversation(root);
+    await saveStore();
     const conversationsBefore = listConversations().length;
     const logsBefore = listLogs().length;
     llmMocks.complete

@@ -3,12 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const llmMocks = vi.hoisted(() => ({ complete: vi.fn() }));
 
 vi.mock('@/lib/llm', () => ({ complete: llmMocks.complete }));
-vi.mock('@/lib/inference-log', () => ({ appendInferenceLogs: vi.fn() }));
-vi.mock('@/lib/kv', () => ({
-  kvEnabled: () => false,
-  kvGet: vi.fn(),
-  kvSet: vi.fn(),
-}));
 
 import { POST as branchPost } from '@/app/api/branch/route';
 import { POST as chatPost } from '@/app/api/chat/route';

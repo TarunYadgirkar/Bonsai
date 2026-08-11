@@ -1,8 +1,10 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import seed from '@/fixtures/seed-conversation.json';
 import tree from '@/fixtures/seed-tree.json';
 import { assembleVisibleContext } from './context';
-import { kvEnabled, kvGet, kvSet } from './kv';
-import { appendInferenceLogs } from './inference-log';
+import { PersistenceUncertainCommitError } from './persistence/errors';
+import { selectPersistenceBackend } from './persistence/select';
+import type { PersistenceBackend } from './persistence/types';
 import {
   normalizeInferenceLog,
   normalizeInsight,
@@ -24,15 +26,6 @@ import type {
   Tier,
 } from './types';
 
-/**
- * In-memory store, seeded from the fixture, optionally mirrored to Upstash.
- *
- * globalThis alone survives Next's dev hot-reload but NOT a Vercel cold start or a second
- * serverless instance — a branch created on stage would vanish on the next request. With KV env
- * vars present, `loadStore()` re-reads the snapshot on every request and `saveStore()` writes it
- * back, so globalThis degrades to a per-request cache and any instance sees the same tree.
- * Without them the behavior is unchanged.
- */
 interface StoreShape {
   conversations: Map<string, Conversation>;
   logs: InferenceLog[];
@@ -41,7 +34,25 @@ interface StoreShape {
 }
 
 const GLOBAL_KEY = Symbol.for('bonsai.store');
-const KV_KEY = 'bonsai:store:v1';
+const RUNTIME_KEY = Symbol.for('bonsai.store.persistence');
+const transactionStorage = new AsyncLocalStorage<TransactionContext>();
+
+interface TransactionContext {
+  active: boolean;
+  draft: StoreShape;
+}
+
+interface StoreRuntime {
+  backend?: PersistenceBackend;
+  legacyPrevious?: StoreSnapshot | null;
+  poisoned: boolean;
+  readUnavailable: boolean;
+  tail: Promise<void>;
+}
+
+export interface StoreTransactionOptions {
+  replaceInferenceLogView?: boolean;
+}
 
 export class StoreSequenceExhaustedError extends Error {
   constructor() {
@@ -50,8 +61,19 @@ export class StoreSequenceExhaustedError extends Error {
   }
 }
 
-/** Logs written this request, waiting to be flushed to the local mirror by flushLogs(). */
-const pending: InferenceLog[] = [];
+export class StoreNestedTransactionError extends Error {
+  constructor() {
+    super('nested store transactions are not supported');
+    this.name = 'StoreNestedTransactionError';
+  }
+}
+
+export class StoreInactiveTransactionError extends Error {
+  constructor() {
+    super('store transaction context is no longer active');
+    this.name = 'StoreInactiveTransactionError';
+  }
+}
 
 /**
  * Boots the pre-built demo tree: the root transcript from `seed-conversation.json` plus the
@@ -91,6 +113,18 @@ function shouldUseRootOnlyFixture(): boolean {
 }
 
 function store(): StoreShape {
+  const context = transactionStorage.getStore();
+  if (context) {
+    if (!context.active) throw new StoreInactiveTransactionError();
+    return context.draft;
+  }
+  return publishedStore();
+}
+
+function publishedStore(): StoreShape {
+  if (runtime().readUnavailable) {
+    throw new PersistenceUncertainCommitError('authoritative persistence state is unavailable');
+  }
   const g = globalThis as typeof globalThis & { [GLOBAL_KEY]?: StoreShape };
   if (!g[GLOBAL_KEY]) g[GLOBAL_KEY] = build();
   return g[GLOBAL_KEY];
@@ -100,67 +134,206 @@ function setStore(next: StoreShape): void {
   (globalThis as typeof globalThis & { [GLOBAL_KEY]?: StoreShape })[GLOBAL_KEY] = next;
 }
 
+function runtime(): StoreRuntime {
+  const g = globalThis as typeof globalThis & { [RUNTIME_KEY]?: StoreRuntime };
+  if (!g[RUNTIME_KEY]) {
+    g[RUNTIME_KEY] = { poisoned: false, readUnavailable: false, tail: Promise.resolve() };
+  }
+  return g[RUNTIME_KEY];
+}
+
+function persistenceBackend(): PersistenceBackend {
+  const state = runtime();
+  state.backend ??= selectPersistenceBackend();
+  return state.backend;
+}
+
 function toSnapshot(s: StoreShape): StoreSnapshot {
-  return {
-    conversations: [...s.conversations.values()],
-    logs: s.logs,
+  return parseStoreSnapshot({
+    conversations: [...s.conversations.values()].map((conversation) =>
+      structuredClone(conversation),
+    ),
+    logs: s.logs.map((log) => structuredClone(log)),
     rootId: s.rootId,
     seq: s.seq,
-  };
+  });
 }
 
 function fromSnapshot(snapshot: StoreSnapshot): StoreShape {
-  const conversations = snapshot.conversations.map((conversation) => structuredClone(conversation));
+  const parsed = parseStoreSnapshot(snapshot);
+  const conversations = parsed.conversations.map((conversation) => structuredClone(conversation));
   return {
     conversations: new Map(conversations.map((conversation) => [conversation.id, conversation])),
-    logs: snapshot.logs.map((log) => ({ ...log })),
-    rootId: snapshot.rootId,
-    seq: snapshot.seq,
+    logs: parsed.logs.map((log) => structuredClone(log)),
+    rootId: parsed.rootId,
+    seq: parsed.seq,
   };
 }
 
-/**
- * Call at the top of every route. No-op without KV env vars. Re-reads on every request rather
- * than caching, because a warm instance holding a stale tree is exactly the failure this fixes.
- */
 export async function loadStore(): Promise<void> {
-  if (shouldUseRootOnlyFixture() || !kvEnabled()) return;
-  const read = await kvGet(KV_KEY);
-
-  // Only an empty store may be seeded. On a read error, keep memory and write nothing —
-  // seeding here would overwrite a live tree with the fixture.
-  if (read.status === 'error') return;
-  if (read.status === 'miss') {
-    await saveStore();
-    return;
-  }
-
-  try {
-    const parsed = JSON.parse(read.value) as unknown;
-    setStore(fromSnapshot(parseStoreSnapshot(parsed)));
-  } catch {
-    console.warn('[store] unreadable KV snapshot — keeping in-memory state');
-  }
+  assertOutsideTransaction();
+  await enqueue(async () => {
+    const state = runtime();
+    const backend = persistenceBackend();
+    const loaded = await backend.load();
+    if (loaded.status === 'miss') {
+      if (state.poisoned) {
+        throw new PersistenceUncertainCommitError('persistence state is uncertain');
+      }
+      const seedSnapshot = toSnapshot(build());
+      try {
+        await backend.commit(null, seedSnapshot);
+      } catch (error: unknown) {
+        if (error instanceof PersistenceUncertainCommitError) {
+          await reconcileUncertainCommit(backend, error);
+        }
+        throw error;
+      }
+      setStore(fromSnapshot(seedSnapshot));
+      state.readUnavailable = false;
+      state.legacyPrevious = parseStoreSnapshot(seedSnapshot);
+      return;
+    }
+    setStore(fromSnapshot(loaded.snapshot));
+    state.readUnavailable = false;
+    state.legacyPrevious = parseStoreSnapshot(loaded.snapshot);
+  });
 }
 
-/** Call before responding from any route that mutated state. Awaited: a frozen lambda drops it. */
 export async function saveStore(): Promise<void> {
-  if (shouldUseRootOnlyFixture() || !kvEnabled()) return;
-  await kvSet(KV_KEY, JSON.stringify(toSnapshot(store())));
+  assertOutsideTransaction();
+  const next = toSnapshot(publishedStore());
+  await enqueue(async () => {
+    const state = runtime();
+    if (state.poisoned) {
+      throw new PersistenceUncertainCommitError('persistence state is uncertain');
+    }
+    const backend = persistenceBackend();
+    let previous = state.legacyPrevious;
+    if (previous === undefined) {
+      const loaded = await backend.load();
+      previous = loaded.status === 'miss' ? null : parseStoreSnapshot(loaded.snapshot);
+    }
+    try {
+      await backend.commit(previous, next);
+    } catch (error: unknown) {
+      if (error instanceof PersistenceUncertainCommitError) {
+        await reconcileUncertainCommit(backend, error);
+      }
+      if (previous) setStore(fromSnapshot(previous));
+      throw error;
+    }
+    setStore(fromSnapshot(next));
+    state.legacyPrevious = parseStoreSnapshot(next);
+  });
 }
 
-/**
- * Back to the opening state: rebuild from the fixtures, then overwrite the snapshot.
- *
- * Order matters. Clearing the snapshot row alone leaves a warm lambda holding the old tree in
- * globalThis, and its next request writes that tree straight back — so the in-memory store is
- * replaced first, then persisted over the top.
- */
 export async function resetStore(): Promise<StateResponse> {
-  setStore(build());
-  pending.length = 0;
-  await saveStore();
+  await transactStore(
+    () => {
+      const context = requireActiveTransaction();
+      context.draft = build();
+    },
+    { replaceInferenceLogView: true },
+  );
   return { rootId: rootId(), tree: buildTree(), conversations: listConversations() };
+}
+
+export function configureStorePersistenceForTests(backend: PersistenceBackend): void {
+  const state = runtime();
+  state.backend = backend;
+  state.legacyPrevious = undefined;
+  state.poisoned = false;
+  state.readUnavailable = false;
+  state.tail = Promise.resolve();
+  setStore(build());
+}
+
+export async function transactStore<T>(
+  work: () => T | Promise<T>,
+  options: StoreTransactionOptions = {},
+): Promise<T> {
+  assertOutsideTransaction();
+  return enqueue(async () => {
+    const state = runtime();
+    if (state.poisoned) {
+      throw new PersistenceUncertainCommitError('persistence state is uncertain');
+    }
+    const backend = persistenceBackend();
+    const loaded = await backend.load();
+    const previous = loaded.status === 'miss' ? null : parseStoreSnapshot(loaded.snapshot);
+    if (previous) {
+      setStore(fromSnapshot(previous));
+      state.legacyPrevious = parseStoreSnapshot(previous);
+    }
+    const context: TransactionContext = {
+      active: true,
+      draft: previous ? fromSnapshot(previous) : build(),
+    };
+    let result: T;
+    try {
+      result = await transactionStorage.run(context, work);
+    } finally {
+      context.active = false;
+    }
+    const next = toSnapshot(context.draft);
+    try {
+      await backend.commit(previous, next, options);
+    } catch (error: unknown) {
+      if (error instanceof PersistenceUncertainCommitError) {
+        await reconcileUncertainCommit(backend, error);
+      }
+      throw error;
+    }
+    setStore(fromSnapshot(next));
+    state.legacyPrevious = parseStoreSnapshot(next);
+    return result;
+  });
+}
+
+function assertOutsideTransaction(): void {
+  const context = transactionStorage.getStore();
+  if (!context) return;
+  if (!context.active) throw new StoreInactiveTransactionError();
+  throw new StoreNestedTransactionError();
+}
+
+function requireActiveTransaction(): TransactionContext {
+  const context = transactionStorage.getStore();
+  if (!context || !context.active) throw new StoreInactiveTransactionError();
+  return context;
+}
+
+function enqueue<T>(work: () => Promise<T>): Promise<T> {
+  const state = runtime();
+  const result = state.tail.then(work);
+  state.tail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
+async function reconcileUncertainCommit(
+  backend: PersistenceBackend,
+  error: PersistenceUncertainCommitError,
+): Promise<never> {
+  const state = runtime();
+  state.poisoned = true;
+  state.readUnavailable = true;
+  try {
+    const visible = await backend.load();
+    if (visible.status !== 'miss') {
+      setStore(fromSnapshot(visible.snapshot));
+      state.readUnavailable = false;
+      state.legacyPrevious = parseStoreSnapshot(visible.snapshot);
+    } else {
+      state.legacyPrevious = null;
+    }
+  } catch {
+    state.legacyPrevious = undefined;
+  }
+  throw error;
 }
 
 export function nextId(prefix: string): string {
@@ -175,7 +348,8 @@ export function rootId(): string {
 }
 
 export function getConversation(id: string): Conversation | undefined {
-  return store().conversations.get(id);
+  const conversation = store().conversations.get(id);
+  return conversation ? structuredClone(conversation) : undefined;
 }
 
 export function visibleContextFor(id: string): AssembledContext | undefined {
@@ -184,11 +358,13 @@ export function visibleContextFor(id: string): AssembledContext | undefined {
 }
 
 export function listConversations(): Conversation[] {
-  return [...store().conversations.values()];
+  return [...store().conversations.values()].map((conversation) =>
+    structuredClone(conversation),
+  );
 }
 
 export function putConversation(conversation: Conversation): void {
-  store().conversations.set(conversation.id, conversation);
+  store().conversations.set(conversation.id, structuredClone(conversation));
 }
 
 /** Immutable update — replaces the stored node rather than mutating it. */
@@ -198,9 +374,9 @@ export function updateConversation(
 ): Conversation | undefined {
   const current = store().conversations.get(id);
   if (!current) return undefined;
-  const next = patch(current);
+  const next = structuredClone(patch(structuredClone(current)));
   store().conversations.set(id, next);
-  return next;
+  return structuredClone(next);
 }
 
 export function appendMessage(id: string, message: Message): Conversation | undefined {
@@ -212,24 +388,17 @@ export function appendInsight(parentId: string, insight: Insight): Conversation 
 }
 
 export function logInference(log: InferenceLog): InferenceLog {
-  store().logs.push(log);
-  pending.push(log);
-  return log;
+  const cloned = structuredClone(log);
+  store().logs.push(cloned);
+  return structuredClone(cloned);
 }
 
-/**
- * Mirror everything logged during this request into the local JSON file.
- * Awaited by the routes after saveStore: a frozen lambda drops floating promises. Queued per
- * process rather than per store, so a snapshot reload can't resurrect already-written rows.
- */
 export async function flushLogs(): Promise<void> {
-  if (!pending.length) return;
-  const batch = pending.splice(0, pending.length);
-  await appendInferenceLogs(batch);
+  return;
 }
 
 export function listLogs(): InferenceLog[] {
-  return [...store().logs];
+  return store().logs.map((log) => structuredClone(log));
 }
 
 /** Full parent history a branch could have inherited — the baseline every saving is measured against. */

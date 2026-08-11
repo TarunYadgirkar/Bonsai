@@ -79,7 +79,7 @@ Updated: 2026-08-10
 **Done this session:**
 - History rewritten so every commit is authored by Tarun Yadgirkar; all `Co-Authored-By: Claude` trailers stripped.
 - Repo is private. Branch layout above created.
-- The dead sponsor integration was removed (`98e91d0`) — barred on the trial account and inert behind an unset flag, so it was entirely dead code. Do not reintroduce it. The local JSON log writer it contained survives as `lib/inference-log.ts`; the integration itself remains only in `hackathon-copy`.
+- The dead sponsor integration was removed (`98e91d0`) — barred on the trial account and inert behind an unset flag, so it was entirely dead code. Do not reintroduce it. Inference logs are owned by persisted store snapshots; the integration itself remains only in `hackathon-copy`.
 - Vercel restricted to deploying `main` (`b3ddd26`).
 - New Neon project `bonsai` (`wild-feather-67393800`) with per-lane branches.
 - Hackathon-only docs (`PLAN.md`, `PROMPTS.md`, `DEMO.md`, `docs/`) deleted here; they remain in `hackathon-copy`.

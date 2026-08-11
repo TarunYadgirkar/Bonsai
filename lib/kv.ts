@@ -1,110 +1,191 @@
-/**
- * Durable snapshot storage for lib/store.ts. Two interchangeable backends, picked by env:
- *
- * - Neon Postgres (`DATABASE_URL`) — the one we provision. HTTP driver, no pooling to babysit.
- * - Upstash Redis REST (`UPSTASH_REDIS_REST_*` or `KV_REST_API_*`) — kept because the Vercel
- *   marketplace integration injects those names, so adding it later needs no code change.
- *
- * Neither present means the app runs on globalThis exactly as before, per the AGENTS.md
- * mock-first rule. Every failure here is swallowed and logged: a dead store must degrade to
- * in-memory, never take the demo down (rule 8).
- */
 import { neon } from '@neondatabase/serverless';
+import { PersistenceConfigurationError } from './persistence/errors';
 
-const DATABASE_URL = process.env.DATABASE_URL;
-const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
-const TIMEOUT_MS = 3_000;
+type Environment = Readonly<Record<string, string | undefined>>;
+const MAX_UPSTASH_RESPONSE_BYTES = 32 * 1024 * 1024 + 1_024;
 
-export function kvEnabled(): boolean {
-  return Boolean(DATABASE_URL || (REDIS_URL && REDIS_TOKEN));
+export interface KvTransport {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string): Promise<void>;
 }
 
-export function kvBackend(): 'neon' | 'upstash' | 'memory' {
-  if (DATABASE_URL) return 'neon';
-  if (REDIS_URL && REDIS_TOKEN) return 'upstash';
-  return 'memory';
+export interface CreateKvTransportOptions {
+  env?: Environment;
+  fetch?: typeof globalThis.fetch;
+  neonFactory?: typeof neon;
+  timeoutMs?: number;
+  maxResponseBytes?: number;
 }
 
-/**
- * A miss and a failure must stay distinguishable. Collapsing both to null lets one transient
- * read error convince loadStore() the store is empty, which overwrites a live tree with a fresh
- * fixture — the tree vanishing mid-demo is the exact failure this whole file exists to prevent.
- */
-export type KvRead =
-  | { status: 'hit'; value: string }
-  | { status: 'miss' }
-  | { status: 'error' };
+type KvConfiguration =
+  | { kind: 'neon'; databaseUrl: string }
+  | { kind: 'upstash'; url: string; token: string };
 
-export async function kvGet(key: string): Promise<KvRead> {
+export function hasKvConfiguration(env: Environment = process.env): boolean {
   try {
-    const value = DATABASE_URL
-      ? await neonGet(key)
-      : REDIS_URL && REDIS_TOKEN
-        ? await redisGet(key)
-        : null;
-    return value === null ? { status: 'miss' } : { status: 'hit', value };
-  } catch (err) {
-    console.warn(`[kv] get failed (${(err as Error).message}) — continuing from memory`);
-    return { status: 'error' };
-  }
-}
-
-export async function kvSet(key: string, value: string): Promise<boolean> {
-  try {
-    if (DATABASE_URL) return await neonSet(key, value);
-    if (REDIS_URL && REDIS_TOKEN) return await redisSet(key, value);
-    return false;
-  } catch (err) {
-    console.warn(`[kv] set failed (${(err as Error).message}) — state stayed in memory only`);
+    return resolveKvConfiguration(env) !== null;
+  } catch {
     return false;
   }
 }
 
-/* ---------- neon ---------- */
-
-async function neonGet(key: string): Promise<string | null> {
-  const sql = neon(DATABASE_URL!);
-  const rows = (await sql`SELECT value FROM store_snapshot WHERE key = ${key}`) as {
-    value: unknown;
-  }[];
-  if (!rows.length) return null;
-  // JSONB comes back parsed; store.ts wants the raw string it wrote.
-  return JSON.stringify(rows[0].value);
+export function createKvTransport(options: CreateKvTransportOptions = {}): KvTransport {
+  const configuration = resolveKvConfiguration(options.env ?? process.env);
+  if (!configuration) {
+    throw new PersistenceConfigurationError('KV persistence is not configured');
+  }
+  if (configuration.kind === 'neon') {
+    return createNeonTransport(configuration.databaseUrl, options.neonFactory ?? neon);
+  }
+  return createUpstashTransport(
+    configuration.url,
+    configuration.token,
+    options.fetch ?? globalThis.fetch,
+    options.timeoutMs ?? 3_000,
+    resolveMaximumResponseBytes(options.maxResponseBytes),
+  );
 }
 
-async function neonSet(key: string, value: string): Promise<boolean> {
-  const sql = neon(DATABASE_URL!);
-  await sql`
-    INSERT INTO store_snapshot (key, value, updated_at)
-    VALUES (${key}, ${value}::jsonb, now())
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
-  `;
-  return true;
+function resolveKvConfiguration(env: Environment): KvConfiguration | null {
+  const databaseUrl = nonEmpty(env.DATABASE_URL);
+  if (databaseUrl) return { kind: 'neon', databaseUrl };
+
+  const url = nonEmpty(env.UPSTASH_REDIS_REST_URL) ?? nonEmpty(env.KV_REST_API_URL);
+  const token =
+    nonEmpty(env.UPSTASH_REDIS_REST_TOKEN) ?? nonEmpty(env.KV_REST_API_TOKEN);
+  if (!url && !token) return null;
+  if (!url || !token) {
+    throw new PersistenceConfigurationError('KV persistence configuration is incomplete');
+  }
+  return { kind: 'upstash', url, token };
 }
 
-/* ---------- upstash ---------- */
-
-async function redisGet(key: string): Promise<string | null> {
-  const res = await fetch(`${REDIS_URL}/get/${encodeURIComponent(key)}`, {
-    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  // Throw, don't return null: a 5xx is an error, not an empty store.
-  if (!res.ok) throw new Error(`upstash get ${res.status}`);
-  const body = (await res.json()) as { result?: string | null };
-  return body.result ?? null;
+function createNeonTransport(databaseUrl: string, factory: typeof neon): KvTransport {
+  return {
+    async get(key) {
+      try {
+        const sql = factory(databaseUrl);
+        const rows = (await sql`SELECT value FROM store_snapshot WHERE key = ${key}`) as {
+          value: unknown;
+        }[];
+        return rows.length === 0 ? null : JSON.stringify(rows[0].value);
+      } catch {
+        throw new Error('KV request failed');
+      }
+    },
+    async set(key, value) {
+      try {
+        const sql = factory(databaseUrl);
+        await sql`
+          INSERT INTO store_snapshot (key, value, updated_at)
+          VALUES (${key}, ${value}::jsonb, now())
+          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()
+        `;
+      } catch {
+        throw new Error('KV request failed');
+      }
+    },
+  };
 }
 
-async function redisSet(key: string, value: string): Promise<boolean> {
-  const res = await fetch(`${REDIS_URL}/set/${encodeURIComponent(key)}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${REDIS_TOKEN}` },
-    body: value,
-    cache: 'no-store',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (!res.ok) console.warn(`[kv] upstash set ${res.status} — state stayed in memory only`);
-  return res.ok;
+function createUpstashTransport(
+  url: string,
+  token: string,
+  fetch: typeof globalThis.fetch,
+  timeoutMs: number,
+  maxResponseBytes: number,
+): KvTransport {
+  const baseUrl = url.replace(/\/$/, '');
+  return {
+    async get(key) {
+      try {
+        const response = await fetch(`${baseUrl}/get/${encodeURIComponent(key)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: 'no-store',
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!response.ok) throw new Error('non-2xx');
+        const result = readUpstashResult(await readBoundedJson(response, maxResponseBytes));
+        if (result === null) return null;
+        if (typeof result !== 'string') throw new Error('malformed');
+        return result;
+      } catch {
+        throw new Error('KV request failed');
+      }
+    },
+    async set(key, value) {
+      try {
+        const response = await fetch(`${baseUrl}/set/${encodeURIComponent(key)}`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: value,
+          cache: 'no-store',
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+        if (!response.ok) throw new Error('non-2xx');
+        if (readUpstashResult(await readBoundedJson(response, maxResponseBytes)) !== 'OK') {
+          throw new Error('malformed');
+        }
+      } catch {
+        throw new Error('KV request failed');
+      }
+    },
+  };
+}
+
+function nonEmpty(value: string | undefined): string | undefined {
+  return value && value.trim() ? value : undefined;
+}
+
+function resolveMaximumResponseBytes(value: number | undefined): number {
+  if (value === undefined) return MAX_UPSTASH_RESPONSE_BYTES;
+  if (!Number.isSafeInteger(value) || value <= 0 || value > MAX_UPSTASH_RESPONSE_BYTES) {
+    throw new PersistenceConfigurationError('KV response limit is invalid');
+  }
+  return value;
+}
+
+async function readBoundedJson(response: Response, maximumBytes: number): Promise<unknown> {
+  const contentLength = response.headers.get('content-length');
+  if (contentLength !== null) {
+    const declaredBytes = Number(contentLength);
+    if (
+      !Number.isSafeInteger(declaredBytes) ||
+      declaredBytes < 0 ||
+      declaredBytes > maximumBytes
+    ) {
+      await response.body?.cancel();
+      throw new Error('malformed');
+    }
+  }
+  if (!response.body) throw new Error('malformed');
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  while (true) {
+    const chunk = await reader.read();
+    if (chunk.done) break;
+    totalBytes += chunk.value.byteLength;
+    if (totalBytes > maximumBytes) {
+      await reader.cancel();
+      throw new Error('malformed');
+    }
+    chunks.push(chunk.value);
+  }
+  return JSON.parse(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)), totalBytes).toString(
+    'utf8',
+  )) as unknown;
+}
+
+function readUpstashResult(value: unknown): unknown {
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    Array.isArray(value) ||
+    !Object.prototype.hasOwnProperty.call(value, 'result')
+  ) {
+    throw new Error('malformed');
+  }
+  return (value as Record<string, unknown>).result;
 }

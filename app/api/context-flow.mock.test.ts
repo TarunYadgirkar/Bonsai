@@ -1,26 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { MemoryPersistenceBackend } from '@/lib/persistence/memory';
 import type { Conversation } from '@/lib/types';
-
-const inferenceLogMocks = vi.hoisted(() => ({
-  appendInferenceLogs: vi.fn().mockResolvedValue(undefined),
-}));
 
 vi.mock('@/lib/provider', () => ({
   providerComplete: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock('@/lib/inference-log', () => ({
-  appendInferenceLogs: inferenceLogMocks.appendInferenceLogs,
-}));
-
-vi.mock('@/lib/kv', () => ({
-  kvEnabled: () => false,
-  kvGet: vi.fn(),
-  kvSet: vi.fn(),
-}));
-
 import { POST as chatPost } from '@/app/api/chat/route';
-import { putConversation, resetStore } from '@/lib/store';
+import {
+  configureStorePersistenceForTests,
+  listLogs,
+  putConversation,
+  resetStore,
+  saveStore,
+} from '@/lib/store';
 
 const ROOT_ID = 'real-mock-root';
 const INSIGHT_TEXT =
@@ -36,7 +29,7 @@ function request(body: unknown): Request {
 
 describe('zero-key route context flow', () => {
   beforeEach(async () => {
-    inferenceLogMocks.appendInferenceLogs.mockClear();
+    configureStorePersistenceForTests(new MemoryPersistenceBackend());
     await resetStore();
   });
 
@@ -60,7 +53,40 @@ describe('zero-key route context flow', () => {
       pinnedTier: null,
       archived: false,
     };
+    const child: Conversation = {
+      id: 'runtime-child',
+      title: 'Runtime child',
+      parentId: ROOT_ID,
+      messages: [
+        { id: 'runtime-conclusion', role: 'assistant', content: INSIGHT_TEXT },
+      ],
+      brief: {
+        id: 'runtime-child-brief',
+        branchId: 'runtime-child',
+        selection: 'Codex runtime',
+        markdown: '# Runtime context',
+        facts: ['Codex runtime is selected.'],
+        excludedNote: 'Excluded: nothing.',
+        availableTokens: 0,
+        briefTokens: 4,
+        prunedPct: 0,
+        sourceRefs: [
+          {
+            kind: 'selection',
+            conversationId: 'runtime-child',
+            sourceId: 'selection:runtime-child',
+          },
+        ],
+        factSourceIds: [['selection:runtime-child']],
+        factProvenance: ['extractive'],
+      },
+      insights: [],
+      pinnedTier: null,
+      archived: true,
+    };
     putConversation(root);
+    putConversation(child);
+    await saveStore();
 
     const response = await chatPost(
       request({
@@ -74,6 +100,6 @@ describe('zero-key route context flow', () => {
 
     expect(body.message.content).toBe(INSIGHT_TEXT);
     expect(body.message.content).not.toContain('does not cover');
-    expect(inferenceLogMocks.appendInferenceLogs).toHaveBeenCalled();
+    expect(listLogs().at(-1)).toMatchObject({ purpose: 'chat', status: 'succeeded' });
   });
 });

@@ -184,3 +184,33 @@ Verification evidence:
 Next:
 
 - execute durability Task 4: explicit backend selection, typed KV failure behavior, serialized store transactions, atomic state/log commits, concurrency preservation, and rollback.
+
+## 2026-08-11 — Local durability transaction seam
+
+Completed:
+
+- selected memory, KV, or local-file persistence deterministically at process start; local launches remain file-backed even when `DATABASE_URL` is inherited, and non-production root-only fixtures remain memory-only;
+- replaced KV fail-soft booleans with validated transports and typed load, confirmed-commit, and uncertain-commit failures without exposing credentials;
+- added one rejection-safe process-local transaction queue with `AsyncLocalStorage` draft isolation, nested-operation rejection, detached-work invalidation, unique sequence allocation, and publish-after-commit semantics;
+- restored the authoritative prior snapshot after callback or confirmed commit failure and reloaded the backend-visible winner after uncertain commits;
+- made uncertain KV writes sticky, kept persistence health in error after authoritative reload, blocked later mutations, and blocked stale direct reads when reconciliation could not produce a snapshot;
+- made conversations and inference logs snapshot-owned with deep-cloned read/write boundaries, replacement log epochs on reset, and a compatibility no-op for `flushLogs()`;
+- removed the obsolete best-effort `lib/inference-log.ts` writer after confirming it had no callers;
+- clamped computed pruning percentages to the persisted `[0, 100]` invariant instead of weakening state validation;
+- validated Upstash GET/SET success envelopes and bounded declared and streamed response bodies before JSON parsing, including body cancellation on either overflow path.
+
+Verification evidence:
+
+- focused RED checks reproduced negative pruning, ambiguous KV writes, malformed success envelopes, mutable observer inputs, stale uncertain reads, unbounded response bodies, and uncanceled declared-overflow bodies before each fix;
+- persistence, store, and API characterization suites passed;
+- full Vitest, strict TypeScript, ESLint, webpack production build, dependency audit, diff check, and changed-surface secret/debug scans passed;
+- independent code, TypeScript, and security reviews approved the final transaction seam with no Critical or Important findings.
+
+Interim boundary:
+
+- Task 4 lands the verified transaction seam but deliberately does not convert mutation routes. Those routes still use the legacy load/mutate/save sequence and are not yet safe under concurrent API mutation requests;
+- Task 5 must move each complete ID-allocation, inference, mutation, and inference-event flow into `transactStore()` before Bonsai claims route-level serialization, then expose typed persistence status and 503 responses.
+
+Next:
+
+- execute durability Task 5 without claiming the documented route-concurrency limitation is already resolved.

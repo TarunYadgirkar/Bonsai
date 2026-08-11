@@ -2,30 +2,24 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompleteParams, CompleteResult } from '@/lib/llm';
 import { CEILING_MODEL, MODEL_TIERS, TIER_DEFAULTS, costForModel } from '@/lib/models';
 import { ProviderUnavailableError } from '@/lib/provider';
+import { MemoryPersistenceBackend } from '@/lib/persistence/memory';
 import { estimateTokens } from '@/lib/tokens';
 import type { Conversation, InferenceLog } from '@/lib/types';
 
 const llmMocks = vi.hoisted(() => ({
   complete: vi.fn<(params: CompleteParams) => Promise<CompleteResult>>(),
 }));
-const logMocks = vi.hoisted(() => ({ append: vi.fn().mockResolvedValue(undefined) }));
-
 vi.mock('@/lib/llm', () => ({ complete: llmMocks.complete }));
-vi.mock('@/lib/inference-log', () => ({ appendInferenceLogs: logMocks.append }));
-vi.mock('@/lib/kv', () => ({
-  kvEnabled: () => false,
-  kvGet: vi.fn(),
-  kvSet: vi.fn(),
-}));
 
 import { POST as branchPost } from '@/app/api/branch/route';
 import { POST as chatPost } from '@/app/api/chat/route';
 import {
   availableTokensFor,
+  configureStorePersistenceForTests,
   getConversation,
   listConversations,
-  putConversation,
-  resetStore,
+  listLogs,
+  loadStore,
 } from '@/lib/store';
 
 const ROOT_ID = 'logging-root';
@@ -61,7 +55,13 @@ function root(): Conversation {
     id: ROOT_ID,
     title: 'Logging root',
     parentId: null,
-    messages: [{ id: 'root-message', role: 'user', content: 'Use SQLite for local storage.' }],
+    messages: [
+      {
+        id: 'root-message',
+        role: 'user',
+        content: 'Use SQLite for local storage. '.repeat(32),
+      },
+    ],
     insights: [],
     pinnedTier: null,
     archived: false,
@@ -69,18 +69,18 @@ function root(): Conversation {
 }
 
 function lastBatch(): InferenceLog[] {
-  const batch = logMocks.append.mock.calls.at(-1)?.[0] as InferenceLog[] | undefined;
-  if (!batch) throw new Error('missing inference log batch');
-  return batch;
+  return listLogs();
 }
 
 describe('exact inference logging', () => {
   beforeEach(async () => {
     llmMocks.complete.mockReset();
-    logMocks.append.mockReset();
-    logMocks.append.mockResolvedValue(undefined);
-    await resetStore();
-    putConversation(root());
+    configureStorePersistenceForTests(
+      new MemoryPersistenceBackend({
+        initialSnapshot: { conversations: [root()], logs: [], rootId: ROOT_ID, seq: 0 },
+      }),
+    );
+    await loadStore();
   });
 
   it('logs the classifier and every answer retry without aggregating metadata', async () => {

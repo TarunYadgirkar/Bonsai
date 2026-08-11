@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 Lane: copy-b
-Status: in progress — Tasks 1–3 complete
+Status: in progress — Tasks 1–4 complete
 Design: `docs/superpowers/specs/2026-08-11-bonsai-local-runtime-design.md`
 
 ## Outcome
@@ -227,7 +227,7 @@ Commit:
 fix: recover interrupted persistence writes
 ```
 
-## Task 4: Serialize store transactions and adapt KV
+## Task 4: Serialize store transactions and adapt KV — complete
 
 Create:
 
@@ -262,6 +262,8 @@ Tests first:
 
 Remove the pending-log split only after route tests characterize it. Delete `lib/inference-log.ts` when JSONL ownership has fully moved into the backend.
 
+Task 4 lands the transaction seam without converting mutation routes. Until Task 5 moves each complete load/inference/mutation/log flow into `transactStore()`, concurrent API mutations remain an explicit interim limitation and must not be described as serialized.
+
 Verification:
 
 ```bash
@@ -295,6 +297,8 @@ Modify:
 - `lib/types.ts`
 
 Add `StateResponse.persistence`. Add safe persistence error codes to the existing API error shape. `GET /api/persistence` must work even when tree loading fails so the UI can show recovery guidance.
+
+Convert every mutation route from the legacy `loadStore()` / direct mutation / `saveStore()` sequence to `transactStore()` before exposing the persistence status as complete. ID allocation and inference-event persistence must share the transaction boundary so concurrent requests cannot reuse sequence IDs or overwrite accepted state.
 
 Tests first:
 
