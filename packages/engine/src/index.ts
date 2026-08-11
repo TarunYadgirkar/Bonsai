@@ -69,3 +69,14 @@ export {
   lastTier,
   type ConversationLookup,
 } from './tree';
+export {
+  adjustForProfile,
+  emptyProfile,
+  normalizeProfile,
+  profileSummary,
+  recordFeedback,
+  type FeedbackKind,
+  type LearnedAdjustment,
+  type RoutingFeedback,
+  type RoutingProfile,
+} from './learning';

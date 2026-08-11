@@ -8,6 +8,7 @@ import {
   loadWorkingSet,
   logInference,
   newId,
+  recordRoutingFeedback,
   updateConversation,
 } from '@/lib/store';
 import type { Conversation, Insight, MergeResponse } from '@/lib/types';
@@ -49,6 +50,10 @@ export const POST = apiRoute(MergeRequestSchema, async (body) => {
 
   if ((await commit(ws)) === 'failed') return persistenceError();
 
+  // A merged branch is a kept answer: the tier that produced its last auto reply was sufficient.
+  const keptTier = lastAutoTier(branch);
+  if (keptTier) await recordRoutingFeedback({ kind: 'merge', classifiedTier: keptTier });
+
   const response: MergeResponse = {
     insight,
     parentId: branch.parentId,
@@ -57,6 +62,15 @@ export const POST = apiRoute(MergeRequestSchema, async (body) => {
   };
   return Response.json(response);
 });
+
+/** The tier the auto-router last chose on this branch (ignoring manual/pinned picks). */
+function lastAutoTier(conversation: Conversation) {
+  for (let i = conversation.messages.length - 1; i >= 0; i -= 1) {
+    const r = conversation.messages[i].routing;
+    if (r && !r.overridden) return r.tier;
+  }
+  return null;
+}
 
 /**
  * The whole point of cherry-picking: one durable line, not a summary of the excursion.

@@ -99,6 +99,8 @@ export interface RoutingDecision {
   coveredByBrief?: boolean;
   /** True when the escalation ladder pulled parent context in beside the brief. */
   widened?: boolean;
+  /** True when the user's learned routing priors moved the tier off the classifier's choice. */
+  learned?: boolean;
 }
 
 export interface Insight {

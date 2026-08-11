@@ -8,6 +8,7 @@
  * is their own labelled example, and overriding it would destroy the signal.
  */
 import { complete as defaultComplete, type CompleteFn } from './llm';
+import { adjustForProfile, type RoutingProfile } from './learning';
 import {
   INTERNAL_TIER,
   CEILING_MODEL,
@@ -28,6 +29,12 @@ import type {
   RoutingDecision,
   Tier,
 } from './types';
+
+const COMPLEXITY_BY_TIER: Record<Tier, Complexity> = {
+  quick: 1,
+  thoughtful: 2,
+  deep: 3,
+};
 
 const TIER_BY_COMPLEXITY: Record<Complexity, Tier> = {
   1: 'quick',
@@ -50,6 +57,8 @@ export interface RouteParams {
   mode?: ModeSelection;
   /** Branch-level persisted pin. Loses to a per-request manual mode, beats pinnedTier. */
   pinnedMode?: ModeSelection | null;
+  /** The user's learned routing priors. Applied only on the auto path, after classification. */
+  profile?: RoutingProfile;
 }
 
 export interface RouterDeps {
@@ -96,15 +105,21 @@ export async function route(
   }
 
   const { complexity, covered, why } = await classify(params, deps);
-  const tier = TIER_BY_COMPLEXITY[complexity];
+  const classifiedTier = TIER_BY_COMPLEXITY[complexity];
+
+  // Learned priors pre-empt the classifier once the user has shown a consistent pattern.
+  const adjusted = adjustForProfile(classifiedTier, params.profile);
+  const tier = adjusted.tier;
+  const baseReason = `${why} Complexity ${complexity}/3 against a ${contextTokens}-token compiled brief.`;
 
   return decision({
     tier,
-    complexity,
+    complexity: COMPLEXITY_BY_TIER[tier],
     contextTokens,
-    reason: `${why} Complexity ${complexity}/3 against a ${contextTokens}-token compiled brief.`,
+    reason: adjusted.learned ? `${baseReason} ${adjusted.note}` : baseReason,
     overridden: false,
     coveredByBrief: covered,
+    learned: adjusted.learned,
   });
 }
 
@@ -178,6 +193,7 @@ function decision(params: {
   model?: string;
   effort?: Effort;
   coveredByBrief?: boolean;
+  learned?: boolean;
 }): RoutingDecision {
   const model = params.model ?? MODEL_TIERS[params.tier];
   const effort = params.effort ?? TIER_DEFAULTS[params.tier].effort;
@@ -197,6 +213,7 @@ function decision(params: {
     escalated: params.escalated ?? false,
     overridden: params.overridden,
     ...(params.coveredByBrief === undefined ? {} : { coveredByBrief: params.coveredByBrief }),
+    ...(params.learned ? { learned: true } : {}),
   };
 }
 

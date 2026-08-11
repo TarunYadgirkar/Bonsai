@@ -9,9 +9,11 @@ import {
   assemblePath,
   compileBrief,
   complete,
+  emptyProfile,
   estimateTokens,
   profileFor,
   providerName,
+  recordFeedback,
   route,
   type Conversation,
   type ContextBrief,
@@ -150,11 +152,51 @@ async function depthTwoCase(): Promise<Verdict> {
   };
 }
 
+/**
+ * The learning router, end to end: a lookup that classifies 'quick' every time. After the user
+ * upgrades that quick pick three times, the profile pre-empts the classifier and starts the same
+ * question at 'thoughtful' — same prompt, different route, because the history differs. This is
+ * the "overriding teaches it" / "learns from what you kept" claim, executed rather than asserted.
+ */
+async function learningCase(): Promise<Verdict> {
+  const question = 'When do Free Ventures applications close?';
+  const brief: ContextBrief = {
+    id: 'eval_brief_l',
+    branchId: 'eval_branch_l',
+    selection: 'Free Ventures',
+    markdown: '- Free Ventures applications close September 11.',
+    facts: ['Free Ventures applications close September 11.'],
+    excludedNote: 'Excluded: everything else.',
+    availableTokens: 5000,
+    briefTokens: 60,
+    prunedPct: 98.8,
+  };
+
+  const cold = await route({ question, brief, contextTokens: 60 });
+  let profile = emptyProfile();
+  for (let i = 0; i < 3; i += 1) {
+    profile = recordFeedback(profile, {
+      kind: 'override',
+      classifiedTier: 'quick',
+      chosenTier: 'deep',
+    });
+  }
+  const warm = await route({ question, brief, contextTokens: 60, profile });
+
+  const pass = cold.tier === 'quick' && warm.tier === 'thoughtful' && warm.learned === true;
+  return {
+    name: 'learning router: repeated upgrades shift the same question up a tier',
+    pass,
+    detail: `cold=${cold.tier} → warm=${warm.tier} (learned=${warm.learned})`,
+  };
+}
+
 async function main() {
   console.log(`bonsai evals — provider: ${providerName()}\n`);
   const verdicts: Verdict[] = [];
   for (const c of CASES) verdicts.push(await runCase(c));
   verdicts.push(await depthTwoCase());
+  verdicts.push(await learningCase());
 
   let failed = 0;
   for (const v of verdicts) {

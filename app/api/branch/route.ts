@@ -15,10 +15,12 @@ import {
   buildTree,
   commit,
   getConversation,
+  loadProfile,
   loadWorkingSet,
   logInference,
   newId,
   putConversation,
+  recordRoutingFeedback,
 } from '@/lib/store';
 import type { BranchResponse, Conversation, Message, RoutingDecision } from '@/lib/types';
 
@@ -81,6 +83,8 @@ export const POST = apiRoute(BranchRequestSchema, async (body) => {
 
   let routing: RoutingDecision | undefined;
   let answer: Message | undefined;
+  // The tier classification STARTED at when the ladder escalated — the "too low" signal to learn.
+  let escalatedFrom: RoutingDecision['tier'] | null = null;
 
   if (question) {
     const initial = await route({
@@ -88,6 +92,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body) => {
       brief,
       contextTokens: brief.briefTokens,
       mode: body.mode,
+      profile: await loadProfile(),
     });
     const result = await completeWithEscalation({
       routing: initial,
@@ -101,6 +106,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body) => {
       },
     });
     routing = result.routing;
+    if (routing.escalated) escalatedFrom = initial.tier;
     answer = {
       id: newId('msg'),
       role: 'assistant',
@@ -134,6 +140,10 @@ export const POST = apiRoute(BranchRequestSchema, async (body) => {
   if (!node) return apiError('branch node missing after write', 500);
 
   if ((await commit(ws)) === 'failed') return persistenceError();
+
+  if (escalatedFrom) {
+    await recordRoutingFeedback({ kind: 'escalation', classifiedTier: escalatedFrom });
+  }
 
   const response: BranchResponse = { node, conversation, brief, message: answer, routing };
   return Response.json(response);

@@ -15,7 +15,12 @@
 import {
   availableTokensFor as availableTokensForIn,
   buildTree as buildTreeOf,
+  emptyProfile,
+  normalizeProfile,
   prunedPct,
+  recordFeedback,
+  type RoutingFeedback,
+  type RoutingProfile,
 } from '@bonsai/engine';
 import seed from '@/fixtures/seed-conversation.json';
 import tree from '@/fixtures/seed-tree.json';
@@ -406,6 +411,54 @@ export async function resetStore(): Promise<StateResponse> {
   resetMemory();
   const ws = await loadWorkingSet();
   return { rootId: ws.rootId, tree: buildTree(ws), conversations: listConversations(ws) };
+}
+
+/* ---------- derived ---------- */
+
+/* ---------- learned routing profile ---------- */
+
+const PROFILE_KEY = 'default';
+const PROFILE_GLOBAL = Symbol.for('bonsai.profile.v1');
+
+function memoryProfile(): RoutingProfile {
+  const g = globalThis as typeof globalThis & { [PROFILE_GLOBAL]?: RoutingProfile };
+  if (!g[PROFILE_GLOBAL]) g[PROFILE_GLOBAL] = emptyProfile();
+  return g[PROFILE_GLOBAL];
+}
+
+export async function loadProfile(): Promise<RoutingProfile> {
+  if (dbEnabled()) {
+    try {
+      const rows = (await sql()`
+        SELECT profile FROM routing_profiles WHERE id = ${PROFILE_KEY}
+      `) as unknown as { profile: unknown }[];
+      if (rows.length) return normalizeProfile(rows[0].profile);
+      return emptyProfile();
+    } catch (err) {
+      console.warn(`[store] profile load failed (${(err as Error).message}) — memory profile`);
+    }
+  }
+  return memoryProfile();
+}
+
+/** Fold one behavioral signal into the profile and persist it. Never throws — routing must not
+ *  break because a learning write failed. */
+export async function recordRoutingFeedback(event: RoutingFeedback): Promise<void> {
+  const current = await loadProfile();
+  const next = recordFeedback(current, event);
+  if (dbEnabled()) {
+    try {
+      await sql()`
+        INSERT INTO routing_profiles (id, profile, updated_at)
+        VALUES (${PROFILE_KEY}, ${JSON.stringify(next)}::jsonb, now())
+        ON CONFLICT (id) DO UPDATE SET profile = EXCLUDED.profile, updated_at = now()
+      `;
+      return;
+    } catch (err) {
+      console.warn(`[store] profile save failed (${(err as Error).message})`);
+    }
+  }
+  (globalThis as typeof globalThis & { [PROFILE_GLOBAL]?: RoutingProfile })[PROFILE_GLOBAL] = next;
 }
 
 /* ---------- derived ---------- */

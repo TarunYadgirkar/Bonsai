@@ -11,28 +11,47 @@ import {
   availableTokensFor,
   commit,
   getConversation,
+  loadProfile,
   loadWorkingSet,
   logInference,
   newId,
+  recordRoutingFeedback,
   updateConversation,
 } from '@/lib/store';
-import type { ChatResponse } from '@/lib/types';
+import type { ChatResponse, Conversation, Tier } from '@/lib/types';
+
+/** Most recent tier the auto-router chose on this branch (ignoring manual/pinned picks). */
+function lastAutoTier(conversation: Conversation): Tier | null {
+  for (let i = conversation.messages.length - 1; i >= 0; i -= 1) {
+    const r = conversation.messages[i].routing;
+    if (r && !r.overridden) return r.tier;
+  }
+  return null;
+}
 
 const ANSWER_SYSTEM_PROMPT =
   'You answer using only the context provided. If it is a compiled brief, it is deliberately minimal and self-contained; if it genuinely lacks what you need, say so plainly rather than guessing.';
 
 export const POST = apiRoute(ChatRequestSchema, async (body) => {
   const ws = await loadWorkingSet();
-  const conversation = getConversation(ws, body.branchId);
+  let conversation = getConversation(ws, body.branchId);
   if (!conversation) return apiError(`unknown branch ${body.branchId}`, 404);
 
-  // A manual pick pins the branch; an explicit switch back to auto unpins it. Pin-per-branch
-  // (not per message) also keeps the provider prompt cache warm across the branch.
+  // A manual pick pins the branch; an explicit switch back to auto unpins it — and both take
+  // effect THIS turn, so `conversation` is rebound to the updated node before routing reads its
+  // pin. Pin-per-branch (not per message) also keeps the provider prompt cache warm.
   if (body.mode?.mode === 'manual') {
-    updateConversation(ws, conversation.id, (c) => ({ ...c, pinnedMode: body.mode }));
+    conversation =
+      updateConversation(ws, conversation.id, (c) => ({ ...c, pinnedMode: body.mode })) ??
+      conversation;
   } else if (body.mode?.mode === 'auto') {
-    updateConversation(ws, conversation.id, (c) => ({ ...c, pinnedMode: null }));
+    conversation =
+      updateConversation(ws, conversation.id, (c) => ({ ...c, pinnedMode: null })) ?? conversation;
   }
+
+  // The auto tier this branch last landed on, captured before the new turn is appended — the
+  // baseline a manual pick this turn is judged an up/down override against.
+  const priorAutoTier = lastAutoTier(conversation);
 
   appendMessage(ws, conversation.id, {
     id: newId('msg'),
@@ -53,6 +72,7 @@ export const POST = apiRoute(ChatRequestSchema, async (body) => {
     pinnedTier,
     mode: body.mode,
     pinnedMode: conversation.pinnedMode,
+    profile: await loadProfile(),
   });
 
   const result = await completeWithEscalation({
@@ -95,6 +115,20 @@ export const POST = apiRoute(ChatRequestSchema, async (body) => {
   );
 
   if ((await commit(ws)) === 'failed') return persistenceError();
+
+  // Learn from what just happened. An escalation means the classifier started too low; a manual
+  // pick that moved off the branch's last auto tier is a labeled up/down correction. Both feed
+  // the profile that shifts future routing — the "it learns from what you kept" loop.
+  if (result.routing.escalated) {
+    await recordRoutingFeedback({ kind: 'escalation', classifiedTier: initial.tier });
+  }
+  if (result.routing.overridden && priorAutoTier && priorAutoTier !== result.routing.tier) {
+    await recordRoutingFeedback({
+      kind: 'override',
+      classifiedTier: priorAutoTier,
+      chosenTier: result.routing.tier,
+    });
+  }
 
   const response: ChatResponse = {
     branchId: conversation.id,
