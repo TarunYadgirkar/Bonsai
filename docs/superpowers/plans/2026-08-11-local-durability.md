@@ -2,7 +2,7 @@
 
 Date: 2026-08-11
 Lane: copy-b
-Status: ready to execute
+Status: in progress — Tasks 1 and 2 complete
 Design: `docs/superpowers/specs/2026-08-11-bonsai-local-runtime-design.md`
 
 ## Outcome
@@ -68,6 +68,7 @@ interface ManifestV1 {
   rootId: string;
   seq: number;
   conversations: Record<string, number>;
+  conversationOrder: string[];
   inferenceLogStartBytes: number;
   inferenceLogBytes: number;
 }
@@ -85,6 +86,7 @@ Disk layout:
 ```
 
 Conversation files contain a schema-versioned envelope with the conversation ID and revision. Unsupported future schema versions fail without rewriting any file.
+`conversationOrder` is a duplicate-free exact ordering of the `conversations` keys so numeric-looking IDs cannot be reordered by object enumeration.
 
 ## Backend selection
 
@@ -100,7 +102,7 @@ No selected file or KV backend may degrade to memory.
 
 The file backend resolves its default directory as `<process.cwd()/.bonsai>`. Tests and local tooling may set `BONSAI_DATA_DIR` to an absolute path. Relative paths, empty paths, browser-provided paths, and production overrides are rejected. This variable is a process-start configuration boundary, never an API input.
 
-## Task 1: Extract and version persisted schemas
+## Task 1: Extract and version persisted schemas — complete (`62bc4db`)
 
 Create:
 
@@ -141,7 +143,7 @@ Commit:
 feat: validate persisted state
 ```
 
-## Task 2: Add the atomic file backend
+## Task 2: Add the atomic file backend — complete (`0cf787c`)
 
 Create:
 

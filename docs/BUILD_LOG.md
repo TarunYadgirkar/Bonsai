@@ -136,3 +136,29 @@ Remaining concerns:
 Next:
 
 - address local persistence as a separate, explicitly authorized task with restart-survival coverage.
+
+## 2026-08-11 — Local durability Tasks 1–2
+
+Completed:
+
+- `62bc4db` (`feat: validate persisted state`): extracted pure versioned snapshot validation and legacy normalization; validated forests, immutable brief-path evidence, global IDs, failed-attempt branch sequence allocation, numeric exhaustion, Manifest V1, and conversation envelopes;
+- `0cf787c` (`feat: add local file persistence`): added manifest-last local commits, immutable conversation revision files, streamed append-only inference-log epochs, strict stale-revision checks, explicit data-directory selection, bounded reads, and confirmed rollback or sticky error state after an uncertain commit;
+- preserved conversation order explicitly in Manifest V1 instead of relying on JavaScript object-key enumeration;
+- hardened every store path against symlink traversal and mutating hard-link aliasing with no-follow directory/file handles, private `0700` directories, `0600` files, single-link mutation checks, and atomic hard-link no-replace revision publication;
+- kept the backend isolated from `lib/store.ts` and API routes until transaction integration has its own tests and commit.
+
+Verification evidence:
+
+- schema checkpoint: 57 focused tests, 116 total tests, strict TypeScript, lint, webpack production build, diff check, and secret/debug scan passed;
+- file-backend checkpoint: 49 focused tests, 151 total tests, strict TypeScript, zero-warning lint, webpack production build, diff check, and secret/debug scan passed;
+- code, TypeScript, and security reviews approved the final file-backend diff with no Critical or Important findings;
+- real temporary-directory tests verified active byte ranges, reset epochs, suffix truncation, bounded streaming, reload equivalence, immutable changed-only revisions, orphan retry, stale revisions, private modes, path defenses, and poisoned uncertain state;
+- `copy-b` was clean and synchronized with `origin/copy-b` after both commits.
+
+Known boundary:
+
+- Node does not expose the directory-descriptor `openat` workflow needed to eliminate a hostile cross-process parent-directory swap. The current local milestone is explicitly single-process and single-user; cross-process locking and stronger OS isolation remain packaging gates.
+
+Next:
+
+- execute durability Task 3 with injected failures, corrupt-revision quarantine, prior-revision recovery, committed-log corruption checks, and stale-temp cleanup.
