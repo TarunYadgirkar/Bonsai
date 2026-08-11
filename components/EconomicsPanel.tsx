@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { EconomicsResponse, InferenceLog } from '@/lib/types';
 import { EFFORT_LABEL } from './ModeBadge';
 import { formatUsd } from './tokens';
@@ -133,6 +133,36 @@ export function EconomicsPanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
+  // Modal focus management: move focus into the dialog on open, trap Tab inside it so the
+  // background stays inert to the keyboard, and restore focus to the trigger on close.
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus();
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab' || !dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || active === dialogRef.current)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    window.addEventListener('keydown', onTab);
+    return () => {
+      window.removeEventListener('keydown', onTab);
+      opener?.focus?.();
+    };
+  }, []);
+
   // Actuals provenance: 'measured' only when every log row carried live provider usage.
   const basisWord = data?.stats.basis === 'measured' ? 'measured' : 'modeled';
 
@@ -143,11 +173,13 @@ export function EconomicsPanel({
       role="presentation"
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Session economics"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-rule bg-paper-raised"
+        className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-rule bg-paper-raised outline-none"
         style={{ boxShadow: '0 18px 60px -24px color-mix(in oklab, var(--ink) 34%, transparent)' }}
       >
         <header className="flex items-start gap-4 border-b border-rule px-8 py-6">
