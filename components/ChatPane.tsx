@@ -1,12 +1,53 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { Conversation, ModeSelection } from '@/lib/types';
+import type { Conversation, Message, ModeSelection } from '@/lib/types';
 import { RoutingChip } from './RoutingChip';
 import { conversationTokens, formatTokens } from './tokens';
 
 type Selection = { text: string; x: number; y: number };
+
+/**
+ * Memoized so composer keystrokes and selection updates don't re-parse every assistant
+ * message's markdown — the thread re-renders per keystroke, the bubbles shouldn't.
+ */
+const MessageBubble = memo(function MessageBubble({
+  message,
+  mode,
+  onSelectMode,
+}: {
+  message: Message;
+  mode: ModeSelection | null;
+  onSelectMode: (mode: ModeSelection | null) => void;
+}) {
+  return (
+    <div className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+      <div
+        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+          message.role === 'user'
+            ? 'whitespace-pre-wrap bg-white/10 text-white'
+            : 'bg-white/[0.04] text-neutral-200'
+        }`}
+      >
+        {message.role === 'user' ? (
+          message.content
+        ) : (
+          // Assistant turns are markdown. react-markdown escapes raw HTML by default —
+          // no rehype-raw, on purpose. User turns stay plain text above.
+          <div className="[&>*+*]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-white [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_blockquote]:text-neutral-400 [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-white [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
+            <ReactMarkdown>{message.content}</ReactMarkdown>
+          </div>
+        )}
+        {message.routing && (
+          <span className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
+            <RoutingChip routing={message.routing} mode={mode} onSelectMode={onSelectMode} />
+          </span>
+        )}
+      </div>
+    </div>
+  );
+});
 
 export function ChatPane({
   conversation,
@@ -196,39 +237,12 @@ export function ChatPane({
           )}
 
           {conversation.messages.map((message) => (
-            <div
+            <MessageBubble
               key={message.id}
-              className={
-                message.role === 'user' ? 'flex justify-end' : 'flex justify-start'
-              }
-            >
-              <div
-                className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
-                  message.role === 'user'
-                    ? 'whitespace-pre-wrap bg-white/10 text-white'
-                    : 'bg-white/[0.04] text-neutral-200'
-                }`}
-              >
-                {message.role === 'user' ? (
-                  message.content
-                ) : (
-                  // Assistant turns are markdown. react-markdown escapes raw HTML by default —
-                  // no rehype-raw, on purpose. User turns stay plain text above.
-                  <div className="[&>*+*]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-white [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_blockquote]:text-neutral-400 [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-white [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                  </div>
-                )}
-                {message.routing && (
-                  <span className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
-                    <RoutingChip
-                      routing={message.routing}
-                      mode={mode}
-                      onSelectMode={onSelectMode}
-                    />
-                  </span>
-                )}
-              </div>
-            </div>
+              message={message}
+              mode={mode}
+              onSelectMode={onSelectMode}
+            />
           ))}
 
           {branching && (

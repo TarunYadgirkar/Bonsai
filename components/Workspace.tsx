@@ -306,10 +306,15 @@ export function Workspace() {
     }
   };
 
-  const selectMode = (mode: ModeSelection | null) => {
-    if (!activeId) return;
-    setPendingModes((prev) => ({ ...prev, [activeId]: mode }));
-  };
+  // Stable identity: this reaches memoized message bubbles; a fresh closure per render would
+  // defeat the memo and re-parse every assistant message's markdown on each keystroke.
+  const selectMode = useCallback(
+    (mode: ModeSelection | null) => {
+      if (!activeId) return;
+      setPendingModes((prev) => ({ ...prev, [activeId]: mode }));
+    },
+    [activeId],
+  );
 
   /**
    * Merging is destructive on purpose — the branch archives and the insight lands on the parent.
@@ -415,7 +420,10 @@ export function Workspace() {
         successful refetch clears it via applyState; the button clears it by hand.
       */}
       {error && (
-        <div className="absolute left-1/2 top-3 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg border border-red-400/30 bg-neutral-950/95 px-4 py-2.5 shadow-xl shadow-black/40">
+        <div
+          role="alert"
+          className="absolute left-1/2 top-3 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg border border-red-400/30 bg-neutral-950/95 px-4 py-2.5 shadow-xl shadow-black/40"
+        >
           <p className="text-xs leading-snug text-red-200">{error}</p>
           <button
             onClick={() => setError(null)}

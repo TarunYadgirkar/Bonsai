@@ -85,7 +85,7 @@ export function RoutingChip({
 
         {/* Hover card — "Why did Bonsai choose this?" */}
         {!menuOpen && (
-          <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-72 flex-col gap-1.5 rounded-lg border border-white/15 bg-neutral-950 p-3 text-left shadow-xl group-hover:flex">
+          <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-72 flex-col gap-1.5 rounded-lg border border-white/15 bg-neutral-950 p-3 text-left shadow-xl group-hover:flex group-focus-within:flex">
             <span className="flex items-center justify-between">
               <span className="text-xs font-medium text-white">{label}</span>
               <span className="font-mono text-xs tabular-nums text-emerald-300">
