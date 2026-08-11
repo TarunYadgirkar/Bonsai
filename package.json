@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "fixture:serve": "BONSAI_ROOT_ONLY_FIXTURE=1 DATABASE_URL= ANTHROPIC_API_KEY= OPENAI_API_KEY= XAI_API_KEY= next dev --hostname 127.0.0.1 --port 3111",
+    "fixture:serve": "NODE_ENV=development BONSAI_ROOT_ONLY_FIXTURE=1 DATABASE_URL= ANTHROPIC_API_KEY= OPENAI_API_KEY= XAI_API_KEY= next dev --hostname 127.0.0.1 --port 3111",
     "fixture:build": "DATABASE_URL= BONSAI_BASE=http://127.0.0.1:3111 tsx scripts/build-seed-tree.ts",
     "build": "next build",
     "start": "next start",

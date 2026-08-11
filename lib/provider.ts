@@ -12,8 +12,9 @@
  * `servedBy` carries the real upstream model so the UI can say so — the chips keep Bonsai's
  * vocabulary, but nothing claims a Claude model answered when one did not.
  *
- * Mock is selected only when no provider key is configured. A configured provider failure is
- * surfaced to the caller so live operation is never misrepresented as a mock success.
+ * Mock is selected when no provider key is configured or a non-production root-only fixture is
+ * active. A configured provider failure is surfaced to the caller so live operation is never
+ * misrepresented as a mock success.
  */
 import { MODELS } from './models';
 
@@ -22,6 +23,9 @@ const TIMEOUT_MS = 30_000;
 export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'mock';
 
 export function providerName(): ProviderName {
+  if (process.env.NODE_ENV !== 'production' && process.env.BONSAI_ROOT_ONLY_FIXTURE === '1') {
+    return 'mock';
+  }
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
   if (process.env.OPENAI_API_KEY) return 'openai';
   if (process.env.XAI_API_KEY) return 'xai';

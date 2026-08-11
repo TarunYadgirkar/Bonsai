@@ -1,8 +1,52 @@
 import { describe, expect, it } from 'vitest';
 import { estimateTokens } from '@/lib/tokens';
+import packageJson from '../package.json';
 import tree from './seed-tree.json';
 
 describe('generated seed tree contract', () => {
+  it('pins the supported server to non-production root-only mode', () => {
+    expect(packageJson.scripts['fixture:serve']).toMatch(/^NODE_ENV=development\b/);
+    expect(packageJson.scripts['fixture:serve']).toContain('BONSAI_ROOT_ONLY_FIXTURE=1');
+  });
+
+  it('contains the six scenarios and eighteen inference events in exact purpose order', () => {
+    expect(tree.branches.map((branch) => branch.title)).toEqual([
+      'Free Ventures club inquiry',
+      'ML@B club workload inquiry',
+      'Top 3 clubs ranking inquiry',
+      'Codebase club inquiry',
+      'Blueprint club inquiry',
+      'Law school tuition inquiry (off-brief)',
+    ]);
+    expect(tree.logs).toHaveLength(18);
+    expect(
+      tree.logs.reduce<Record<string, number>>(
+        (counts, log) => ({ ...counts, [log.purpose]: (counts[log.purpose] ?? 0) + 1 }),
+        {},
+      ),
+    ).toEqual({ compile: 6, classify: 5, chat: 7 });
+    expect(tree.logs.map((log) => log.purpose)).toEqual([
+      'compile',
+      'classify',
+      'chat',
+      'compile',
+      'classify',
+      'chat',
+      'compile',
+      'classify',
+      'chat',
+      'compile',
+      'classify',
+      'chat',
+      'classify',
+      'chat',
+      'compile',
+      'chat',
+      'compile',
+      'chat',
+    ]);
+  });
+
   it('has unique persisted IDs and traceable aligned brief provenance', () => {
     const ids = [
       ...tree.branches.flatMap((branch) => [
