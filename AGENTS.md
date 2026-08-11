@@ -127,7 +127,7 @@ ones are fixed:**
 - **Web UI**: failed-send draft survives a branch switch; routing chip no longer flickers to Auto.
 - **Garden artifact** reworked into a real left-to-right tree diagram (same URL b1b44d60).
 
-All 36 adversarially-verified findings from the audit are now fixed on copy-a (192 tests, 10/10
+All 36 adversarially-verified findings from the audit are now fixed on copy-a (173 tests, 10/10
 evals, plugin smoke 12/12, both builds green). Two were left deliberately, documented in place: the
 MCP connector's open CORS/origin (claude.ai's initialize breaks with strict validation) and the
 per-session routing-profile read-modify-write (last-write-wins; negligible contention per session).
