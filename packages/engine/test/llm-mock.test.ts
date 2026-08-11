@@ -20,6 +20,27 @@ function classifierMessages(question: string, contextTokens: number): LlmMessage
   ];
 }
 
+function compilerMessages(selection: string, question: string, transcript: string): LlmMessage[] {
+  return [
+    {
+      role: 'system',
+      content:
+        'You compile minimal context briefs. Respond with JSON only: {"facts": string[], "excludedNote": string}.',
+    },
+    {
+      role: 'user',
+      content: [
+        'User profile: Tarun — Berkeley freshman.',
+        `Branch topic (highlighted text): ${selection}`,
+        `Branch question: ${question}`,
+        '',
+        'Parent conversation:',
+        transcript,
+      ].join('\n'),
+    },
+  ];
+}
+
 const PUNT_SENTENCE =
   'The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does.';
 
@@ -109,31 +130,73 @@ describe('mock provider path', () => {
     expect((JSON.parse(uncovered.text) as { covered: boolean }).covered).toBe(false);
   });
 
+  it('emits a question kind inferred from surface cues', async () => {
+    const classify = async (question: string) => {
+      const result = await complete({
+        tier: 'quick',
+        purpose: 'classify',
+        messages: classifierMessages(question, 200),
+      });
+      return JSON.parse(result.text) as { kind: string; confidence: number; complexity: number };
+    };
+
+    const cases: [string, string][] = [
+      ['When do Free Ventures applications close?', 'lookup'],
+      ['Compare ML@B and Blueprint on time commitment.', 'comparison'],
+      ['Why is the education track so heavy?', 'synthesis'],
+      ['Debug the function that breaks on import.', 'code'],
+      ['Write a short poem about the bonsai garden.', 'creative'],
+      [
+        'Given my workload cap and my startup goals, weigh whether joining two clubs is sustainable this semester.',
+        'reasoning',
+      ],
+    ];
+    for (const [question, expected] of cases) {
+      const parsed = await classify(question);
+      expect(parsed.kind, question).toBe(expected);
+      expect(parsed.confidence).toBeGreaterThanOrEqual(0);
+      expect(parsed.confidence).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('is confident on a single clear cue and unsure on ambiguity or none', async () => {
+    const classify = async (question: string) => {
+      const result = await complete({
+        tier: 'quick',
+        purpose: 'classify',
+        messages: classifierMessages(question, 200),
+      });
+      return JSON.parse(result.text) as { kind: string; confidence: number };
+    };
+
+    const clear = await classify('When do Free Ventures applications close?');
+    expect(clear.confidence).toBeGreaterThanOrEqual(0.7);
+
+    // "why" (synthesis) + "deadline" (lookup) + "compare" (comparison) all fire at once.
+    const ambiguous = await classify('Why does the deadline compare so badly?');
+    expect(ambiguous.kind).toBe('comparison');
+    expect(ambiguous.confidence).toBeLessThan(0.5);
+
+    const cueless = await classify('Thoughts on the current club plan?');
+    expect(cueless.kind).toBe('other');
+    expect(cueless.confidence).toBeLessThan(0.5);
+    expect(clear.confidence).toBeGreaterThan(cueless.confidence);
+  });
+
   it('answers compiler prompts with facts extracted from transcript sentences on the topic', async () => {
     const transcript = [
       'user: I am weighing which clubs to join at Berkeley this fall semester.',
       '',
       'assistant: Free Ventures is a student-run accelerator where you apply with your own startup. Free Ventures applications close September 11 with an info session on September 3. Blueprint does consulting for nonprofits and has a heavy time commitment.',
     ].join('\n');
-    const messages: LlmMessage[] = [
-      {
-        role: 'system',
-        content:
-          'You compile minimal context briefs. Respond with JSON only: {"facts": string[], "excludedNote": string}.',
-      },
-      {
-        role: 'user',
-        content: [
-          'User profile: Tarun — Berkeley freshman.',
-          'Branch topic (highlighted text): Free Ventures',
-          'Branch question: When do Free Ventures applications close?',
-          '',
-          'Parent conversation:',
-          transcript,
-        ].join('\n'),
-      },
-    ];
-    const result = await complete({ tier: 'quick', messages });
+    const result = await complete({
+      tier: 'quick',
+      messages: compilerMessages(
+        'Free Ventures',
+        'When do Free Ventures applications close?',
+        transcript,
+      ),
+    });
     const parsed = JSON.parse(result.text) as { facts: string[]; excludedNote: string };
 
     expect(parsed.facts.length).toBeGreaterThan(0);
@@ -142,6 +205,59 @@ describe('mock provider path', () => {
     expect(parsed.facts.some((f) => f.includes('Blueprint'))).toBe(false);
     expect(parsed.excludedNote).toContain('Free Ventures');
     expect(result.mock).toBe(true);
+  });
+
+  it('ranks a rare-term sentence above common-word sentences that match more query terms', async () => {
+    // Five noise sentences each match TWO common terms ("clubs", "offer"); the answer sentence
+    // matches only ONE term ("stipend") that appears nowhere else. A raw overlap count ranks
+    // the noise higher; inverse-sentence-frequency rarity must put the stipend sentence first.
+    const transcript = [
+      'assistant: Berkeley clubs offer recruiting events during the first weeks of the semester.',
+      'assistant: Most clubs offer workshops that help freshmen meet upperclassmen early.',
+      'assistant: Consulting clubs offer case interview practice on weekday evenings.',
+      'assistant: Social clubs offer mixers and game nights on most weekends.',
+      'assistant: Design clubs offer portfolio reviews at the start of the term.',
+      'assistant: The engineering society pays each member a stipend of 500 dollars.',
+    ].join('\n');
+    const result = await complete({
+      tier: 'quick',
+      purpose: 'compile',
+      messages: compilerMessages('funding', 'How big a stipend do clubs offer?', transcript),
+    });
+    const parsed = JSON.parse(result.text) as { facts: string[]; excludedNote: string };
+
+    expect(parsed.facts[0]).toContain('stipend of 500 dollars');
+    expect(typeof parsed.excludedNote).toBe('string');
+  });
+
+  it('boosts a later transcript sentence over an otherwise equal earlier one', async () => {
+    const transcript = [
+      'assistant: The studio rent was quoted at 2000 dollars monthly during the tour.',
+      'assistant: The studio rent was requoted at 2100 dollars monthly after the follow-up call.',
+    ].join('\n');
+    const result = await complete({
+      tier: 'quick',
+      purpose: 'compile',
+      messages: compilerMessages('studio rent', 'What is the studio rent now?', transcript),
+    });
+    const parsed = JSON.parse(result.text) as { facts: string[] };
+
+    expect(parsed.facts[0]).toContain('2100');
+  });
+
+  it('scores a user constraint above a later user question with the same term matches', async () => {
+    const transcript = [
+      'user: I want at most two clubs to fit this semester.',
+      'user: Which clubs would look impressive on resumes this semester?',
+    ].join('\n');
+    const result = await complete({
+      tier: 'quick',
+      purpose: 'compile',
+      messages: compilerMessages('club load', 'Which clubs suit this semester?', transcript),
+    });
+    const parsed = JSON.parse(result.text) as { facts: string[] };
+
+    expect(parsed.facts[0]).toContain('at most two clubs');
   });
 
   it('distills a branch to one line of at most 20 words', async () => {

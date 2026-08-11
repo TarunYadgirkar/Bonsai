@@ -93,6 +93,12 @@ export function RoutingChip({
               </span>
             </span>
             <span className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-bark">
+              {routing.kind && (
+                <>
+                  <span>Read as</span>
+                  <span className="text-ink-soft">{routing.kind} question</span>
+                </>
+              )}
               <span>Context</span>
               <span className="text-ink-soft">
                 <span className="tnum">{formatTokens(routing.contextTokens)}</span> tokens
@@ -103,6 +109,20 @@ export function RoutingChip({
               <span className="text-ink-soft">
                 <span className="tnum">{routing.complexity}</span>/3
               </span>
+              {typeof routing.confidence === 'number' && (
+                <>
+                  <span>Confidence</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="h-1 w-16 overflow-hidden rounded-full bg-paper-sunk">
+                      <span
+                        className="block h-full rounded-full bg-moss"
+                        style={{ width: `${Math.round(routing.confidence * 100)}%` }}
+                      />
+                    </span>
+                    <span className="tnum text-ink-soft">{Math.round(routing.confidence * 100)}%</span>
+                  </span>
+                </>
+              )}
               {routing.servedBy && (
                 <>
                   <span>Served by</span>
@@ -113,9 +133,14 @@ export function RoutingChip({
             <span className="border-t border-rule pt-1.5 text-[11px] leading-snug text-ink-soft">
               {routing.reason}
             </span>
-            {/* Escalation truth: what the router actually did to the context before answering. */}
-            {(routing.coveredByBrief === false || routing.widened) && (
+            {/* Escalation + learning truth: what the router actually did before answering. */}
+            {(routing.coveredByBrief === false || routing.widened || routing.learned) && (
               <span className="flex flex-wrap gap-1">
+                {routing.learned && (
+                  <span className="rounded-full border border-moss/30 bg-moss-wash px-1.5 py-0.5 text-[10px] text-moss">
+                    learned from your history
+                  </span>
+                )}
                 {routing.coveredByBrief === false && (
                   <span className="rounded-full border border-rule bg-paper-sunk px-1.5 py-0.5 text-[10px] text-ember">
                     brief flagged insufficient

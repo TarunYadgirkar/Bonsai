@@ -171,6 +171,9 @@ describe('compileBrief', () => {
     const [system, user] = calls[0].messages;
     expect(system.role).toBe('system');
     expect(system.content).toContain('compile minimal context');
+    expect(system.content).toContain('ONE fact the question most depends on first');
+    expect(system.content).toContain('smaller model could not infer without them');
+    expect(system.content).toContain('{"facts": string[], "excludedNote": string}');
     expect(user.role).toBe('user');
     expect(user.content).toContain(
       'User profile: Tarun — Berkeley freshman. Goals: ship Bonsai; join two clubs.',

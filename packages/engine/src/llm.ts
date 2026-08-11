@@ -8,7 +8,7 @@
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, costForServedBy, effortSpec } from './models';
 import { providerComplete } from './provider';
 import { estimateTokens } from './tokens';
-import type { Effort, InferencePurpose, Tier } from './types';
+import type { Effort, InferencePurpose, QuestionKind, Tier } from './types';
 
 export interface LlmMessage {
   role: 'system' | 'user' | 'assistant';
@@ -100,6 +100,43 @@ function mockComplexity(prompt: string): 1 | 2 | 3 {
   return 1;
 }
 
+/** Ordered by precedence: the first matching cue names the kind when several fire. */
+const KIND_CUES: { kind: QuestionKind; cue: RegExp }[] = [
+  { kind: 'comparison', cue: /\b(rank(s|ed|ing)?|compar(e|es|ed|ison)|vs|versus|which of|trade-?offs?)\b/ },
+  { kind: 'code', cue: /\b(rewrite|refactor|debug|code|function|bug|implement)\b/ },
+  { kind: 'creative', cue: /\b(write|draft|story|poem|creative)\b/ },
+  { kind: 'synthesis', cue: /\b(why|explain|summar\w*)\b/ },
+  { kind: 'lookup', cue: /\b(when|what|where|who|how many|deadline|list)\b/ },
+];
+
+const CLEAR_CUE_CONFIDENCE = 0.85;
+const STRUCTURAL_CUE_CONFIDENCE = 0.6;
+const UNCLEAR_CONFIDENCE = 0.4;
+/** A lookup is a SHORT factual ask; the same cue words in a long question are not a lookup. */
+const LOOKUP_MAX_WORDS = 12;
+const REASONING_MIN_WORDS = 16;
+const REASONING_MIN_CLAUSES = 3;
+
+/**
+ * Kind + confidence from surface cues. One clear cue is a confident read; several competing
+ * cues or none at all is an honest "not sure", which the learning layer treats more cautiously.
+ */
+function mockKind(question: string): { kind: QuestionKind; confidence: number } {
+  const q = question.toLowerCase();
+  const words = q.trim().split(/\s+/).filter(Boolean).length;
+  const matched = KIND_CUES.filter(
+    ({ kind, cue }) => cue.test(q) && (kind !== 'lookup' || words <= LOOKUP_MAX_WORDS),
+  );
+  if (matched.length === 1) return { kind: matched[0].kind, confidence: CLEAR_CUE_CONFIDENCE };
+  if (matched.length > 1) return { kind: matched[0].kind, confidence: UNCLEAR_CONFIDENCE };
+  // No lexical cue: a long multi-clause question is weighing something — reasoning.
+  const clauses = q.split(/,|;|\band\b/).filter((part) => part.trim().length > 0).length;
+  if (words >= REASONING_MIN_WORDS && clauses >= REASONING_MIN_CLAUSES) {
+    return { kind: 'reasoning', confidence: STRUCTURAL_CUE_CONFIDENCE };
+  }
+  return { kind: 'other', confidence: UNCLEAR_CONFIDENCE };
+}
+
 const MOCK_FACTS = [
   'Free Ventures is a student-run startup accelerator at Berkeley; you apply with your own startup.',
   'Free Ventures applications close September 11, with an info session on September 3.',
@@ -165,11 +202,100 @@ function rankByRelevance(
     .map((c) => c.text);
 }
 
+/* ---------- salience (the mock compiler's ranking) ---------- */
+
+type SpeakerRole = 'user' | 'assistant' | 'system' | 'unknown';
+
+interface RoleSentence {
+  text: string;
+  role: SpeakerRole;
+}
+
+/** Small enough that shared-vocabulary evidence still dominates; enough to break ties late. */
+const RECENCY_WEIGHT = 0.5;
+/** Assistant statements of fact and user constraints beat questions and filler. */
+const ROLE_FACT_WEIGHT = 0.75;
+
+const CONSTRAINT_CUE =
+  /\b(must|need|want|only|at most|at least|no more than|cap|capped|cannot|can't|won't|budget|prefer|require|hard)\b/i;
+
+/** sentencesOf, but keeping who said each sentence. Role is sticky across a turn's lines. */
+function sentencesWithRole(transcript: string): RoleSentence[] {
+  let role: SpeakerRole = 'unknown';
+  const out: RoleSentence[] = [];
+  for (const line of transcript.split('\n')) {
+    const tag = /^(user|assistant|system):\s*/i.exec(line);
+    if (tag) role = tag[1].toLowerCase() as SpeakerRole;
+    const body = line.replace(/^(user|assistant|system):\s*/i, '');
+    for (const raw of body.split(/(?<=[.!?])\s+(?=[A-Z])/)) {
+      const text = raw.replace(/\s+/g, ' ').trim();
+      if (text.length > 30 && text.length < 320) out.push({ text, role });
+    }
+  }
+  return out;
+}
+
 /**
- * Extractive stand-in for the compiler. Pulls the sentences that actually mention the branch
- * topic out of the real parent transcript, so branching on anything other than the two scripted
- * demo selections still produces a brief about the thing that was highlighted. The constant
- * fact list is only the last resort.
+ * Inverse-sentence-frequency: a query term found in one transcript sentence identifies that
+ * sentence; a term found in every sentence identifies nothing. 1 + ln(N/sf) floors at 1, so a
+ * match never counts for less than the old flat tally did.
+ */
+function rarityWeights(sentences: string[], terms: string[]): Map<string, number> {
+  const lower = sentences.map((s) => s.toLowerCase());
+  const total = Math.max(1, lower.length);
+  const weights = new Map<string, number>();
+  for (const term of terms) {
+    const inSentences = lower.filter((s) => s.includes(term)).length;
+    weights.set(term, 1 + Math.log(total / Math.max(1, inSentences)));
+  }
+  return weights;
+}
+
+function roleWeight(sentence: RoleSentence): number {
+  if (sentence.text.endsWith('?')) return 0; // a question is never a fact for the brief
+  if (sentence.role === 'assistant') return ROLE_FACT_WEIGHT;
+  if (sentence.role === 'user' && CONSTRAINT_CUE.test(sentence.text)) return ROLE_FACT_WEIGHT;
+  return 0;
+}
+
+/**
+ * Salience = Σ rarity of matched terms + topic mention + recency + role. Only sentences that
+ * share vocabulary with the question (or name the topic outright) are candidates at all —
+ * recency and role order the relevant, they never rescue the irrelevant.
+ */
+function rankBySalience(
+  sentences: RoleSentence[],
+  terms: string[],
+  limit: number,
+  topic?: string,
+): string[] {
+  const needle = topic?.trim().toLowerCase();
+  const rarity = rarityWeights(sentences.map((s) => s.text), terms);
+  const span = Math.max(1, sentences.length - 1);
+  return sentences
+    .map((sentence, i) => {
+      const hay = sentence.text.toLowerCase();
+      const termScore = terms.reduce(
+        (sum, t) => (hay.includes(t) ? sum + (rarity.get(t) ?? 0) : sum),
+        0,
+      );
+      const topicScore = needle && hay.includes(needle) ? TOPIC_MENTION_WEIGHT : 0;
+      const relevant = termScore + topicScore;
+      const score = relevant + RECENCY_WEIGHT * (i / span) + roleWeight(sentence);
+      return { text: sentence.text, relevant, score, i };
+    })
+    .filter((c) => c.relevant > 0)
+    .sort((a, b) => b.score - a.score || a.i - b.i)
+    .slice(0, limit)
+    .map((c) => c.text);
+}
+
+/**
+ * Extractive stand-in for the compiler. Ranks the parent transcript's sentences by salience —
+ * rare identifying terms over common shared words, topic mentions, late-transcript recency,
+ * and factual roles — so branching on anything other than the two scripted demo selections
+ * still produces a brief about the thing that was highlighted. The constant fact list is only
+ * the last resort.
  */
 function mockCompilerJson(prompt: string): string {
   const selection = /Branch topic \(highlighted text\):\s*(.*)$/m.exec(prompt)?.[1] ?? '';
@@ -177,7 +303,7 @@ function mockCompilerJson(prompt: string): string {
   const transcript = prompt.split(/^Parent conversation:$/m)[1] ?? '';
 
   const terms = keywords(`${selection} ${question}`);
-  const facts = rankByRelevance(sentencesOf(transcript), terms, MOCK_FACT_COUNT, selection);
+  const facts = rankBySalience(sentencesWithRole(transcript), terms, MOCK_FACT_COUNT, selection);
 
   return JSON.stringify({
     facts: facts.length ? facts : MOCK_FACTS,
@@ -285,12 +411,19 @@ function classifierFacts(prompt: string): string[] {
 function mockClassifierJson(prompt: string): string {
   const complexity = mockComplexity(prompt);
   const question = /Question:\s*(.*)$/m.exec(prompt)?.[1] ?? '';
+  const { kind, confidence } = mockKind(question);
   const facts = classifierFacts(prompt);
   // No facts in the prompt means there is no brief to judge — a root or a briefless call.
   const covered =
     !facts.length ||
     rankByRelevance(facts, keywords(question), 1, undefined, ANSWER_MIN_SCORE).length > 0;
-  return `{"complexity": ${complexity}, "covered": ${covered}, "reason": "heuristic mock classifier"}`;
+  return JSON.stringify({
+    complexity,
+    kind,
+    covered,
+    confidence,
+    reason: 'heuristic mock classifier',
+  });
 }
 
 function mockText(tier: Tier, prompt: string, purpose?: InferencePurpose): string {

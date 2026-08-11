@@ -87,6 +87,25 @@ export const apartmentRoot = conv({
   ],
 });
 
+/* ---------- scenario: PhD funding (common-word noise around one rare-term answer) ---------- */
+
+export const fundingRoot = conv({
+  id: 'eval_fund_root',
+  title: 'PhD program funding',
+  messages: [
+    msg('user', 'Help me compare the funding packages across the PhD programs I got into.'),
+    msg(
+      'assistant',
+      'All three programs offer full tuition remission. The Stanford and MIT programs offer standard teaching assistantships. Both programs offer subsidized housing for the first year. The Berkeley package includes the Hertz fellowship, which pays a stipend of 55,000 dollars per year.',
+    ),
+    msg('user', 'Which programs offer the best conference travel support?'),
+    msg(
+      'assistant',
+      'The MIT and Stanford programs offer 1,500 dollars of conference travel each year.',
+    ),
+  ],
+});
+
 /* ---------- case definitions ---------- */
 
 export interface BriefCase {
@@ -135,6 +154,14 @@ export const CASES: EvalCase[] = [
     selection: 'Inner Richmond junior one-bedroom',
     question: 'what is the commute from the cheaper one?',
     mustContain: ['Inner Richmond'],
+  },
+  {
+    kind: 'brief',
+    name: 'salience: rare-term stipend sentence survives common-word noise',
+    parent: fundingRoot,
+    selection: 'stipend amounts',
+    question: 'how large is the stipend the programs offer?',
+    mustContain: ['Hertz', '55,000'],
   },
   {
     kind: 'route',

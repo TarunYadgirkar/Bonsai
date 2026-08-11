@@ -18,7 +18,7 @@ import {
   type Conversation,
   type ContextBrief,
 } from '@bonsai/engine';
-import { CASES, clubsRoot, conv, msg, type EvalCase } from './cases';
+import { CASES, clubsRoot, conv, fundingRoot, msg, type EvalCase } from './cases';
 
 interface Verdict {
   name: string;
@@ -153,6 +153,30 @@ async function depthTwoCase(): Promise<Verdict> {
 }
 
 /**
+ * The salience proof, stricter than containment: the question's load-bearing fact lives in ONE
+ * rare-term sentence ("stipend") while the noise sentences share more query words ("programs
+ * offer"). A raw keyword-overlap count ranks the noise higher; salience must put the stipend
+ * sentence at the top of the brief.
+ */
+async function salienceCase(): Promise<Verdict> {
+  const brief = await compileFor(
+    fundingRoot,
+    [],
+    'stipend amounts',
+    'how large is the stipend the programs offer?',
+  );
+  const top = brief.facts[0] ?? '';
+  const pass = /hertz/i.test(top) && top.includes('55,000');
+  return {
+    name: 'salience: the rare-term stipend sentence is the top-ranked fact',
+    pass,
+    detail: pass
+      ? `top fact: "${top.slice(0, 90)}"`
+      : `top fact "${top.slice(0, 90)}" — facts: ${brief.facts.join(' | ').slice(0, 200)}`,
+  };
+}
+
+/**
  * The learning router, end to end: a lookup that classifies 'quick' every time. After the user
  * upgrades that quick pick three times, the profile pre-empts the classifier and starts the same
  * question at 'thoughtful' — same prompt, different route, because the history differs. This is
@@ -196,6 +220,7 @@ async function main() {
   const verdicts: Verdict[] = [];
   for (const c of CASES) verdicts.push(await runCase(c));
   verdicts.push(await depthTwoCase());
+  verdicts.push(await salienceCase());
   verdicts.push(await learningCase());
 
   let failed = 0;
