@@ -7,6 +7,7 @@ import {
   TIER_DEFAULTS,
   costForModel,
   estimateCostUsd,
+  tokenizerFactor,
   type Effort,
   type InferenceLog,
   type InferencePurpose,
@@ -36,8 +37,15 @@ export function buildLog(params: {
   /** True when token counts are live provider usage (CompleteResult.mock === false). Absent = estimated. */
   measured?: boolean;
 }): InferenceLog & { measured?: boolean } {
-  const { branchId, purpose, tier, inputTokens, outputTokens, baselineInputTokens } = params;
+  const { branchId, purpose, tier, inputTokens, outputTokens } = params;
   const model = params.model ?? MODEL_TIERS[tier];
+  // The counterfactual sends the whole history to the strong (deep) model, which tokenizes ~1.3x
+  // heavier than the chars/4 (Haiku-basis) estimate the caller passes. Scale the baseline onto
+  // that model's tokenizer before pricing it — otherwise both the baseline token count and the
+  // reported savings are understated. Store the scaled count so the economics panel agrees.
+  const baselineInputTokens = Math.ceil(
+    params.baselineInputTokens * tokenizerFactor(MODEL_TIERS.deep),
+  );
   return {
     id: newId('log'),
     ts: new Date().toISOString(),

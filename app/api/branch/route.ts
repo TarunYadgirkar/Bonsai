@@ -37,7 +37,8 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
   const byId = (id: string) => getConversation(ws, id);
   const branchId = newId('branch');
   const question = body.question ?? '';
-  const availableTokens = availableTokensFor(ws, parent.id) + estimateTokens(body.selection);
+  const availableTokens =
+    availableTokensFor(ws, parent.id, body.anchorMessageId) + estimateTokens(body.selection);
 
   // Compile off the assembled path: the parent's own brief + merged insights + the transcript
   // up to the fork anchor. Referents an ancestor already resolved arrive pre-resolved.

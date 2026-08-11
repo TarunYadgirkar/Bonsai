@@ -128,10 +128,10 @@ describe('assemblePath', () => {
     expect(path.tokens).toBe(estimateTokens(path.markdown));
   });
 
-  it('falls back to the full transcript on an unknown anchor id', () => {
+  it('scopes to empty on an unknown anchor id — fail closed, never leak the full transcript', () => {
     const path = assemblePath({ parent, byId, anchorMessageId: 'ghost' });
-    expect(path.scopedMessages).toEqual(messages);
-    expect(path.markdown).toContain('Berkeley Consulting');
+    expect(path.scopedMessages).toEqual([]);
+    expect(path.markdown).not.toContain('Berkeley Consulting');
   });
 });
 

@@ -137,15 +137,6 @@ function mockKind(question: string): { kind: QuestionKind; confidence: number } 
   return { kind: 'other', confidence: UNCLEAR_CONFIDENCE };
 }
 
-const MOCK_FACTS = [
-  'Free Ventures is a student-run startup accelerator at Berkeley; you apply with your own startup.',
-  'Free Ventures applications close September 11, with an info session on September 3.',
-  'Tarun is an incoming Berkeley freshman in applied math, CS-focused, already building a startup with a cofounder.',
-  'Tarun wants at most two clubs, builder-first and startup-adjacent over resume-padding.',
-  'Tarun has a hard cap of 8-10 hours per week across all clubs.',
-  'Berkeley Consulting was ruled out because of its case-interview recruiting process.',
-];
-
 const MOCK_FACT_COUNT = 6;
 
 const STOPWORDS = new Set(
@@ -294,22 +285,31 @@ function rankBySalience(
  * Extractive stand-in for the compiler. Ranks the parent transcript's sentences by salience —
  * rare identifying terms over common shared words, topic mentions, late-transcript recency,
  * and factual roles — so branching on anything other than the two scripted demo selections
- * still produces a brief about the thing that was highlighted. The constant fact list is only
- * the last resort.
+ * still produces a brief about the thing that was highlighted.
  */
 function mockCompilerJson(prompt: string): string {
   const selection = /Branch topic \(highlighted text\):\s*(.*)$/m.exec(prompt)?.[1] ?? '';
   const question = /Branch question:\s*(.*)$/m.exec(prompt)?.[1] ?? '';
   const transcript = prompt.split(/^Parent conversation:$/m)[1] ?? '';
 
+  const sentences = sentencesWithRole(transcript);
   const terms = keywords(`${selection} ${question}`);
-  const facts = rankBySalience(sentencesWithRole(transcript), terms, MOCK_FACT_COUNT, selection);
+  let facts = rankBySalience(sentences, terms, MOCK_FACT_COUNT, selection);
+
+  // When no sentence shares vocabulary with the question (e.g. "the deadline" vs "applications
+  // close"), carry the INHERITED BRIEF forward: the assembled path leads with it, so the earliest
+  // substantive statements preserve referents an ancestor already resolved. This is what keeps a
+  // depth-2 fork's grandparent entity alive — genuinely, not by injecting a hardcoded fixture.
+  if (!facts.length) {
+    facts = sentences
+      .filter((s) => !s.text.endsWith('?'))
+      .slice(0, MOCK_FACT_COUNT)
+      .map((s) => s.text);
+  }
 
   return JSON.stringify({
-    facts: facts.length ? facts : MOCK_FACTS,
-    excludedNote: facts.length
-      ? `Excluded: the rest of the parent thread — everything not bearing on ${selection || 'this branch'}.`
-      : 'Excluded: the club-by-club comparison, workload math, decision tree, and interview prep from the parent thread.',
+    facts: facts.length ? facts : [`Topic in focus: ${selection || question || 'this branch'}.`],
+    excludedNote: `Excluded: the rest of the parent thread — everything not bearing on ${selection || 'this branch'}.`,
   });
 }
 

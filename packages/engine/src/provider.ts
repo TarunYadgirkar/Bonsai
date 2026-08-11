@@ -147,6 +147,9 @@ export async function providerComplete(params: ProviderParams): Promise<Provider
     }
     return result;
   } catch (err) {
+    // A caller-initiated abort is a cancellation, not a provider failure — propagate it instead of
+    // answering with a mock. Our own timeout abort (params.signal not aborted) still degrades.
+    if ((err as Error).name === 'AbortError' && params.signal?.aborted) throw err;
     logger.warn(`[llm] ${provider} failed (${(err as Error).message}) — falling back to mock`);
     return null;
   }

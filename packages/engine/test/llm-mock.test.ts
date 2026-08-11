@@ -207,6 +207,24 @@ describe('mock provider path', () => {
     expect(result.mock).toBe(true);
   });
 
+  it('never injects the Berkeley fixture into an unrelated transcript with no salient match', async () => {
+    const transcript = [
+      'user: We are migrating the billing service off the legacy monolith next quarter.',
+      '',
+      'assistant: The cutover window is the first weekend of March, with a read-only freeze.',
+    ].join('\n');
+    // Selection + question share no vocabulary with the transcript, so nothing ranks and the
+    // fallback path runs — it must carry the transcript forward, not the Berkeley fixture.
+    const result = await complete({
+      tier: 'quick',
+      messages: compilerMessages('pricing tiers', 'what does the vendor SLA say?', transcript),
+    });
+    const parsed = JSON.parse(result.text) as { facts: string[]; excludedNote: string };
+    const blob = parsed.facts.join(' ');
+    expect(blob).not.toMatch(/Free Ventures|Berkeley|ML@B|Hertz/);
+    expect(blob).toContain('billing service');
+  });
+
   it('ranks a rare-term sentence above common-word sentences that match more query terms', async () => {
     // Five noise sentences each match TWO common terms ("clubs", "offer"); the answer sentence
     // matches only ONE term ("stipend") that appears nowhere else. A raw overlap count ranks

@@ -605,8 +605,12 @@ export async function recordRoutingFeedback(
 
 /* ---------- derived ---------- */
 
-export function availableTokensFor(ws: WorkingSet, parentId: string | null): number {
-  return availableTokensForIn(parentId, (id) => ws.byId.get(id));
+export function availableTokensFor(
+  ws: WorkingSet,
+  parentId: string | null,
+  anchorMessageId?: string,
+): number {
+  return availableTokensForIn(parentId, (id) => ws.byId.get(id), anchorMessageId);
 }
 
 export function buildTree(ws: WorkingSet): BranchNode[] {

@@ -7,6 +7,7 @@
  * depth N+1 because the resolution travels inside the brief. The full ancestor transcript is
  * deliberately NOT re-walked — that is the pruning bet, and `widen` is the escape hatch.
  */
+import { logger } from './logger';
 import { estimateTokens, messagesTokens } from './tokens';
 import type { Conversation, Message, UserProfile } from './types';
 import type { ConversationLookup } from './tree';
@@ -108,7 +109,11 @@ export function widenedChatContext(
 function anchorScoped(messages: Message[], anchorMessageId?: string): Message[] {
   if (!anchorMessageId) return messages;
   const idx = messages.findIndex((m) => m.id === anchorMessageId);
-  return idx === -1 ? messages : messages.slice(0, idx + 1);
+  if (idx !== -1) return messages.slice(0, idx + 1);
+  // Anchor specified but not found: the scope boundary is unknown, so fail CLOSED (send nothing
+  // after it) rather than silently leaking the whole transcript past the intended cut point.
+  logger.warn(`[context] anchor ${anchorMessageId} not found — scoping to empty, not full transcript`);
+  return [];
 }
 
 function renderInsights(conversation: Conversation): string {

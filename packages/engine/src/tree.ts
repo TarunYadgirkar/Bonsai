@@ -7,11 +7,21 @@ import type { BranchNode, Conversation, ContextBrief, Tier } from './types';
 
 export type ConversationLookup = (id: string) => Conversation | undefined;
 
-/** Full parent history a branch could have inherited — the baseline every saving is measured against. */
-export function availableTokensFor(parentId: string | null, byId: ConversationLookup): number {
+/**
+ * Full parent history a branch could have inherited — the baseline every saving is measured
+ * against. When the fork is anchored, only the immediate parent's messages UP TO the anchor were
+ * in scope at fork time; counting the ones after it would inflate the baseline and thus prunedPct.
+ * Ancestors are always counted whole (their briefs already captured them).
+ */
+export function availableTokensFor(
+  parentId: string | null,
+  byId: ConversationLookup,
+  anchorMessageId?: string,
+): number {
   if (!parentId) return 0;
   const parent = byId(parentId);
   if (!parent) return 0;
+  const scoped = anchorScopedMessages(parent.messages, anchorMessageId);
   const profileTokens = parent.profile
     ? messagesTokens([
         {
@@ -21,7 +31,14 @@ export function availableTokensFor(parentId: string | null, byId: ConversationLo
         },
       ])
     : 0;
-  return messagesTokens(parent.messages) + profileTokens + availableTokensFor(parent.parentId, byId);
+  return messagesTokens(scoped) + profileTokens + availableTokensFor(parent.parentId, byId);
+}
+
+/** Same anchor rule as context.ts anchorScoped: unknown anchor scopes to empty, not full. */
+function anchorScopedMessages(messages: Conversation['messages'], anchorMessageId?: string) {
+  if (!anchorMessageId) return messages;
+  const idx = messages.findIndex((m) => m.id === anchorMessageId);
+  return idx === -1 ? [] : messages.slice(0, idx + 1);
 }
 
 export function lastTier(c: Conversation): Tier | null {

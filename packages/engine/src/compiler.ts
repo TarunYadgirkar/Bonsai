@@ -142,9 +142,14 @@ function parseCompilerOutput(text: string, selection: string): CompilerOutput {
   if (start !== -1 && end > start) {
     try {
       const json = JSON.parse(text.slice(start, end + 1)) as Partial<CompilerOutput>;
-      if (Array.isArray(json.facts) && json.facts.length) {
+      // Filter to strings FIRST, then gate on the result: a facts array of non-strings passes a
+      // raw length check but filters to empty, yielding a factless brief that skips the fallback.
+      const facts = Array.isArray(json.facts)
+        ? json.facts.filter((f): f is string => typeof f === 'string')
+        : [];
+      if (facts.length) {
         return {
-          facts: json.facts.filter((f): f is string => typeof f === 'string'),
+          facts,
           excludedNote:
             typeof json.excludedNote === 'string'
               ? json.excludedNote
