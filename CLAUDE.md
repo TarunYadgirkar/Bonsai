@@ -1,5 +1,5 @@
 @AGENTS.md
 
 Claude Code specifics:
-- Before any work: read PLAN.md and confirm which milestone + which person's territory this session is (the prompt will say).
-- Work exactly one milestone per request. When it's done and committed, stop and summarize — don't roll into the next one.
+- If a `LANE.md` exists at the repo root, read it before any work — it is your lane's mission brief and takes precedence over general direction questions.
+- Commit messages: short conventional subject only. Never add Co-Authored-By trailers or generated-with footers.
