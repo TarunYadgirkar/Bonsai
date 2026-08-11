@@ -69,3 +69,18 @@ Base: `fe7fcc64a7752c302280cf1f85e5c028057bdef5`
 - Code review initially found two Important issues: selector/configuration failures retried backend construction, and semantic 4xx paths committed unchanged drafts. Both were reproduced with RED tests and fixed. Re-review approved with no remaining Critical or Important findings.
 - TypeScript review independently found the selector/configuration retry issue. Re-review verified typed missing-KV 503 handling and semantic transaction aborts, with no remaining Critical or Important findings.
 - Security review found one Important false-ready health path after an initial file seed-commit failure. The route now conservatively reports safe error health when a typed load/seed failure occurs before backend health changes; the backend implementation remained untouched. Re-review approved with no remaining Critical or Important findings and no path, environment, backend-response, or secret leakage.
+
+## Post-review provider masking fix
+
+- RED command: `VITE_CONFIG_NATIVE_IGNORE_WARNING=true npx vitest run app/api/persistence/route.test.ts -t "does not commit when a manual first answer fails before any inference event completes"`
+- RED result: exit 1; 1 failed and 18 skipped. Expected provider 502, received persistence 503 because the unchanged transaction attempted a durable commit.
+- Fix: when answer completion fails with `ProviderUnavailableError`, rethrow it if neither a classifier event nor a completed answer attempt exists. Keep returning the transaction result when either event category must be committed.
+- GREEN command: `VITE_CONFIG_NATIVE_IGNORE_WARNING=true npx vitest run app/api/persistence/route.test.ts -t "does not commit when a manual first answer fails before any inference event completes"`
+- GREEN result: exit 0; 1 passed and 18 skipped. The response remained provider 502 and the injected commit counter remained zero.
+- Focused command: `VITE_CONFIG_NATIVE_IGNORE_WARNING=true npx vitest run app/api/persistence/route.test.ts app/api/context-flow.test.ts app/api/inference-logging.test.ts`
+- Focused result: exit 0; 3 files and 28 tests passed.
+- TypeScript command: `npx tsc --noEmit -p tsconfig.json`
+- TypeScript result: exit 0.
+- Full regression: `VITE_CONFIG_NATIVE_IGNORE_WARNING=true npm test` passed 20 files and 242 tests.
+- `npm run lint`, `npx next build --webpack`, and `git diff --check` passed.
+- Fresh code, TypeScript, and security reviews approved the follow-up delta with no Critical or Important findings. Reviewers verified that zero-event provider failures never reach commit, while completed classifier or retry events still commit before the safe provider 502 response.

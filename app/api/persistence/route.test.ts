@@ -497,4 +497,33 @@ describe('persistence API contracts', () => {
     expect(persistenceResponse.status).toBe(503);
     expect((await body(persistenceResponse)).code).toBe('PERSISTENCE_COMMIT_FAILED');
   });
+
+  it('does not commit when a manual first answer fails before any inference event completes', async () => {
+    let commits = 0;
+    configureStorePersistenceForTests(
+      new MemoryPersistenceBackend({
+        initialSnapshot: snapshot(),
+        beforeCommit: () => {
+          commits += 1;
+          throw new PersistenceCommitError('must not mask the provider failure');
+        },
+      }),
+    );
+    llmMocks.complete.mockRejectedValueOnce(new ProviderUnavailableError('provider unavailable'));
+
+    const response = await chatPost(
+      request('/api/chat', {
+        branchId: ROOT_ID,
+        content: 'Does a first-answer failure remain a provider failure?',
+        mode: { mode: 'manual', model: 'claude-haiku-4-5', effort: 'low' },
+      }),
+    );
+
+    expect(response.status).toBe(502);
+    expect(await body(response)).toEqual({
+      error: 'inference provider unavailable',
+      code: 'PROVIDER_UNAVAILABLE',
+    });
+    expect(commits).toBe(0);
+  });
 });

@@ -74,23 +74,23 @@ export async function POST(request: Request) {
       } catch (error: unknown) {
         const cause = error instanceof CompletionPipelineError ? error.cause : error;
         if (!(cause instanceof ProviderUnavailableError)) throw error;
+        const attempts = error instanceof CompletionPipelineError ? error.attempts : [];
+        if (!routed.classifier && attempts.length === 0) throw cause;
         if (routed.classifier) {
           logInference(
             buildLog({ branchId: conversation.id, purpose: 'classify', ...routed.classifier }),
           );
         }
-        if (error instanceof CompletionPipelineError) {
-          for (const attempt of error.attempts) {
-            logInference(
-              buildLog({
-                branchId: conversation.id,
-                purpose: 'chat',
-                ...attempt,
-                escalated: true,
-                overridden: routed.routing.overridden,
-              }),
-            );
-          }
+        for (const attempt of attempts) {
+          logInference(
+            buildLog({
+              branchId: conversation.id,
+              purpose: 'chat',
+              ...attempt,
+              escalated: true,
+              overridden: routed.routing.overridden,
+            }),
+          );
         }
         return { kind: 'provider-unavailable' as const };
       }
