@@ -101,7 +101,7 @@ async function runCompiler(sources: ContextSource[]): Promise<string> {
       {
         role: 'system',
         content:
-          'You compile minimal context briefs. Extract ONLY the facts needed to answer the branch question. Resolve every referent so each fact stands alone. Respond with JSON only: {"facts":[{"text":string,"sourceIds":string[]}],"excludedNote":string}. Return at most 8 short facts. Every fact must cite at least one source ID, and every source ID must come exactly from a supplied [source:kind:sourceId] marker. Never invent a source ID.',
+          'You compile minimal context briefs. Extract ONLY the facts needed to answer the branch question. Resolve every referent so each fact stands alone. Each [source:kind:sourceId] marker is followed by a JSON string containing its source text. Respond with JSON only: {"facts":[{"text":string,"sourceIds":string[]}],"excludedNote":string}. Return at most 8 short facts. Every fact must cite at least one source ID, and every source ID must come exactly from a supplied marker. Never invent a source ID.',
       },
       {
         role: 'user',
@@ -114,7 +114,10 @@ async function runCompiler(sources: ContextSource[]): Promise<string> {
 }
 
 function renderSource(source: ContextSource): string {
-  return `[source:${source.kind}:${source.sourceId}]\n${source.content}`;
+  const content = JSON.stringify(source.content)
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+  return `[source:${source.kind}:${source.sourceId}]\n${content}`;
 }
 
 function parseCompilerOutput(text: string, sources: ContextSource[]): CompilerOutput | undefined {

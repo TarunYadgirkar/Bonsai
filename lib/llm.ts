@@ -156,9 +156,16 @@ interface MockCompilerSource {
 
 function compilerSources(prompt: string): MockCompilerSource[] {
   const sources: MockCompilerSource[] = [];
-  const marker = /\[source:([^:\]]+):([^\]]+)\]\n([\s\S]*?)(?=\n\n\[source:|$)/g;
+  const marker = /^\[source:([^:\]\r\n]+):([^\]\r\n]+)\]\r?\n(.*)$/gm;
   for (const match of prompt.matchAll(marker)) {
-    sources.push({ kind: match[1], sourceId: match[2], content: match[3].trim() });
+    try {
+      const content = JSON.parse(match[3]) as unknown;
+      if (typeof content === 'string') {
+        sources.push({ kind: match[1], sourceId: match[2], content });
+      }
+    } catch {
+      continue;
+    }
   }
   return sources;
 }
