@@ -6,6 +6,7 @@
  * escalates only when the cheap answer fails a sanity check.
  */
 import { complete } from './llm';
+import type { CompletionEvent, CompleteResult } from './llm';
 import {
   INTERNAL_TIER,
   CEILING_MODEL,
@@ -49,50 +50,66 @@ export interface RouteParams {
 }
 
 export async function route(params: RouteParams): Promise<RoutingDecision> {
+  return (await routeWithMetadata(params)).routing;
+}
+
+export interface RouteResult {
+  routing: RoutingDecision;
+  classifier?: CompletionEvent;
+}
+
+export async function routeWithMetadata(params: RouteParams): Promise<RouteResult> {
   const { question, contextTokens, pinnedTier, mode } = params;
 
   // An explicit pick is the user's own labelled example — skip the classifier entirely.
   if (mode?.mode === 'manual' && mode.model) {
     const model = modelSpec(mode.model);
     const effort = mode.effort ?? TIER_DEFAULTS[model.tier].effort;
-    return decision({
-      tier: model.tier,
-      model: model.id,
-      effort,
-      complexity: model.tier === 'deep' ? 3 : model.tier === 'thoughtful' ? 2 : 1,
-      contextTokens,
-      reason: `You picked ${model.label} at ${effortSpec(effort).label} effort; classification skipped.`,
-      overridden: true,
-    });
+    return {
+      routing: decision({
+        tier: model.tier,
+        model: model.id,
+        effort,
+        complexity: model.tier === 'deep' ? 3 : model.tier === 'thoughtful' ? 2 : 1,
+        contextTokens,
+        reason: `You picked ${model.label} at ${effortSpec(effort).label} effort; classification skipped.`,
+        overridden: true,
+      }),
+    };
   }
 
   if (pinnedTier) {
-    return decision({
-      tier: pinnedTier,
-      complexity: TIER_BY_COMPLEXITY[3] === pinnedTier ? 3 : 2,
-      contextTokens,
-      reason: `Branch pinned to ${TIER_LABEL[pinnedTier]} by you; classification skipped.`,
-      overridden: true,
-    });
+    return {
+      routing: decision({
+        tier: pinnedTier,
+        complexity: TIER_BY_COMPLEXITY[3] === pinnedTier ? 3 : 2,
+        contextTokens,
+        reason: `Branch pinned to ${TIER_LABEL[pinnedTier]} by you; classification skipped.`,
+        overridden: true,
+      }),
+    };
   }
 
-  const { complexity, why } = await classify(question, contextTokens);
+  const { complexity, why, classifier } = await classify(question, contextTokens);
   const tier = TIER_BY_COMPLEXITY[complexity];
 
-  return decision({
-    tier,
-    complexity,
-    contextTokens,
-    reason: `${why} Complexity ${complexity}/3 against a ${contextTokens}-token compiled brief.`,
-    overridden: false,
-  });
+  return {
+    routing: decision({
+      tier,
+      complexity,
+      contextTokens,
+      reason: `${why} Complexity ${complexity}/3 against a ${contextTokens}-token compiled brief.`,
+      overridden: false,
+    }),
+    classifier,
+  };
 }
 
 /** One cheap call. Cost discipline is the product — the classifier never runs on a big model. */
 async function classify(
   question: string,
   contextTokens: number,
-): Promise<{ complexity: Complexity; why: string }> {
+): Promise<{ complexity: Complexity; why: string; classifier: CompletionEvent }> {
   const result = await complete({
     tier: INTERNAL_TIER,
     maxTokens: 120,
@@ -110,10 +127,19 @@ async function classify(
   });
 
   const parsed = parseClassifier(result.text);
-  if (parsed) return parsed;
+  if (parsed) {
+    return {
+      ...parsed,
+      classifier: { completion: result, status: 'succeeded' as const },
+    };
+  }
 
   console.warn('[router] unparseable classifier output — defaulting to thoughtful');
-  return { complexity: 2, why: 'Classifier unclear; defaulted to the middle tier.' };
+  return {
+    complexity: 2,
+    why: 'Classifier unclear; defaulted to the middle tier.',
+    classifier: { completion: result, status: 'failed' },
+  };
 }
 
 function parseClassifier(text: string): { complexity: Complexity; why: string } | null {
@@ -173,11 +199,30 @@ export function answerFailsSanityCheck(answer: string): boolean {
   return answer.trim().length < 40 || PUNT.test(answer);
 }
 
+export interface EscalatedCompletionResult {
+  text: string;
+  routing: RoutingDecision;
+  /** Compatibility fields describe the delivered attempt, never an aggregate of retries. */
+  inputTokens: number;
+  outputTokens: number;
+  attempts: CompletionEvent[];
+}
+
+export class CompletionPipelineError extends Error {
+  constructor(
+    readonly cause: unknown,
+    readonly attempts: CompletionEvent[],
+  ) {
+    super('completion pipeline failed', { cause });
+    this.name = 'CompletionPipelineError';
+  }
+}
+
 export async function completeWithEscalation(params: {
   routing: RoutingDecision;
   systemPrompt: string;
   userPrompt: string;
-}): Promise<{ text: string; routing: RoutingDecision; inputTokens: number; outputTokens: number }> {
+}): Promise<EscalatedCompletionResult> {
   const messages = [
     { role: 'system' as const, content: params.systemPrompt },
     { role: 'user' as const, content: params.userPrompt },
@@ -195,6 +240,7 @@ export async function completeWithEscalation(params: {
       routing: { ...params.routing, estCostUsd: first.estCostUsd, servedBy: first.servedBy },
       inputTokens: first.inputTokens,
       outputTokens: first.outputTokens,
+      attempts: [{ completion: first, status: 'succeeded' }],
     };
   }
 
@@ -212,18 +258,24 @@ export async function completeWithEscalation(params: {
       routing: { ...params.routing, estCostUsd: first.estCostUsd, servedBy: first.servedBy },
       inputTokens: first.inputTokens,
       outputTokens: first.outputTokens,
+      attempts: [{ completion: first, status: 'succeeded' }],
     };
   }
 
   const upgradedTier = upgraded ?? params.routing.tier;
   const upgradedModel = upgraded ? TIER_DEFAULTS[upgraded].model : CEILING_MODEL;
   const upgradedEffort = upgraded ? TIER_DEFAULTS[upgraded].effort : params.routing.effort ?? 'high';
-  const second = await complete({
-    tier: upgradedTier,
-    model: upgradedModel,
-    effort: upgradedEffort,
-    messages,
-  });
+  let second: CompleteResult;
+  try {
+    second = await complete({
+      tier: upgradedTier,
+      model: upgradedModel,
+      effort: upgradedEffort,
+      messages,
+    });
+  } catch (error: unknown) {
+    throw new CompletionPipelineError(error, [{ completion: first, status: 'failed' }]);
+  }
   return {
     text: second.text,
     routing: {
@@ -239,9 +291,13 @@ export async function completeWithEscalation(params: {
       reason: `${params.routing.reason} Escalated to ${routingLabel(upgradedModel, upgradedEffort)}: the ${
         params.routing.label ?? params.routing.modelLabel
       } answer failed the sanity check.`,
-      estCostUsd: first.estCostUsd + second.estCostUsd,
+      estCostUsd: second.estCostUsd,
     },
-    inputTokens: first.inputTokens + second.inputTokens,
-    outputTokens: first.outputTokens + second.outputTokens,
+    inputTokens: second.inputTokens,
+    outputTokens: second.outputTokens,
+    attempts: [
+      { completion: first, status: 'failed' },
+      { completion: second, status: 'succeeded' },
+    ],
   };
 }

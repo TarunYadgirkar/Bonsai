@@ -16,7 +16,7 @@ export async function GET() {
     autoPicks: TIER_DEFAULTS,
     autoLabels: TIER_LABEL,
     modeNote: 'Auto classifies the question and picks both halves; Manual names them.',
-    /** Rates are published-list, applied to locally generated text — modeled spend, not billed. */
-    pricingNote: 'Cost is modeled at published per-token rates.',
+    /** Catalog rates applied to measured token usage — modeled spend, not billed. */
+    pricingNote: 'Cost is modeled from Bonsai catalog rates, including a placeholder ceiling rate.',
   });
 }

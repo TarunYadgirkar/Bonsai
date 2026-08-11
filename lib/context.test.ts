@@ -48,6 +48,7 @@ function brief(id: string, markdown: string): ContextBrief {
     prunedPct: 90,
     sourceRefs: [],
     factSourceIds: [[]],
+    factProvenance: ['model-cited'],
   };
 }
 

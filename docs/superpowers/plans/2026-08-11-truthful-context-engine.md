@@ -13,7 +13,8 @@
 - Work only on copy-b.
 - Keep complete() as the only inference entry point.
 - Existing compiled briefs remain immutable.
-- New brief facts must cite source IDs present in the compiler input.
+- New brief facts must name source IDs present in the compiler input. Membership proves
+  traceability only; it does not prove that a model-written fact is entailed by the source.
 - No external provider is needed for tests.
 - Mock mode must remain fully usable.
 - Run npm test, npm run lint, and npm run build before every implementation commit.
@@ -371,7 +372,7 @@ interface CompilerOutput {
 
 The system prompt must require JSON facts with text and sourceIds, state that every source ID must come from the supplied [source:...] markers, and cap output at eight facts.
 
-- [ ] **Step 3: Validate provenance**
+- [ ] **Step 3: Check source-ID membership**
 
 After parsing:
 
@@ -456,7 +457,8 @@ Verify the permanent call-site change made with Task 3, then cover it in the acc
 - resolve parentContext = visibleContextFor(parent.id);
 - return a 500 ApiError if the parent exists but assembly fails;
 - pass parentContext to compileBrief;
-- keep availableTokensFor(parent.id) plus selection tokens as the full-history baseline;
+- keep availableTokensFor(parent.id) as the full parent-history baseline; the highlighted
+  selection is already inside that history and must not be counted twice;
 - never pass parent.messages or profileFor();
 - remove profileFor() when it becomes unused.
 
@@ -578,7 +580,8 @@ The milestone is complete only when:
 
 - nested forks compile from the parent brief plus its turns and active insights;
 - merged insights appear in future chat prompts;
-- every new compiled fact has aligned, validated source IDs;
+- every new compiled fact has aligned, membership-checked source IDs; this is not semantic
+  entailment validation;
 - old briefs remain immutable;
 - full test, lint, and production build gates pass;
 - copy-b is pushed and the build log contains exact evidence.

@@ -1,11 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import type { Conversation, ModeSelection } from '@/lib/types';
+import type { Conversation, FactProvenanceStatus, ModeSelection } from '@/lib/types';
 import { RoutingChip } from './RoutingChip';
 import { conversationTokens, formatTokens } from './tokens';
 
 type Selection = { text: string; x: number; y: number };
+
+const PROVENANCE_LABEL: Record<FactProvenanceStatus, string> = {
+  'model-cited': 'source ID cited; entailment unchecked',
+  extractive: 'exact extract',
+  'legacy-unknown': 'legacy provenance unknown',
+};
 
 export function ChatPane({
   conversation,
@@ -174,9 +180,12 @@ export function ChatPane({
                 Compiled context brief · {brief.facts.length} facts
               </summary>
               <ul className="mt-2 flex flex-col gap-1">
-                {brief.facts.map((fact) => (
-                  <li key={fact} className="text-[11px] leading-snug text-neutral-300">
-                    · {fact}
+                {brief.facts.map((fact, index) => (
+                  <li key={`${fact}:${index}`} className="text-[11px] leading-snug text-neutral-300">
+                    · {fact}{' '}
+                    <span className="text-[10px] text-neutral-600">
+                      ({PROVENANCE_LABEL[brief.factProvenance[index] ?? 'legacy-unknown']})
+                    </span>
                   </li>
                 ))}
               </ul>

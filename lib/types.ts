@@ -60,6 +60,13 @@ export interface AssembledContext {
   tokens: number;
 }
 
+/**
+ * `model-cited` means the model named a supplied source ID. It does not claim semantic
+ * entailment. `extractive` means Bonsai deterministically copied text from the named source.
+ * `legacy-unknown` is reserved for old snapshots that did not persist this distinction.
+ */
+export type FactProvenanceStatus = 'model-cited' | 'extractive' | 'legacy-unknown';
+
 export interface Message {
   id: string;
   role: Role;
@@ -89,6 +96,8 @@ export interface ContextBrief {
   prunedPct: number;
   sourceRefs: ContextSourceRef[];
   factSourceIds: string[][];
+  /** Aligned with facts. Source-ID membership is traceability, not semantic validation. */
+  factProvenance: FactProvenanceStatus[];
 }
 
 export interface RoutingDecision {
@@ -166,16 +175,21 @@ export interface InferenceLog {
   purpose: InferencePurpose;
   tier: Tier;
   model: string;
+  /** Upstream model that served this exact completion, when a live provider was used. */
+  servedBy?: string;
   /** Effort the call ran at. Optional for pre-M5 rows; always set by the engine now. */
   effort?: Effort;
   inputTokens: number;
   outputTokens: number;
+  /** Modeled Bonsai catalog equivalent, not necessarily the upstream provider's invoice. */
   estCostUsd: number;
+  /** Whether this completion produced the event output that its caller accepted. */
+  status?: 'succeeded' | 'failed';
   escalated: boolean;
   overridden: boolean;
-  /** Input tokens the same request would have cost carrying full parent history. */
+  /** Full-history tokens for the delivered-answer counterfactual; zero for all other events. */
   baselineInputTokens: number;
-  /** Cost of the same request on the deep-tier model with full history. */
+  /** Modeled ceiling-model cost for that counterfactual; exactly zero when its input is zero. */
   baselineCostUsd: number;
 }
 
@@ -183,13 +197,14 @@ export interface EconomicsTotals {
   inferenceCount: number;
   inputTokens: number;
   outputTokens: number;
+  /** Sum of modeled Bonsai catalog costs. */
   costUsd: number;
 }
 
 export interface EconomicsBaseline {
-  /** Full-history input tokens across every logged inference. */
+  /** Full-history input tokens for delivered answers only; internal overhead has zero baseline. */
   inputTokens: number;
-  /** Strong-model-always cost across every logged inference. */
+  /** Modeled ceiling-model, full-history cost for delivered answers only. */
   costUsd: number;
   tokensSavedPct: number;
   costSavedPct: number;

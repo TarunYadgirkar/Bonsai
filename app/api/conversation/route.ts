@@ -1,3 +1,4 @@
+import { parseConversationRequest } from '@/lib/api-validation';
 import {
   buildTree,
   flushLogs,
@@ -28,7 +29,13 @@ export interface NewConversationResponse {
  * who the user is; `parentId` is null, so it inherits no transcript and no tokens.
  */
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as NewConversationRequest;
+  const parsedRequest = await parseConversationRequest(request);
+  if (!parsedRequest.ok) {
+    return Response.json({ error: parsedRequest.error } satisfies ApiError, {
+      status: parsedRequest.status,
+    });
+  }
+  const body = parsedRequest.value;
 
   await loadStore();
   const id = nextId('conv');

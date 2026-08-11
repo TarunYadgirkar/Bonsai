@@ -1,12 +1,13 @@
 /**
  * Regenerates `fixtures/seed-tree.json` — the pre-built branch tree the app boots with.
  *
- *   DATABASE_URL= npx next dev -p 3111        # in-memory, so this never touches the demo snapshot
- *   npx tsx scripts/build-seed-tree.ts
+ *   npm run fixture:serve
+ *   npm run fixture:build
  *
  * Every branch here is produced by the real engine over the real API, so the briefs, pruned-%,
  * routing decisions and costs in the fixture are computed, not hand-written. Timestamps are
- * normalized to a fixed date afterwards so re-running produces a clean diff.
+ * normalized to a fixed date afterwards so re-running produces a clean diff. The root-only flag
+ * is intentionally ignored by production builds.
  *
  * Scenarios covered, one branch each: an auto-routed lookup, an auto-routed synthesis, an
  * auto-routed deep ranking, a nested branch off a branch, a manual Opus/max override, and an

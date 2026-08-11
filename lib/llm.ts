@@ -7,6 +7,7 @@
  */
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, effortSpec } from './models';
 import { parseContextSources } from './context';
+import type { ParsedContextSource } from './context';
 import { providerComplete } from './provider';
 import { estimateTokens } from './tokens';
 import type { Effort, Tier } from './types';
@@ -32,6 +33,7 @@ export interface CompleteResult {
   text: string;
   model: string;
   tier: Tier;
+  effort: Effort;
   inputTokens: number;
   outputTokens: number;
   estCostUsd: number;
@@ -41,6 +43,11 @@ export interface CompleteResult {
   servedBy?: string;
 }
 
+export interface CompletionEvent {
+  completion: CompleteResult;
+  status: 'succeeded' | 'failed';
+}
+
 export async function complete(params: CompleteParams): Promise<CompleteResult> {
   const { tier, messages } = params;
   const model = params.model ?? MODEL_TIERS[tier];
@@ -48,7 +55,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
   const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
   const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
 
-  // A live key wins over everything: real completion, real token counts off the API's own usage.
+  // A live key wins over everything: real completion, exact token counts when the API reports them.
   const live = await providerComplete({
     model,
     messages,
@@ -56,12 +63,13 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
     temperature: params.temperature,
   });
   if (live) {
-    const usedInput = live.inputTokens || inputTokens;
-    const usedOutput = live.outputTokens || estimateTokens(live.text);
+    const usedInput = live.inputTokens ?? inputTokens;
+    const usedOutput = live.outputTokens ?? estimateTokens(live.text);
     return {
       text: live.text,
       model,
       tier,
+      effort,
       inputTokens: usedInput,
       outputTokens: usedOutput,
       estCostUsd: costForModel(model, usedInput, usedOutput),
@@ -70,7 +78,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
     };
   }
 
-  return mockComplete(tier, model, messages, inputTokens);
+  return mockComplete(tier, model, effort, messages, inputTokens);
 }
 
 /* ---------- mock ---------- */
@@ -157,7 +165,7 @@ function mockCompilerJson(prompt: string): string {
   const facts = sources
     .filter((source) => source.kind !== 'selection' && source.kind !== 'question')
     .flatMap((source, sourceIndex) =>
-      sentencesOf(source.content).map((text, sentenceIndex) => ({
+      compilerFactsFromSource(source).map((text, sentenceIndex) => ({
         text,
         sourceId: source.sourceId,
         sourceIndex,
@@ -190,9 +198,25 @@ function mockCompilerJson(prompt: string): string {
   });
 }
 
+function compilerFactsFromSource(source: ParsedContextSource): string[] {
+  const statements =
+    source.kind === 'brief' ? factsFromBrief(source.content) : statementsFromSource(source.content);
+  return statements
+    .map((statement) => statement.replace(/^[-*]\s+/, '').trim())
+    .filter((statement) => statement.length > 0 && !looksLikeQuestionOrRequest(statement));
+}
+
+function looksLikeQuestionOrRequest(statement: string): boolean {
+  if (statement.endsWith('?')) return true;
+  return /^(?:(?:what|when|where|why|who|which|how|can|could|would|should|do|does|did|is|are|will|tell|explain|rank|compare)\b|given\b[^.!?]{0,160}\b(?:rank|compare|explain|list|recommend)\b)/i.test(
+    statement,
+  );
+}
+
 function mockComplete(
   tier: Tier,
   model: string,
+  effort: Effort,
   messages: LlmMessage[],
   inputTokens: number,
 ): CompleteResult {
@@ -204,23 +228,13 @@ function mockComplete(
     text,
     model,
     tier,
+    effort,
     inputTokens,
     outputTokens,
     estCostUsd: costForModel(model, inputTokens, outputTokens),
     mock: true,
   };
 }
-
-/** The two DEMO.md questions keep their rehearsed answers; everything else is grounded below. */
-const DEADLINE_QUESTION = /\b(when|what date|deadline|due)\b.*\b(close|closes|due|deadline|apply|application)\b/i;
-const RANKING_QUESTION = /\b(rank|top \d|opportunity cost|compare)\b/i;
-
-const DEMO_ANSWERS = {
-  deadline:
-    'Free Ventures applications close **September 11**, with an info session on September 3. That is eight days between the session and the deadline — draft the application before September 3 rather than after.',
-  ranking:
-    'Ranked, with the opportunity cost of each:\n\n1. **Free Ventures** — the only option whose hours go into your own company. Cost: ~3-4 hrs/week of overhead and a September application window that collides with technical-org recruiting.\n2. **ML@B** — strongest technical peer group and the highest ceiling. Cost: 12-14 hrs/week once the first-semester education track is counted, with a three-week spike landing on November midterms.\n3. **Blueprint** — fits the 8-10 hr cap and has the strongest community. Cost: almost no technical stretch.\n\nCodebase is dominated in both branches; cut it and reclaim the application slot.',
-} as const;
 
 const FACTS_PER_TIER: Record<Tier, number> = { quick: 1, thoughtful: 3, deep: 5 };
 const ANSWER_MIN_SCORE = 2;
@@ -261,9 +275,6 @@ function answerCandidates(prompt: string): string[] {
  */
 function mockAnswer(tier: Tier, prompt: string): string {
   const question = prompt.split(/\n---\n/).pop()?.trim() ?? '';
-  if (DEADLINE_QUESTION.test(question)) return DEMO_ANSWERS.deadline;
-  if (RANKING_QUESTION.test(question)) return DEMO_ANSWERS.ranking;
-
   // Two matching terms, not one: a lone "Berkeley" hit is not an answer, it is a coincidence.
   const hits = rankByRelevance(
     answerCandidates(prompt),

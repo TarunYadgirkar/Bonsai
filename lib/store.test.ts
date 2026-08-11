@@ -1,5 +1,5 @@
 import tree from '@/fixtures/seed-tree.json';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { estimateTokens, messagesTokens } from './tokens';
 import type { Conversation, Insight } from './types';
 
@@ -40,6 +40,10 @@ describe('store context compatibility', () => {
   beforeEach(() => {
     kvMocks.get.mockReset();
     kvMocks.set.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   it('loads generated fixture briefs without mutating imported JSON', async () => {
@@ -108,6 +112,7 @@ describe('store context compatibility', () => {
     expect(getConversation('legacy-child')?.brief).toMatchObject({
       sourceRefs: [],
       factSourceIds: [[], []],
+      factProvenance: ['legacy-unknown', 'legacy-unknown'],
     });
     expect(getConversation('legacy-root')?.insights[0]).toMatchObject({
       sourceMessageIds: [],
@@ -148,5 +153,147 @@ describe('store context compatibility', () => {
 
   it('returns undefined for unknown visible context IDs', () => {
     expect(visibleContextFor('missing-conversation')).toBeUndefined();
+  });
+
+  it.each([
+    {
+      name: 'nested factSourceIds',
+      mutate: (snapshot: Record<string, unknown>) => {
+        const conversations = snapshot.conversations as Array<Record<string, unknown>>;
+        const brief = conversations[1].brief as Record<string, unknown>;
+        brief.factSourceIds = [['root-message', 42]];
+      },
+    },
+    {
+      name: 'unknown fact source membership',
+      mutate: (snapshot: Record<string, unknown>) => {
+        const conversations = snapshot.conversations as Array<Record<string, unknown>>;
+        const brief = conversations[1].brief as Record<string, unknown>;
+        brief.factSourceIds = [['fabricated-source']];
+      },
+    },
+    {
+      name: 'insight active flag',
+      mutate: (snapshot: Record<string, unknown>) => {
+        const conversations = snapshot.conversations as Array<Record<string, unknown>>;
+        const insights = conversations[0].insights as Array<Record<string, unknown>>;
+        insights[0].active = 'false';
+      },
+    },
+    {
+      name: 'parent cycle',
+      mutate: (snapshot: Record<string, unknown>) => {
+        const conversations = snapshot.conversations as Array<Record<string, unknown>>;
+        conversations[0].parentId = 'invalid-child';
+      },
+    },
+    {
+      name: 'sequence below a generated ID',
+      mutate: (snapshot: Record<string, unknown>) => {
+        const conversations = snapshot.conversations as Array<Record<string, unknown>>;
+        conversations[1].id = 'branch_10';
+        snapshot.seq = 9;
+      },
+    },
+  ])('keeps prior memory when a valid JSON snapshot has malformed $name', async ({ mutate }) => {
+    await resetStore();
+    const sentinel: Conversation = {
+      id: 'memory-sentinel',
+      title: 'Memory sentinel',
+      parentId: null,
+      messages: [],
+      insights: [],
+      pinnedTier: null,
+      archived: false,
+    };
+    putConversation(sentinel);
+    const snapshot: Record<string, unknown> = {
+      conversations: [
+        {
+          id: 'invalid-root',
+          title: 'Invalid root',
+          parentId: null,
+          messages: [],
+          insights: [
+            {
+              id: 'root-insight',
+              branchId: 'invalid-child',
+              parentId: 'invalid-root',
+              text: 'Insight text.',
+              createdAt: '2026-08-11T00:00:00.000Z',
+              sourceMessageIds: [],
+              active: true,
+            },
+          ],
+          pinnedTier: null,
+          archived: false,
+        },
+        {
+          id: 'invalid-child',
+          title: 'Invalid child',
+          parentId: 'invalid-root',
+          messages: [],
+          brief: {
+            id: 'invalid-brief',
+            branchId: 'invalid-child',
+            selection: 'runtime',
+            markdown: '# Brief',
+            facts: ['Use SQLite.'],
+            excludedNote: 'Excluded: nothing.',
+            availableTokens: 20,
+            briefTokens: 3,
+            prunedPct: 85,
+            sourceRefs: [
+              { kind: 'message', conversationId: 'invalid-root', sourceId: 'root-message' },
+            ],
+            factSourceIds: [['root-message']],
+            factProvenance: ['model-cited'],
+          },
+          insights: [],
+          pinnedTier: null,
+          archived: false,
+        },
+      ],
+      logs: [],
+      rootId: 'invalid-root',
+      seq: 1,
+    };
+    mutate(snapshot);
+    kvMocks.get.mockResolvedValueOnce({ status: 'hit', value: JSON.stringify(snapshot) });
+
+    await loadStore();
+
+    expect(getConversation(sentinel.id)).toEqual(sentinel);
+    expect(getConversation('invalid-root')).toBeUndefined();
+  });
+
+  it('boots only the root when the supported development fixture flag is set', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('BONSAI_ROOT_ONLY_FIXTURE', '1');
+
+    await resetStore();
+
+    expect(listConversations()).toHaveLength(1);
+  });
+
+  it('never reads or writes KV while the development root-only fixture flag is active', async () => {
+    vi.stubEnv('NODE_ENV', 'development');
+    vi.stubEnv('BONSAI_ROOT_ONLY_FIXTURE', '1');
+    kvMocks.get.mockResolvedValue({ status: 'miss' });
+
+    await resetStore();
+    await loadStore();
+
+    expect(kvMocks.get).not.toHaveBeenCalled();
+    expect(kvMocks.set).not.toHaveBeenCalled();
+  });
+
+  it('ignores the root-only fixture flag in production', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    vi.stubEnv('BONSAI_ROOT_ONLY_FIXTURE', '1');
+
+    await resetStore();
+
+    expect(listConversations().length).toBeGreaterThan(1);
   });
 });

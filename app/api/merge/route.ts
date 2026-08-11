@@ -1,8 +1,10 @@
+import { parseMergeRequest } from '@/lib/api-validation';
 import { complete } from '@/lib/llm';
-import { INTERNAL_TIER, buildLog, mockInsight } from '@/lib/mock';
+import type { CompleteResult } from '@/lib/llm';
+import { INTERNAL_TIER, buildLog } from '@/lib/mock';
+import { ProviderUnavailableError } from '@/lib/provider';
 import {
   appendInsight,
-  availableTokensFor,
   flushLogs,
   getConversation,
   loadStore,
@@ -16,15 +18,17 @@ import type {
   ApiError,
   Conversation,
   Insight,
-  MergeRequest,
   MergeResponse,
 } from '@/lib/types';
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as Partial<MergeRequest>;
-  if (!body.branchId) {
-    return Response.json({ error: 'branchId is required' } satisfies ApiError, { status: 400 });
+  const parsedRequest = await parseMergeRequest(request);
+  if (!parsedRequest.ok) {
+    return Response.json({ error: parsedRequest.error } satisfies ApiError, {
+      status: parsedRequest.status,
+    });
   }
+  const body = parsedRequest.value;
 
   await loadStore();
   const branch = getConversation(body.branchId);
@@ -46,9 +50,32 @@ export async function POST(request: Request) {
     });
   }
 
-  const baselineInputTokens = availableTokensFor(branch.id);
-  const distillation = await distill(branch, context.markdown);
+  let distillation: Awaited<ReturnType<typeof distill>>;
+  try {
+    distillation = await distill(branch, context.markdown);
+  } catch (error: unknown) {
+    if (!(error instanceof ProviderUnavailableError)) throw error;
+    return Response.json({ error: 'inference provider unavailable' } satisfies ApiError, {
+      status: 502,
+    });
+  }
   const { text } = distillation;
+
+  if (!text) {
+    logInference(
+      buildLog({
+        branchId: branch.id,
+        purpose: 'merge',
+        completion: distillation.completion,
+        status: 'failed',
+      }),
+    );
+    await saveStore();
+    await flushLogs();
+    return Response.json({ error: 'merge produced no durable insight' } satisfies ApiError, {
+      status: 502,
+    });
+  }
 
   const insight: Insight = {
     id: nextId('insight'),
@@ -70,10 +97,8 @@ export async function POST(request: Request) {
     buildLog({
       branchId: branch.id,
       purpose: 'merge',
-      tier: INTERNAL_TIER,
-      inputTokens: distillation.inputTokens,
-      outputTokens: distillation.outputTokens,
-      baselineInputTokens,
+      completion: distillation.completion,
+      status: 'succeeded',
     }),
   );
 
@@ -96,7 +121,7 @@ export async function POST(request: Request) {
 async function distill(
   branch: Conversation,
   contextMarkdown: string,
-): Promise<{ text: string; inputTokens: number; outputTokens: number }> {
+): Promise<{ text: string; completion: CompleteResult }> {
   const result = await complete({
     tier: INTERNAL_TIER,
     maxTokens: 120,
@@ -115,10 +140,5 @@ async function distill(
 
   const line =
     result.text.trim().split('\n')[0]?.replace(/^["']|["']$/g, '').trim() ?? '';
-  const text = line || mockInsight(branch.brief?.selection ?? branch.title);
-  return {
-    text,
-    inputTokens: result.inputTokens,
-    outputTokens: result.outputTokens,
-  };
+  return { text: line, completion: result };
 }

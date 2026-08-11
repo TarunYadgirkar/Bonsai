@@ -12,8 +12,8 @@
  * `servedBy` carries the real upstream model so the UI can say so — the chips keep Bonsai's
  * vocabulary, but nothing claims a Claude model answered when one did not.
  *
- * Every failure returns null and the caller falls back to the mock. A dead key, a wrong model
- * name, a rate limit and a timeout all degrade to a working demo (rule 8).
+ * Mock is selected only when no provider key is configured. A configured provider failure is
+ * surfaced to the caller so live operation is never misrepresented as a mock success.
  */
 import { MODELS } from './models';
 
@@ -36,8 +36,8 @@ export function isLiveProvider(): boolean {
  * Bonsai model id → the upstream id to actually call, per provider.
  *
  * Every entry is overridable by env (BONSAI_MODEL_<PROVIDER>_<QUICK|MID|DEEP|CEILING>) because
- * model names change faster than a hackathon: a wrong id 404s, logs one line and falls back to
- * the mock rather than breaking the demo, and the fix is an env var rather than a deploy.
+ * model names change faster than a hackathon: the fix for a wrong id is an env var rather than a
+ * deploy.
  */
 function upstreamModel(bonsaiModelId: string): string {
   const rung = RUNG_BY_MODEL[bonsaiModelId] ?? 'QUICK';
@@ -84,10 +84,18 @@ export interface ProviderMessage {
 
 export interface ProviderResult {
   text: string;
-  inputTokens: number;
-  outputTokens: number;
+  /** Exact provider usage when reported; absent means the caller must estimate. */
+  inputTokens?: number;
+  outputTokens?: number;
   /** The upstream model that actually answered, for the UI's "served by" line. */
   servedBy: string;
+}
+
+export class ProviderUnavailableError extends Error {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'ProviderUnavailableError';
+  }
 }
 
 export async function providerComplete(params: {
@@ -105,14 +113,11 @@ export async function providerComplete(params: {
       provider === 'anthropic'
         ? await callAnthropic(upstream, params)
         : await callOpenAiCompatible(provider, upstream, params);
-    if (!result?.text.trim()) {
-      console.warn(`[llm] ${provider} returned no content on ${upstream} — falling back to mock`);
-      return null;
-    }
     return result;
-  } catch (err) {
-    console.warn(`[llm] ${provider} failed (${(err as Error).message}) — falling back to mock`);
-    return null;
+  } catch (error: unknown) {
+    if (error instanceof ProviderUnavailableError) throw error;
+    const message = error instanceof Error ? error.message : 'unknown provider failure';
+    throw new ProviderUnavailableError(message, { cause: error });
   }
 }
 
@@ -157,8 +162,8 @@ async function callAnthropic(
       .filter((c) => c.type === 'text')
       .map((c) => c.text ?? '')
       .join(''),
-    inputTokens: body.usage?.input_tokens ?? 0,
-    outputTokens: body.usage?.output_tokens ?? 0,
+    inputTokens: body.usage?.input_tokens,
+    outputTokens: body.usage?.output_tokens,
     servedBy: upstream,
   };
 }
@@ -193,8 +198,8 @@ async function callOpenAiCompatible(
   };
   return {
     text: body.choices?.[0]?.message?.content ?? '',
-    inputTokens: body.usage?.prompt_tokens ?? 0,
-    outputTokens: body.usage?.completion_tokens ?? 0,
+    inputTokens: body.usage?.prompt_tokens,
+    outputTokens: body.usage?.completion_tokens,
     servedBy: upstream,
   };
 }

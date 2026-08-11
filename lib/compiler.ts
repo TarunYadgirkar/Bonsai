@@ -3,6 +3,7 @@
  * answers a branch's question.
  */
 import { complete } from './llm';
+import type { CompletionEvent, CompleteResult } from './llm';
 import { renderContextSource } from './context';
 import { INTERNAL_TIER } from './models';
 import { estimateTokens, prunedPct } from './tokens';
@@ -11,6 +12,7 @@ import type {
   ContextBrief,
   ContextSource,
   ContextSourceRef,
+  FactProvenanceStatus,
 } from './types';
 
 const MAX_FACTS = 8;
@@ -37,29 +39,47 @@ interface CompilerFact {
 interface CompilerOutput {
   facts: CompilerFact[];
   excludedNote: string;
+  provenance: FactProvenanceStatus;
 }
 
 export async function compileBrief(params: CompileParams): Promise<ContextBrief> {
+  return (await compileBriefWithMetadata(params)).brief;
+}
+
+export interface CompileBriefResult {
+  brief: ContextBrief;
+  compiler: CompletionEvent;
+}
+
+export async function compileBriefWithMetadata(params: CompileParams): Promise<CompileBriefResult> {
   const { briefId, branchId, selection, question, availableTokens } = params;
   const compilerSources = buildCompilerSources(params);
-  const parsed = await runCompiler(compilerSources);
-  const output = parseCompilerOutput(parsed, compilerSources) ?? fallbackOutput(params);
+  const completion = await runCompiler(compilerSources);
+  const parsed = parseCompilerOutput(completion.text, compilerSources);
+  const provenance: FactProvenanceStatus = completion.mock ? 'extractive' : 'model-cited';
+  const output: CompilerOutput = parsed
+    ? { ...parsed, provenance }
+    : fallbackOutput(params);
   const facts = output.facts.map((fact) => fact.text);
   const markdown = renderBrief({ selection, question, facts });
   const briefTokens = estimateTokens(markdown);
 
   return {
-    id: briefId,
-    branchId,
-    selection,
-    markdown,
-    facts,
-    excludedNote: output.excludedNote,
-    availableTokens,
-    briefTokens,
-    prunedPct: prunedPct(availableTokens, briefTokens),
-    sourceRefs: compilerSources.map(toSourceRef),
-    factSourceIds: output.facts.map((fact) => [...fact.sourceIds]),
+    brief: {
+      id: briefId,
+      branchId,
+      selection,
+      markdown,
+      facts,
+      excludedNote: output.excludedNote,
+      availableTokens,
+      briefTokens,
+      prunedPct: prunedPct(availableTokens, briefTokens),
+      sourceRefs: compilerSources.map(toSourceRef),
+      factSourceIds: output.facts.map((fact) => [...fact.sourceIds]),
+      factProvenance: output.facts.map(() => output.provenance),
+    },
+    compiler: { completion, status: parsed ? 'succeeded' : 'failed' },
   };
 }
 
@@ -94,8 +114,8 @@ function toSourceRef(source: ContextSource): ContextSourceRef {
   };
 }
 
-async function runCompiler(sources: ContextSource[]): Promise<string> {
-  const result = await complete({
+async function runCompiler(sources: ContextSource[]): Promise<CompleteResult> {
+  return complete({
     tier: INTERNAL_TIER,
     maxTokens: 600,
     messages: [
@@ -111,7 +131,6 @@ async function runCompiler(sources: ContextSource[]): Promise<string> {
     ],
   });
 
-  return result.text;
 }
 
 function parseCompilerOutput(text: string, sources: ContextSource[]): CompilerOutput | undefined {
@@ -145,6 +164,7 @@ function parseCompilerOutput(text: string, sources: ContextSource[]): CompilerOu
     if (!facts.length) return undefined;
     return {
       facts,
+      provenance: 'model-cited',
       excludedNote:
         typeof json.excludedNote === 'string'
           ? json.excludedNote
@@ -179,6 +199,7 @@ function fallbackOutput(params: CompileParams): CompilerOutput {
         text: sentence,
         sourceIds: [source.sourceId],
       })),
+      provenance: 'extractive',
       excludedNote: 'Excluded: the rest of the parent conversation (compiler fallback).',
     };
   }
@@ -190,6 +211,7 @@ function fallbackOutput(params: CompileParams): CompilerOutput {
         sourceIds: [`selection:${params.branchId}`],
       },
     ],
+    provenance: 'extractive',
     excludedNote:
       'Excluded: no relevant parent source was found (degraded compiler fallback).',
   };

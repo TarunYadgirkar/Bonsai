@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompleteParams, CompleteResult } from '@/lib/llm';
+import { TIER_DEFAULTS } from '@/lib/models';
+import { ProviderUnavailableError } from '@/lib/provider';
 import { estimateTokens } from '@/lib/tokens';
 import type { ContextBrief, Conversation } from '@/lib/types';
 
@@ -31,6 +33,8 @@ import { POST as mergePost } from '@/app/api/merge/route';
 import {
   availableTokensFor,
   getConversation,
+  listConversations,
+  listLogs,
   putConversation,
   resetStore,
   visibleContextFor,
@@ -75,6 +79,7 @@ function childBrief(): ContextBrief {
       { kind: 'message', conversationId: ROOT_ID, sourceId: 'root-relevant' },
     ],
     factSourceIds: [['root-relevant']],
+    factProvenance: ['model-cited'],
   };
 }
 
@@ -88,6 +93,7 @@ function completion(params: CompleteParams, text: string): CompleteResult {
     text,
     model: params.model ?? 'claude-haiku-4-5',
     tier: params.tier,
+    effort: params.effort ?? TIER_DEFAULTS[params.tier].effort,
     inputTokens,
     outputTokens: estimateTokens(text),
     estCostUsd: 0.0001,
@@ -262,7 +268,7 @@ describe('route context flow', () => {
     expect(inferenceLogMocks.appendInferenceLogs).toHaveBeenCalled();
   });
 
-  it('preserves billed completion usage when merge returns a local fallback', async () => {
+  it('records a blank merge completion as failed without mutating either conversation', async () => {
     const root: Conversation = {
       id: ROOT_ID,
       title: 'Context flow root',
@@ -289,15 +295,98 @@ describe('route context flow', () => {
       ...completion(params, '"   "'),
       inputTokens: 321,
       outputTokens: 99,
+      estCostUsd: 0.004321,
+      servedBy: 'merge-provider',
     }));
 
     const response = await mergePost(request('/api/merge', { branchId: CHILD_ID }));
-    expect(response.status).toBe(200);
+    expect(response.status).toBe(502);
     const body = await response.json();
 
-    expect(body.insight.text).toContain('Free Ventures apps close Sept 11');
-    expect(body.log.inputTokens).toBe(321);
-    expect(body.log.outputTokens).toBe(99);
-    expect(body.log.outputTokens).not.toBe(estimateTokens(body.insight.text));
+    expect(body).toEqual({ error: 'merge produced no durable insight' });
+    expect(getConversation(ROOT_ID)?.insights).toEqual([]);
+    expect(getConversation(CHILD_ID)?.archived).toBe(false);
+    expect(inferenceLogMocks.appendInferenceLogs).toHaveBeenCalledWith([
+      expect.objectContaining({
+        purpose: 'merge',
+        status: 'failed',
+        inputTokens: 321,
+        outputTokens: 99,
+        estCostUsd: 0.004321,
+        servedBy: 'merge-provider',
+        baselineInputTokens: 0,
+        baselineCostUsd: 0,
+      }),
+    ]);
+  });
+
+  it('does not append a chat turn when answer completion rejects', async () => {
+    const root: Conversation = {
+      id: ROOT_ID,
+      title: 'Context flow root',
+      parentId: null,
+      messages: [],
+      insights: [],
+      pinnedTier: null,
+      archived: false,
+    };
+    putConversation(root);
+    llmMocks.complete.mockRejectedValueOnce(new ProviderUnavailableError('provider unavailable'));
+
+    const response = await chatPost(
+      request('/api/chat', {
+        branchId: ROOT_ID,
+        content: 'Will this be staged?',
+        mode: { mode: 'manual', model: 'claude-haiku-4-5', effort: 'low' },
+      }),
+    );
+
+    expect(response.status).toBe(502);
+    expect(getConversation(ROOT_ID)?.messages).toEqual([]);
+  });
+
+  it('does not persist a branch but records completed overhead when its answer rejects', async () => {
+    const root: Conversation = {
+      id: ROOT_ID,
+      title: 'Context flow root',
+      parentId: null,
+      messages: [{ id: 'root-relevant', role: 'user', content: RELEVANT_TEXT }],
+      insights: [],
+      pinnedTier: null,
+      archived: false,
+    };
+    putConversation(root);
+    const conversationsBefore = listConversations().length;
+    const logsBefore = listLogs().length;
+    llmMocks.complete
+      .mockImplementationOnce(async (params) =>
+        completion(
+          params,
+          JSON.stringify({
+            facts: [{ text: RELEVANT_TEXT, sourceIds: ['root-relevant'] }],
+            excludedNote: 'Excluded unrelated context.',
+          }),
+        ),
+      )
+      .mockRejectedValueOnce(new ProviderUnavailableError('provider unavailable'));
+
+    const response = await branchPost(
+      request('/api/branch', {
+        parentId: ROOT_ID,
+        selection: 'selected runtime',
+        question: 'Which runtime?',
+        mode: { mode: 'manual', model: 'claude-haiku-4-5', effort: 'low' },
+      }),
+    );
+
+    expect(response.status).toBe(502);
+    expect(listConversations()).toHaveLength(conversationsBefore);
+    expect(listLogs()).toHaveLength(logsBefore + 1);
+    expect(listLogs().at(-1)).toMatchObject({
+      purpose: 'compile',
+      status: 'succeeded',
+      baselineInputTokens: 0,
+      baselineCostUsd: 0,
+    });
   });
 });

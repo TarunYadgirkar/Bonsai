@@ -136,17 +136,17 @@ export function EconomicsPanel({
                   label="Input tokens"
                   savedPct={data.baseline.tokensSavedPct}
                   actual={data.totals.inputTokens.toLocaleString()}
-                  actualNote="Bonsai (compiled)"
+                  actualNote="Bonsai (all calls)"
                   baseline={data.baseline.inputTokens.toLocaleString()}
-                  baselineNote="Full-history baseline"
+                  baselineNote="Delivered-answer baseline"
                 />
                 <SavingsCard
                   label="Spend"
                   savedPct={data.baseline.costSavedPct}
                   actual={formatUsd(data.totals.costUsd)}
-                  actualNote="Routed spend"
+                  actualNote="Bonsai modeled spend"
                   baseline={formatUsd(data.baseline.costUsd)}
-                  baselineNote="Strong model always"
+                  baselineNote="Modeled ceiling answers"
                 />
                 <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] p-4">
                   <div className="text-[10px] uppercase tracking-wide text-neutral-500">
@@ -209,6 +209,9 @@ export function EconomicsPanel({
                             {log.overridden && (
                               <span className="ml-1.5 text-[10px] text-neutral-500">pinned</span>
                             )}
+                            {log.status === 'failed' && (
+                              <span className="ml-1.5 text-[10px] text-rose-300/80">failed</span>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-neutral-300">
                             {log.effort ? EFFORT_LABEL[log.effort] : '—'}
@@ -236,9 +239,10 @@ export function EconomicsPanel({
               )}
 
               <p className="mt-3 text-[11px] leading-snug text-neutral-500">
-                Baseline = the same requests carrying the full parent history, answered on the
-                strongest model every time. That is what a flat chat log costs. Cost is modeled
-                at published per-token rates.
+                Bonsai token usage includes every compiler, classifier, merge, and retry call. The
+                counterfactual adds one ceiling-model, full-history event only for each delivered
+                answer; internal overhead and failed retries get zero baseline. Costs are Bonsai
+                catalog estimates, including a placeholder ceiling rate, not provider invoices.
               </p>
             </>
           )}

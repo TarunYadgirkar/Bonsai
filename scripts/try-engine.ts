@@ -50,7 +50,8 @@ async function main() {
     console.log(`facts:`);
     for (const [index, fact] of brief.facts.entries()) {
       const sourceIds = brief.factSourceIds[index] ?? [];
-      console.log(`  - ${fact} [${sourceIds.join(', ')}]`);
+      const provenance = brief.factProvenance[index] ?? 'legacy-unknown';
+      console.log(`  - ${fact} [${provenance}: ${sourceIds.join(', ')}]`);
     }
     console.log(`excluded: ${brief.excludedNote}`);
 

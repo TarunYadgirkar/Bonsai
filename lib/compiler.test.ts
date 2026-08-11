@@ -41,7 +41,7 @@ describe('compileBrief', () => {
     llmMocks.complete.mockReset();
   });
 
-  it('preserves valid fact provenance and compiler query sources', async () => {
+  it('preserves model-cited source membership and compiler query sources', async () => {
     llmMocks.complete.mockResolvedValue({
       text: JSON.stringify({
         facts: [
@@ -58,6 +58,7 @@ describe('compileBrief', () => {
 
     expect(brief.facts).toEqual(['Codex App Server is the selected runtime.']);
     expect(brief.factSourceIds).toEqual([['i1']]);
+    expect(brief.factProvenance).toEqual(['model-cited']);
     expect(brief.sourceRefs.map((source) => source.sourceId)).toEqual([
       'i1',
       'selection:branch-1',
@@ -71,6 +72,25 @@ describe('compileBrief', () => {
         content: 'Codex App Server is the selected runtime.',
       },
     ]);
+  });
+
+  it('labels the deterministic mock compiler output as extractive', async () => {
+    llmMocks.complete.mockResolvedValue({
+      text: JSON.stringify({
+        facts: [
+          {
+            text: 'Codex App Server is the selected runtime.',
+            sourceIds: ['i1'],
+          },
+        ],
+        excludedNote: 'Excluded unrelated UI discussion.',
+      }),
+      mock: true,
+    });
+
+    const brief = await compile();
+
+    expect(brief.factProvenance).toEqual(['extractive']);
   });
 
   it('encodes source content so embedded markers cannot become records', async () => {
@@ -117,6 +137,7 @@ describe('compileBrief', () => {
 
     expect(brief.facts).toEqual(['Codex App Server is the selected runtime.']);
     expect(brief.factSourceIds).toEqual([['i1']]);
+    expect(brief.factProvenance).toEqual(['extractive']);
     expect(brief.excludedNote).toContain('compiler fallback');
     expect(
       brief.factSourceIds.every(
@@ -149,6 +170,7 @@ describe('compileBrief', () => {
 
     expect(brief.facts).toEqual(['Topic in focus: Codex App Server.']);
     expect(brief.factSourceIds).toEqual([['selection:branch-1']]);
+    expect(brief.factProvenance).toEqual(['extractive']);
     expect(brief.excludedNote).toContain('degraded compiler fallback');
   });
 
@@ -172,9 +194,10 @@ describe('compileBrief', () => {
 
     expect(brief.facts).toEqual(['Codex App Server runtime.']);
     expect(brief.factSourceIds).toEqual([['m1']]);
+    expect(brief.factProvenance).toEqual(['extractive']);
   });
 
-  it('drops malformed facts, validates IDs, preserves order, and caps facts', async () => {
+  it('drops malformed facts, membership-checks IDs, preserves order, and caps facts', async () => {
     llmMocks.complete.mockResolvedValue({
       text: JSON.stringify({
         facts: [
@@ -197,5 +220,21 @@ describe('compileBrief', () => {
     expect(brief.factSourceIds).toEqual(
       Array.from({ length: 8 }, () => ['question:branch-1', 'i1']),
     );
+  });
+
+  it('rejects facts whose claimed evidence IDs are entirely unknown', async () => {
+    llmMocks.complete.mockResolvedValue({
+      text: JSON.stringify({
+        facts: [{ text: 'Fabricated model claim.', sourceIds: ['fabricated-source'] }],
+        excludedNote: 'Excluded unrelated details.',
+      }),
+    });
+
+    const brief = await compile();
+
+    expect(brief.facts).toEqual(['Codex App Server is the selected runtime.']);
+    expect(brief.factSourceIds).toEqual([['i1']]);
+    expect(brief.factProvenance).toEqual(['extractive']);
+    expect(brief.facts).not.toContain('Fabricated model claim.');
   });
 });

@@ -33,7 +33,7 @@ That is the interesting problem and the thing worth getting right. Surfaces are 
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind. Vercel deploys `main` only (`vercel.json` → `git.deploymentEnabled`).
-- Inference: `lib/provider.ts`. One of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` makes it live; none means the mock in `lib/llm.ts`.
+- Inference: `lib/provider.ts`. One of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` makes it live; none means the mock in `lib/llm.ts`. A configured provider failure returns a safe error and never silently switches to mock.
 - Store persistence: Neon Postgres via `lib/kv.ts`, table `store_snapshot`.
 
 There is deliberately **no durable-memory layer** right now. The hackathon one was a sponsor integration and was removed; whether cross-conversation memory is needed at all, and what should provide it, is an open question. Do not add one back without deciding that first.
@@ -63,14 +63,14 @@ Every external dependency sits behind an interface with a mock that activates au
 3. No refactors outside the current task.
 4. Keep it boring: fetch + JSON, plain React state. No exotic dependencies without a reason.
 5. Secrets only via env. `.env.example` lists the names. Never print keys. Agents cannot read or write `.env*` here — two `PreToolUse` hooks block it; hand Tarun the command instead.
-6. Errors from any external service: catch, log one line, degrade. Nothing crashes on a 4xx.
+6. External storage failures degrade safely. Configured inference-provider failures surface a safe non-2xx response; mock inference is only for an explicitly unconfigured provider.
 7. `lib/types.ts` and the API route signatures are shared contracts. Changing one is a deliberate act, not a side effect.
 
 ## Known traps
 
 - `components/TreeSidebar.tsx` geometry: card heights are fixed per variant and `components/treeLayout.ts` must agree with them. Change one, change both.
 - A node's chip shows the **last** turn's decision, so adding a cheap follow-up turn to a fixture branch overwrites its chip.
-- `fixtures/seed-tree.json` is generated, never hand-edited. Regenerate with `DATABASE_URL= npx next dev -p 3111` then `npx tsx scripts/build-seed-tree.ts`.
+- `fixtures/seed-tree.json` is generated, never hand-edited. Run `npm run fixture:serve`, then `npm run fixture:build` in a second terminal. The supported server is non-production, root-only, memory-only, and explicitly mock inference; production ignores `BONSAI_ROOT_ONLY_FIXTURE`.
 
 ## Ongoing
 

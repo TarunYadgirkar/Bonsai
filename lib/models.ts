@@ -6,14 +6,14 @@ import type { Effort, Tier } from './types';
  * The catalog behind the mode picker: three Claude models × four effort levels, plus Auto
  * (no explicit choice — the router classifies and picks for you).
  *
- * These are display names and published-rate pricing used to model spend; lib/provider.ts maps them
+ * These are display names and catalog-rate pricing used to model spend; lib/provider.ts maps them
  * onto real upstream ids. Change them here only; nothing else in the codebase may name a model.
  */
 export interface ModelSpec {
   id: string;
   label: string;
   /**
-   * Tier used for classification and baselines. Opus 5 and Fable 5 share `deep` because `Tier` is
+   * Tier used for classification. Opus 5 and Fable 5 share `deep` because `Tier` is
    * frozen at three values (lib/types.ts) — the ladder above deep is expressed by model, not tier.
    */
   tier: Tier;

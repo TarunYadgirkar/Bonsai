@@ -23,4 +23,10 @@ Originally a one-day hackathon build; now being rebuilt into something people ca
 
 ## Stack
 
-Next.js (App Router) + TypeScript + Tailwind, deployed on Vercel. Inference goes through `lib/provider.ts` — set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` and it is live; set none and a mock with realistic token math takes over, so the app runs with zero configuration. Store persistence is Neon Postgres via `lib/kv.ts`. Every external dependency degrades to a working local path when its key is absent.
+Next.js (App Router) + TypeScript + Tailwind, deployed on Vercel. Inference goes through `lib/provider.ts` — set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` or `XAI_API_KEY` and it is live; set none and a grounded mock with realistic token math takes over, so the app runs with zero configuration. A configured provider failure is explicit and never masquerades as mock success. Store persistence is Neon Postgres via `lib/kv.ts`; missing storage configuration uses memory.
+
+## Regenerate the demo fixture
+
+Run `npm run fixture:serve`, then run `npm run fixture:build` in a second terminal. The first
+command is a non-production, root-only, memory-only startup; production ignores its fixture flag,
+and the generator never requires hand-editing `fixtures/seed-tree.json`.
