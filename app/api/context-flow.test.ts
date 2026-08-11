@@ -262,7 +262,7 @@ describe('route context flow', () => {
     expect(inferenceLogMocks.appendInferenceLogs).toHaveBeenCalled();
   });
 
-  it('estimates fallback output when merge completion has no usable line', async () => {
+  it('preserves billed completion usage when merge returns a local fallback', async () => {
     const root: Conversation = {
       id: ROOT_ID,
       title: 'Context flow root',
@@ -297,7 +297,7 @@ describe('route context flow', () => {
 
     expect(body.insight.text).toContain('Free Ventures apps close Sept 11');
     expect(body.log.inputTokens).toBe(321);
-    expect(body.log.outputTokens).toBe(estimateTokens(body.insight.text));
-    expect(body.log.outputTokens).not.toBe(99);
+    expect(body.log.outputTokens).toBe(99);
+    expect(body.log.outputTokens).not.toBe(estimateTokens(body.insight.text));
   });
 });

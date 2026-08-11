@@ -12,7 +12,6 @@ import {
   updateConversation,
   visibleContextFor,
 } from '@/lib/store';
-import { estimateTokens } from '@/lib/tokens';
 import type {
   ApiError,
   Conversation,
@@ -120,6 +119,6 @@ async function distill(
   return {
     text,
     inputTokens: result.inputTokens,
-    outputTokens: line ? result.outputTokens : estimateTokens(text),
+    outputTokens: result.outputTokens,
   };
 }
