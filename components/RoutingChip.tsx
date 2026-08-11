@@ -77,56 +77,58 @@ export function RoutingChip({
           size="sm"
         />
         {routing.escalated && (
-          <span className="text-[10px] text-amber-300/80">escalated</span>
+          <span className="text-[10px] text-ember">escalated</span>
         )}
         {routing.overridden && (
-          <span className="text-[10px] text-neutral-400">pinned</span>
+          <span className="text-[10px] text-bark">pinned</span>
         )}
 
-        {/* Hover card — "Why did Bonsai choose this?" */}
+        {/* Hover card — "Why did Bonsai choose this?" A paper note, not a dark tooltip. */}
         {!menuOpen && (
-          <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-72 flex-col gap-1.5 rounded-lg border border-white/15 bg-neutral-950 p-3 text-left shadow-xl group-hover:flex group-focus-within:flex">
+          <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-72 flex-col gap-1.5 rounded-lg border border-rule bg-paper-raised p-3 text-left shadow-sm group-hover:flex group-focus-within:flex">
             <span className="flex items-center justify-between">
-              <span className="text-xs font-medium text-white">{label}</span>
-              <span className="font-mono text-xs tabular-nums text-emerald-300">
+              <span className="text-xs font-medium text-ink">{label}</span>
+              <span className="tnum text-xs text-ink">
                 ${routing.estCostUsd.toFixed(4)}
               </span>
             </span>
-            <span className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-neutral-400">
+            <span className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[11px] text-bark">
               <span>Context</span>
-              <span className="tabular-nums text-neutral-200">
-                {formatTokens(routing.contextTokens)} tokens
+              <span className="text-ink-soft">
+                <span className="tnum">{formatTokens(routing.contextTokens)}</span> tokens
               </span>
               <span>Effort</span>
-              <span className="text-neutral-200">{routing.effortNote}</span>
+              <span className="text-ink-soft">{routing.effortNote}</span>
               <span>Complexity</span>
-              <span className="text-neutral-200">{routing.complexity}/3</span>
+              <span className="text-ink-soft">
+                <span className="tnum">{routing.complexity}</span>/3
+              </span>
               {routing.servedBy && (
                 <>
                   <span>Served by</span>
-                  <span className="truncate font-mono text-neutral-200">{routing.servedBy}</span>
+                  <span className="truncate font-mono text-ink-soft">{routing.servedBy}</span>
                 </>
               )}
             </span>
-            <span className="border-t border-white/10 pt-1.5 text-[11px] leading-snug text-neutral-300">
+            <span className="border-t border-rule pt-1.5 text-[11px] leading-snug text-ink-soft">
               {routing.reason}
             </span>
             {/* Escalation truth: what the router actually did to the context before answering. */}
             {(routing.coveredByBrief === false || routing.widened) && (
               <span className="flex flex-wrap gap-1">
                 {routing.coveredByBrief === false && (
-                  <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-1.5 py-0.5 text-[10px] text-amber-200">
+                  <span className="rounded-full border border-rule bg-paper-sunk px-1.5 py-0.5 text-[10px] text-ember">
                     brief flagged insufficient
                   </span>
                 )}
                 {routing.widened && (
-                  <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[10px] text-sky-200">
+                  <span className="rounded-full border border-moss/30 bg-moss-wash px-1.5 py-0.5 text-[10px] text-moss">
                     widened with parent turns
                   </span>
                 )}
               </span>
             )}
-            <span className="text-[10px] text-neutral-600">Click to override</span>
+            <span className="text-[10px] text-bark">Click to override</span>
           </span>
         )}
       </button>
@@ -141,7 +143,7 @@ export function RoutingChip({
           />
           <span
             role="menu"
-            className="absolute bottom-full left-0 z-30 mb-2 flex w-60 flex-col rounded-lg border border-white/15 bg-neutral-950 p-1 shadow-xl"
+            className="absolute bottom-full left-0 z-30 mb-2 flex w-60 flex-col rounded-lg border border-rule bg-paper-raised p-1 shadow-sm"
           >
             <button
               role="menuitem"
@@ -149,23 +151,23 @@ export function RoutingChip({
                 onSelectMode(null);
                 setMenuOpen(false);
               }}
-              className={`flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-white/10 ${
-                isAuto ? 'text-white' : 'text-neutral-300'
+              className={`flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-paper-sunk ${
+                isAuto ? 'text-ink' : 'text-ink-soft'
               }`}
             >
               Auto
-              <span className="text-[10px] text-neutral-500">router decides</span>
-              {isAuto && <span className="ml-auto text-[10px]">active</span>}
+              <span className="text-[10px] text-bark">router decides</span>
+              {isAuto && <span className="ml-auto text-[10px] text-moss">active</span>}
             </button>
 
-            <span className="mt-1 border-t border-white/10 px-2 pt-1.5 text-[10px] uppercase tracking-wide text-neutral-500">
-              Pin this branch
+            <span className="mt-1 border-t border-rule px-2 pt-1.5 eyebrow">
+              pin this branch
             </span>
 
             {catalog ? (
               catalog.models.map((model) => (
                 <span key={model.id} className="px-1 py-0.5">
-                  <span className="px-1 text-[10px] text-neutral-400">{model.label}</span>
+                  <span className="px-1 text-[10px] text-bark">{model.label}</span>
                   <span className="mt-0.5 flex gap-1">
                     {catalog.efforts.map((effort) => {
                       const picked =
@@ -187,8 +189,8 @@ export function RoutingChip({
                           }}
                           className={`flex-1 rounded border px-1 py-1 text-[10px] transition-colors ${
                             picked
-                              ? 'border-white/40 bg-white/10 text-white'
-                              : 'border-white/10 text-neutral-400 hover:bg-white/10 hover:text-neutral-200'
+                              ? 'border-moss bg-moss-wash text-moss'
+                              : 'border-rule text-ink-soft hover:bg-paper-sunk hover:text-ink'
                           }`}
                         >
                           {EFFORT_LABEL[effort.level]}
@@ -199,7 +201,7 @@ export function RoutingChip({
                 </span>
               ))
             ) : (
-              <span className="px-2 py-1.5 text-[11px] text-neutral-500">Loading modes…</span>
+              <span className="px-2 py-1.5 text-[11px] text-bark">Loading modes…</span>
             )}
           </span>
         </>

@@ -72,7 +72,8 @@ export function MergeFlight({ flight, onDone }: { flight: Flight; onDone: () => 
       >
         <path
           d={arcPath(flight.from, flight.to)}
-          stroke="rgba(110,231,183,.28)"
+          stroke="var(--moss)"
+          strokeOpacity={0.3}
           strokeWidth={1.5}
           strokeDasharray="3 7"
           fill="none"
@@ -82,7 +83,8 @@ export function MergeFlight({ flight, onDone }: { flight: Flight; onDone: () => 
           cx={flight.to.x}
           cy={flight.to.y}
           r={26}
-          fill="rgba(52,211,153,.10)"
+          fill="var(--moss-bright)"
+          fillOpacity={0.12}
           style={{
             transformBox: 'fill-box',
             transformOrigin: 'center',
@@ -95,7 +97,8 @@ export function MergeFlight({ flight, onDone }: { flight: Flight; onDone: () => 
           cx={flight.to.x}
           cy={flight.to.y}
           r={4}
-          fill="rgba(110,231,183,.9)"
+          fill="var(--moss)"
+          fillOpacity={0.9}
           style={{ opacity: arrived ? 1 : 0, transition: 'opacity 320ms ease-out' }}
         />
       </svg>
@@ -111,10 +114,13 @@ export function MergeFlight({ flight, onDone }: { flight: Flight; onDone: () => 
           transition: `transform ${TRAVEL_MS}ms cubic-bezier(0.22, 0.9, 0.3, 1), opacity ${TRAVEL_MS}ms ease-in`,
         }}
       >
-        <div className="max-w-sm rounded-2xl border border-emerald-400/40 bg-emerald-500/15 px-4 py-2.5 text-center text-xs leading-snug text-emerald-50 shadow-xl backdrop-blur-sm">
-          <div className="mb-1 text-[10px] uppercase tracking-wide text-emerald-300/80">
-            Merging insight
-          </div>
+        <div
+          className="max-w-sm rounded-full border border-moss/25 bg-moss-wash px-4 py-2 text-center text-xs leading-snug text-ink"
+          style={{
+            boxShadow: '0 4px 16px -8px color-mix(in oklab, var(--ink) 40%, transparent)',
+          }}
+        >
+          <div className="mb-0.5 text-[0.625rem] tracking-[0.14em] text-moss">merging insight</div>
           {flight.text}
         </div>
       </div>

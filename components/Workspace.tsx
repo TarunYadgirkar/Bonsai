@@ -342,22 +342,20 @@ export function Workspace() {
 
   if (error && !state) {
     return (
-      <main className="flex flex-1 items-center justify-center bg-neutral-900 p-8">
+      <main className="flex flex-1 items-center justify-center bg-paper p-8">
         <div className="max-w-md text-center">
-          <h1 className="text-2xl font-semibold text-white">Bonsai</h1>
-          <p className="mt-3 text-sm text-neutral-400">
-            The UI is up, but the engine isn&apos;t answering yet.
+          <p className="eyebrow">the garden</p>
+          <h1 className="font-display text-4xl text-ink">Bonsai</h1>
+          <p className="mt-3 text-sm text-ink-soft">
+            The garden is here, but the roots aren&apos;t drawing water yet — the engine didn&apos;t
+            answer.
           </p>
-          <p className="mt-2 font-mono text-xs text-neutral-600">{error}</p>
-          <p className="mt-3 text-xs text-neutral-500">
-            Person B owns <code>app/api/**</code>. This pane renders as soon as{' '}
-            <code>GET /api/state</code> returns a StateResponse.
-          </p>
+          <p className="tnum mt-2 text-xs text-bark">{error}</p>
           <button
             onClick={loadState}
-            className="mt-5 rounded-lg border border-white/15 px-4 py-1.5 text-xs text-white hover:bg-white/5"
+            className="mt-5 rounded-md border border-moss px-4 py-1.5 text-xs font-medium text-moss transition-colors hover:bg-moss-wash"
           >
-            Retry
+            Try again
           </button>
         </div>
       </main>
@@ -366,8 +364,12 @@ export function Workspace() {
 
   if (!state) {
     return (
-      <main className="flex flex-1 items-center justify-center bg-neutral-900">
-        <p className="text-sm text-neutral-500">Loading conversation…</p>
+      <main className="flex flex-1 items-center justify-center bg-paper">
+        <p className="text-sm text-ink-soft">
+          <span className="font-display text-lg text-ink">Bonsai</span>
+          <span className="mx-2 text-bark">·</span>
+          unfurling the garden…
+        </p>
       </main>
     );
   }
@@ -422,12 +424,12 @@ export function Workspace() {
       {error && (
         <div
           role="alert"
-          className="absolute left-1/2 top-3 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg border border-red-400/30 bg-neutral-950/95 px-4 py-2.5 shadow-xl shadow-black/40"
+          className="absolute left-1/2 top-4 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg border border-[color:var(--ember)]/40 bg-paper-raised px-4 py-2.5 shadow-sm"
         >
-          <p className="text-xs leading-snug text-red-200">{error}</p>
+          <p className="text-xs leading-snug text-ember">{error}</p>
           <button
             onClick={() => setError(null)}
-            className="shrink-0 rounded border border-white/15 px-2 py-0.5 text-[11px] text-neutral-300 transition-colors hover:bg-white/10 hover:text-white"
+            className="shrink-0 rounded border border-rule-strong px-2 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
           >
             Dismiss
           </button>
@@ -470,8 +472,8 @@ export function Workspace() {
           }
         />
       ) : (
-        <section className="flex flex-1 items-center justify-center bg-neutral-900">
-          <p className="text-sm text-neutral-500">No conversation selected.</p>
+        <section className="flex flex-1 items-center justify-center bg-paper">
+          <p className="text-sm text-ink-soft">Pick a branch from the garden.</p>
         </section>
       )}
 

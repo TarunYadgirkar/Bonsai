@@ -24,10 +24,10 @@ const MessageBubble = memo(function MessageBubble({
   return (
     <div className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+        className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm leading-relaxed text-ink ${
           message.role === 'user'
-            ? 'whitespace-pre-wrap bg-white/10 text-white'
-            : 'bg-white/[0.04] text-neutral-200'
+            ? 'whitespace-pre-wrap bg-moss-wash'
+            : 'border border-rule bg-paper-raised'
         }`}
       >
         {message.role === 'user' ? (
@@ -35,12 +35,12 @@ const MessageBubble = memo(function MessageBubble({
         ) : (
           // Assistant turns are markdown. react-markdown escapes raw HTML by default —
           // no rehype-raw, on purpose. User turns stay plain text above.
-          <div className="[&>*+*]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-white [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-white/20 [&_blockquote]:pl-3 [&_blockquote]:text-neutral-400 [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-white [&_code]:rounded [&_code]:bg-white/10 [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-black/40 [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
+          <div className="[&>*+*]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:text-moss [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-rule [&_blockquote]:pl-3 [&_blockquote]:text-ink-soft [&_:is(h1,h2,h3,h4)]:font-display [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-ink [&_code]:rounded [&_code]:bg-paper-sunk [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-ink [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-rule [&_pre]:bg-paper-sunk [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
             <ReactMarkdown>{message.content}</ReactMarkdown>
           </div>
         )}
         {message.routing && (
-          <span className="mt-2 flex items-center gap-2 border-t border-white/10 pt-2">
+          <span className="mt-2 flex items-center gap-2 border-t border-rule pt-2">
             <RoutingChip routing={message.routing} mode={mode} onSelectMode={onSelectMode} />
           </span>
         )}
@@ -124,24 +124,22 @@ export function ChatPane({
   };
 
   return (
-    <section className="relative flex min-w-0 flex-1 flex-col bg-neutral-900">
-      <header className="flex items-center gap-3 border-b border-white/10 px-6 py-3">
+    <section className="relative flex min-w-0 flex-1 flex-col bg-paper">
+      <header className="flex items-center gap-3 border-b border-rule px-6 py-3">
         <div className="min-w-0">
-          <h2 className="truncate text-sm font-medium text-white">
+          <h2 className="truncate font-display text-base text-ink">
             {conversation.title}
           </h2>
           {brief ? (
-            <p className="truncate text-[11px] tabular-nums text-neutral-500">
-              <span className="text-neutral-400">{brief.availableTokens.toLocaleString()}</span>{' '}
-              available →{' '}
-              <span className="text-neutral-400">{brief.briefTokens.toLocaleString()}</span>{' '}
-              relevant →{' '}
-              <span className="font-medium text-emerald-300">
-                {brief.prunedPct.toFixed(1)}% pruned
-              </span>
+            <p className="truncate text-[11px] text-bark">
+              <span className="tnum text-ink-soft">{brief.availableTokens.toLocaleString()}</span>{' '}
+              available <span className="tnum text-bark">→</span>{' '}
+              <span className="tnum text-ink-soft">{brief.briefTokens.toLocaleString()}</span>{' '}
+              relevant <span className="tnum text-bark">→</span>{' '}
+              <span className="tnum text-moss">{brief.prunedPct.toFixed(1)}%</span> pruned
             </p>
           ) : (
-            <p className="text-[11px] text-neutral-500">
+            <p className="text-[11px] text-bark">
               Root conversation · select any text to branch
             </p>
           )}
@@ -151,7 +149,7 @@ export function ChatPane({
           {/* Merge insight — only branches have a parent to merge into. */}
           {conversation.parentId &&
             (conversation.archived ? (
-              <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-200">
+              <span className="rounded-full border border-moss/30 bg-moss-wash px-2.5 py-1 text-[11px] text-moss">
                 Merged · archived
               </span>
             ) : (
@@ -161,19 +159,17 @@ export function ChatPane({
                   onMerge({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
                 }}
                 disabled={merging || conversation.messages.length === 0}
-                className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs font-medium text-emerald-200 transition-colors hover:bg-emerald-400/20 disabled:opacity-40"
+                className="rounded-full border border-moss/40 bg-moss-wash px-3 py-1.5 text-xs font-medium text-moss transition-colors hover:bg-moss/15 disabled:opacity-40"
               >
                 {merging ? 'Distilling…' : 'Merge insight'}
               </button>
             ))}
 
           <div className="text-right">
-            <div className="font-mono text-lg leading-none tabular-nums text-white">
+            <div className="tnum text-lg leading-none text-ink">
               {formatTokens(tokens)}
             </div>
-            <div className="text-[10px] uppercase tracking-wide text-neutral-500">
-              context tokens
-            </div>
+            <div className="eyebrow mt-0.5">context tokens</div>
           </div>
         </div>
       </header>
@@ -183,24 +179,24 @@ export function ChatPane({
         messages deep, and a landing insight must be visible without scrolling. These lines
         genuinely enter the model's context on every turn here, so showing them is truth.
         Collapsible like the brief disclosure below; open by default so a fresh merge glows —
-        the per-branch remount reopens it on every branch switch.
+        the per-branch remount reopens it on every branch switch. A pressed botanical note.
       */}
       {conversation.insights.length > 0 && (
         <details
           open
-          className="max-h-40 shrink-0 overflow-y-auto border-b border-emerald-400/20 bg-emerald-400/[0.06] px-6 py-2.5"
+          className="max-h-40 shrink-0 overflow-y-auto border-b border-rule bg-paper-sunk px-6 py-2.5"
         >
-          <summary className="mx-auto max-w-3xl cursor-pointer text-[10px] uppercase tracking-wide text-emerald-300/70">
-            Learned from branches · {conversation.insights.length}
+          <summary className="mx-auto max-w-3xl cursor-pointer eyebrow">
+            learned from branches · {conversation.insights.length}
           </summary>
           <div className="mx-auto max-w-3xl">
             {conversation.insights.map((insight) => (
               <p
                 key={insight.id}
                 // The freshly landed insight glows for a beat so the merge reads on a projector.
-                className={`-mx-1 mt-1 rounded px-1 py-0.5 text-xs text-emerald-100 ring-1 transition-all duration-700 ${
+                className={`-mx-1 mt-1 rounded px-1.5 py-1 text-xs leading-relaxed text-ink ring-1 transition-all duration-700 ${
                   insight.id === highlightInsightId
-                    ? 'bg-emerald-400/20 ring-emerald-300/60'
+                    ? 'bg-moss-wash ring-moss/50'
                     : 'ring-transparent'
                 }`}
               >
@@ -219,18 +215,18 @@ export function ChatPane({
       >
         <div className="mx-auto flex max-w-3xl flex-col gap-4">
           {brief && (
-            <details className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-              <summary className="cursor-pointer text-[11px] text-neutral-400">
-                Compiled context brief · {brief.facts.length} facts
+            <details className="rounded-lg border border-rule bg-paper-sunk px-3 py-2">
+              <summary className="cursor-pointer eyebrow">
+                compiled context brief · {brief.facts.length} facts
               </summary>
               <ul className="mt-2 flex flex-col gap-1">
                 {brief.facts.map((fact) => (
-                  <li key={fact} className="text-[11px] leading-snug text-neutral-300">
+                  <li key={fact} className="text-[11px] leading-relaxed text-ink-soft">
                     · {fact}
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 border-t border-white/10 pt-2 text-[11px] leading-snug text-neutral-500">
+              <p className="mt-2 border-t border-rule pt-2 text-[11px] leading-relaxed text-bark">
                 {brief.excludedNote}
               </p>
             </details>
@@ -246,9 +242,9 @@ export function ChatPane({
           ))}
 
           {branching && (
-            <div className="text-xs text-emerald-300">Compiling branch context…</div>
+            <div className="text-xs text-moss">Compiling branch context…</div>
           )}
-          {sending && <div className="text-xs text-neutral-500">Thinking…</div>}
+          {sending && <div className="text-xs text-bark">Thinking…</div>}
         </div>
       </div>
 
@@ -261,13 +257,26 @@ export function ChatPane({
             window.getSelection()?.removeAllRanges();
           }}
           style={{ left: selection.x, top: selection.y - 10 }}
-          className="fixed z-40 -translate-x-1/2 -translate-y-full rounded-lg border border-black/70 bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-lg shadow-black/40 hover:bg-emerald-500"
+          className="fixed z-40 inline-flex -translate-x-1/2 -translate-y-full items-center gap-1.5 rounded-full border border-moss-bright bg-moss px-3 py-1.5 text-xs font-semibold text-paper shadow-sm transition-colors hover:bg-moss-bright"
         >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-3.5 w-3.5"
+            aria-hidden
+          >
+            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+            <path d="M2 21c0-3 1.85-5.36 5.08-6" />
+          </svg>
           Branch
         </button>
       )}
 
-      <footer className="border-t border-white/10 px-6 py-3">
+      <footer className="border-t border-rule px-6 py-3">
         <div className="mx-auto flex max-w-3xl items-end gap-2">
           <textarea
             value={draft}
@@ -280,18 +289,18 @@ export function ChatPane({
             }}
             rows={1}
             placeholder="Ask something…"
-            className="max-h-40 min-h-[38px] flex-1 resize-none rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder:text-neutral-600 focus:border-white/20 focus:outline-none"
+            className="max-h-40 min-h-[38px] flex-1 resize-none rounded-lg border border-rule bg-paper-raised px-3 py-2 text-sm text-ink placeholder:text-bark focus:border-moss focus:outline-none"
           />
           <button
             onClick={submit}
             disabled={sending || !draft.trim()}
-            className="h-[38px] shrink-0 rounded-lg bg-white px-4 text-sm font-medium text-neutral-900 transition-opacity disabled:opacity-30"
+            className="h-[38px] shrink-0 rounded-lg bg-moss px-4 text-sm font-medium text-paper transition-colors hover:bg-moss-bright disabled:opacity-30"
           >
             Send
           </button>
         </div>
         {mode?.mode === 'manual' && (
-          <p className="mx-auto mt-1.5 max-w-3xl text-[10px] text-neutral-500">
+          <p className="mx-auto mt-1.5 max-w-3xl text-[10px] text-bark">
             Branch pinned — classification skipped on every message here.
           </p>
         )}

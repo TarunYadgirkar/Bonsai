@@ -46,21 +46,33 @@ problem. Both are prototypes. Nobody ships the loop.
 
 ## What exists today
 
+Bonsai rides a user's existing subscription on three surfaces; a standalone bring-your-own-key
+web app was ruled out as the product bet (the value is riding the session you already pay for).
+
 | Piece | State |
 |---|---|
-| `@bonsai/engine` | The core as a dependency-free TS package: tree model, path assembly, brief compiler, coverage-aware router, context-first escalation, provider layer with honest per-model pricing. 99 unit tests. |
-| Eval harness | `npm run eval` proves the moat claim: referent resolution held at depth 1 and depth 2 (through composed briefs), coverage flagging, routing thresholds, distillation contract. Runs in CI. |
-| Claude Code plugin | The primary surface. `plugin/` — branch = subagent spawned with a compiled brief on a routed model+effort, merge = enforced one-insight return, tree persisted by a bundled MCP server. Runs entirely on the user's existing Claude subscription. Verified end-to-end. |
+| `@bonsai/engine` | The core as a dependency-free TS package: tree model, path assembly, brief compiler, coverage-aware router, context-first escalation, **a learning router** that personalizes from your overrides/escalations/merges, and a provider layer with honest per-model pricing. Unit-tested; runs in CI. |
+| Eval harness | `npm run eval` proves the moat: referent resolution held at depth 1 and depth 2 (through composed briefs), coverage flagging, routing thresholds, distillation, and the learning router adapting. Runs in CI. |
+| Claude Code plugin | `plugin/` — branch = subagent spawned with a compiled brief on a routed model+effort, merge = enforced one-insight return, tree persisted by a bundled MCP server. Runs on your Claude Code subscription. Verified end-to-end. |
+| Chrome extension | `extension/` — MV3 side panel over claude.ai. Reads your conversation (same-origin), compiles a brief locally, pre-fills the branch and the merge-back into the composer. Strictly human-in-the-loop: it never sends — you do. The local compile is extractive (no model call); the plugin and connector compile with Claude for higher fidelity. |
+| MCP connector | `app/api/mcp/[key]` — a claude.ai custom connector (remote MCP). Claude compiles the brief in-conversation and passes it as a tool argument; the connector stores the tree and formats. Deployed and connected in a live claude.ai account. |
 | Web app | Hosted demo + engine testbed (this repo, Vercel). Mock-first: runs with zero keys. |
+
+## The learning router
+
+The router personalizes. When you upgrade a branch it picked as cheap, escalate a too-small
+brief, or merge an answer back, that's a labelled example — and once a pattern is clear the router
+pre-empts the classifier and tells you why ("you've upgraded quick picks 7/7 times, so this one
+starts at thoughtful"). Two people can type the same prompt and get different routes because their
+histories differ. Signals are real behavior, not an AI judge; priors persist per user.
 
 ## Roadmap (deliberately not built yet)
 
-- **claude.ai connector** — remote MCP + MCP Apps tree UI for claude.ai/Desktop users. The
-  connector holds tree state, compiles briefs, and renders the tree; reasoning stays in the
-  visible conversation (claude.ai has no MCP sampling). Needs hosting + OAuth.
-- **The router that learns.** Today routing is a static classifier plus escalation. Overrides,
-  regenerations, merge-rate and abandonment are the labelled examples a per-user router would
-  train on. Logged already; not learned from yet.
+- **MCP Apps tree UI** — an interactive Bonsai tree rendered inline in claude.ai (the connector
+  already returns `structuredContent` so this slots in). The connector today returns a markdown
+  tree; the interactive view is the next step.
+- **OAuth for the connector.** v1 uses a per-user garden key in the URL; OAuth adds real
+  per-user identity, consent, and revocation without handing out a key.
 - **Durable cross-conversation memory.** Deliberately absent. Whether Bonsai needs it — and
   what should provide it — is an open decision, not a default.
 - **Streaming surfaces.** The engine escalation ladder is whole-response; streaming lands with

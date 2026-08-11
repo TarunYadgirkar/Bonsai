@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { BranchNode, Effort } from '@/lib/types';
-import { ModeBadge, accentOf } from './ModeBadge';
+import { ModeBadge } from './ModeBadge';
 import { formatTokens, formatUsd } from './tokens';
 import { CANVAS_WIDTH, layoutTree, type PlacedNode } from './treeLayout';
 
@@ -25,6 +25,22 @@ export interface SessionTotals {
   inputTokens: number;
 }
 
+/**
+ * The season scale: a branch's effort read as a stage of growth, cheap → expensive. Used for the
+ * edge that grew it and the pruning figure it inherited. Not a cost-purple ramp (see DESIGN.md).
+ */
+function seasonColor(effort: Effort | null | undefined): string {
+  switch (effort) {
+    case 'high':
+    case 'max':
+      return 'var(--season-ember)';
+    case 'medium':
+      return 'var(--season-summer)';
+    default:
+      return 'var(--season-young)';
+  }
+}
+
 function NodeCard({
   placed,
   stats,
@@ -39,23 +55,22 @@ function NodeCard({
   onSelect: (id: string) => void;
 }) {
   const { node, variant, x, y, width, height } = placed;
-  const accent = accentOf(stats?.effort);
+  const season = seasonColor(stats?.effort);
 
   const shell =
     variant === 'root'
-      ? 'border-white/15 bg-white/[0.06]'
+      ? 'border-rule-strong bg-paper-sunk'
       : variant === 'archived'
-        ? 'border-white/[0.09] bg-transparent opacity-55 hover:opacity-80'
-        : `${accent.border} ${accent.bg}`;
+        ? 'border-rule bg-transparent opacity-55 hover:opacity-90'
+        : isActive
+          ? 'border-moss bg-moss-wash'
+          : 'border-rule bg-paper-raised hover:border-rule-strong';
 
-  /*
-   * Selection sits on `outline` with an offset rather than `ring`, so it reads as a halo a
-   * couple of pixels clear of the card instead of thickening its border into a muddy 2px edge.
-   */
+  // Selection is a moss halo a couple of pixels clear of the card; a merge flashes brighter.
   const halo = isFlashing
-    ? 'outline-2 outline-offset-2 outline-emerald-300/70'
+    ? 'outline-2 outline-offset-2 outline-[color:var(--moss-bright)]'
     : isActive
-      ? 'outline-1 outline-offset-2 outline-white/30'
+      ? 'outline-1 outline-offset-2 outline-[color:var(--moss)]'
       : 'outline-1 outline-offset-2 outline-transparent';
 
   return (
@@ -64,14 +79,14 @@ function NodeCard({
       data-node-id={node.id}
       onClick={() => onSelect(node.id)}
       style={{ left: x, top: y, width, height }}
-      className={`absolute flex flex-col justify-center overflow-hidden rounded-lg border px-3 text-left shadow-sm shadow-black/30 outline transition-[top,left,width,outline-color,background-color,border-color,opacity] duration-500 hover:border-white/25 ${shell} ${halo}`}
+      className={`absolute flex flex-col justify-center overflow-hidden rounded-lg border px-3 text-left outline transition-[top,left,width,outline-color,background-color,border-color,opacity] duration-500 ${shell} ${halo}`}
     >
-      {/* Kicker — the pruning ratio this branch inherited, in its tier's tint. */}
+      {/* Kicker — the pruning this branch inherited, inked in its season. */}
       {variant === 'branch' &&
         node.prunedPct !== null &&
         node.availableTokens !== null &&
         node.inheritedTokens !== null && (
-          <div className={`text-[10px] tabular-nums ${accent.kicker}`}>
+          <div className="tnum text-[10px]" style={{ color: season }}>
             {node.availableTokens.toLocaleString()} → {node.inheritedTokens.toLocaleString()} ·{' '}
             {node.prunedPct.toFixed(1)}% pruned
           </div>
@@ -81,32 +96,30 @@ function NodeCard({
         <span
           className={`truncate ${
             variant === 'archived'
-              ? 'text-[11px] text-neutral-400'
-              : 'text-xs font-medium text-white'
+              ? 'text-[11px] text-bark'
+              : variant === 'root'
+                ? 'font-display text-[15px] leading-none text-ink'
+                : 'text-xs font-medium text-ink'
           }`}
         >
           {node.title}
         </span>
         {variant === 'branch' && stats?.modelLabel && (
           <span className="ml-auto shrink-0">
-            <ModeBadge
-              modelLabel={stats.modelLabel}
-              effort={stats.effort ?? undefined}
-              size="sm"
-            />
+            <ModeBadge modelLabel={stats.modelLabel} effort={stats.effort ?? undefined} size="sm" />
           </span>
         )}
       </div>
 
-      <div className="mt-1 flex gap-2.5 truncate text-[10px] tabular-nums text-neutral-500">
+      <div className="tnum mt-1 flex gap-2.5 truncate text-[10px] text-ink-soft">
         {variant === 'root' ? (
           <>
-            <span>root</span>
+            <span className="text-bark">trunk</span>
             <span>{node.messageCount} msg</span>
             {stats && <span>{formatTokens(stats.contextTokens)} tokens</span>}
           </>
         ) : variant === 'archived' ? (
-          <span className="text-neutral-600">
+          <span className="text-bark">
             archived
             {stats && stats.mergedInsights > 0 && (
               <> · merged {stats.mergedInsights} insight{stats.mergedInsights === 1 ? '' : 's'}</>
@@ -115,10 +128,8 @@ function NodeCard({
         ) : (
           <>
             <span>{node.messageCount} msg</span>
-            {stats?.costUsd != null && (
-              <span className="font-mono">{formatUsd(stats.costUsd)}</span>
-            )}
-            {node.pinnedTier && <span className="text-neutral-400">pinned</span>}
+            {stats?.costUsd != null && <span>{formatUsd(stats.costUsd)}</span>}
+            {node.pinnedTier && <span className="text-moss">pinned</span>}
           </>
         )}
       </div>
@@ -154,7 +165,6 @@ export function TreeSidebar({
   const layout = layoutTree(nodes);
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
-
   const [creating, setCreating] = useState(false);
 
   const startNewChat = async () => {
@@ -178,20 +188,21 @@ export function TreeSidebar({
 
   return (
     <aside
-      className="flex shrink-0 flex-col border-r border-white/10 bg-neutral-950"
+      className="flex shrink-0 flex-col border-r border-rule bg-paper-raised"
       style={{ width: CANVAS_WIDTH }}
     >
-      <div className="flex items-start justify-between gap-2 border-b border-white/10 px-4 py-3">
+      <div className="flex items-start justify-between gap-2 border-b border-rule px-5 py-4">
         <div className="min-w-0">
-          <h1 className="text-sm font-semibold tracking-tight text-white">Bonsai</h1>
-          <p className="mt-0.5 text-[11px] text-neutral-500">Grow conversations as trees</p>
+          <p className="eyebrow">the garden</p>
+          <h1 className="font-display text-2xl leading-none tracking-tight text-ink">Bonsai</h1>
+          <p className="mt-1 text-[11px] text-ink-soft">prune the conversation to its living wood</p>
         </div>
         <button
           onClick={startNewChat}
           disabled={creating}
-          className="shrink-0 rounded-md border border-white/15 px-2 py-1 text-[11px] text-neutral-300 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+          className="shrink-0 rounded-md border border-moss px-2.5 py-1 text-[11px] font-medium text-moss transition-colors hover:bg-moss-wash disabled:opacity-40"
         >
-          {creating ? 'Starting…' : 'New chat'}
+          {creating ? 'Planting…' : 'New tree'}
         </button>
       </div>
 
@@ -203,29 +214,34 @@ export function TreeSidebar({
             className="pointer-events-none absolute inset-0"
             aria-hidden
           >
+            {/* Boughs: a parent's vertical run down past its children. */}
             {layout.spines.map((spine) => (
               <path
                 key={`spine-${spine.id}`}
                 d={`M${spine.x} ${spine.y1} V${spine.y2}`}
-                stroke="rgba(255,255,255,.09)"
+                stroke="var(--rule-strong)"
                 strokeWidth={1}
                 fill="none"
               />
             ))}
-            {layout.stubs.map((stub) => (
-              <path
-                key={`stub-${stub.id}`}
-                d={stub.d}
-                stroke={
-                  stub.dashed
-                    ? 'rgba(255,255,255,.12)'
-                    : accentOf(stats[stub.id]?.effort).stroke
-                }
-                strokeWidth={stub.dashed ? 1 : 1.5}
-                strokeDasharray={stub.dashed ? '3 5' : undefined}
-                fill="none"
-              />
-            ))}
+            {/* Cuts: each branch grew from a bough — active path in moss, archived dashed bark. */}
+            {layout.stubs.map((stub) => {
+              const active = stub.id === activeId;
+              return (
+                <path
+                  key={`stub-${stub.id}`}
+                  d={stub.d}
+                  stroke={
+                    stub.dashed ? 'var(--bark)' : active ? 'var(--moss)' : seasonColor(stats[stub.id]?.effort)
+                  }
+                  strokeWidth={stub.dashed ? 1 : active ? 2 : 1.5}
+                  strokeDasharray={stub.dashed ? '3 5' : undefined}
+                  strokeLinecap="round"
+                  fill="none"
+                  opacity={stub.dashed ? 0.6 : 0.9}
+                />
+              );
+            })}
           </svg>
 
           {layout.nodes.map((placed) => (
@@ -241,18 +257,18 @@ export function TreeSidebar({
         </div>
       </div>
 
-      <div className="flex shrink-0 justify-between border-t border-white/[0.08] px-5 py-2 text-[10px] text-neutral-500">
-        <span>Edge tint = effort of last answer</span>
-        <span>Kicker = available → inherited</span>
+      <div className="flex shrink-0 justify-between border-t border-rule px-5 py-2 text-[10px] text-bark">
+        <span>edge · effort of last answer</span>
+        <span>kicker · available → kept</span>
       </div>
 
-      <div className="border-t border-white/10 p-2">
+      <div className="border-t border-rule p-2">
         <button
           onClick={onOpenEconomics}
-          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs text-neutral-300 transition-colors hover:bg-white/5"
+          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs text-ink-soft transition-colors hover:bg-paper-sunk"
         >
-          Economics
-          <span className="ml-auto font-mono text-[10px] tabular-nums text-neutral-600">
+          <span className="font-medium text-ink">Economics</span>
+          <span className="tnum ml-auto text-[10px] text-bark">
             {session
               ? `${formatUsd(session.costUsd)} · ${formatTokens(session.inputTokens)} in`
               : 'tokens · spend'}
@@ -260,22 +276,21 @@ export function TreeSidebar({
         </button>
 
         {/*
-         * Rehearse a merge, then put the tree back. Two-step rather than a confirm() dialog:
-         * a browser modal blocks the page, and this throws away everything the room just
-         * watched you build, so a stray click must not be enough.
+         * Two-step rather than a confirm() dialog: a browser modal blocks the page, and this
+         * discards the whole run, so a stray click must not be enough.
          */}
         <button
           onClick={() => (confirming ? runReset() : setConfirming(true))}
           onBlur={() => setConfirming(false)}
           disabled={resetting}
-          className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors disabled:opacity-40 ${
+          className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs transition-colors disabled:opacity-40 ${
             confirming
-              ? 'bg-amber-400/10 text-amber-200 hover:bg-amber-400/15'
-              : 'text-neutral-500 hover:bg-white/5 hover:text-neutral-300'
+              ? 'bg-[color:var(--ember)]/10 text-ember hover:bg-[color:var(--ember)]/15'
+              : 'text-bark hover:bg-paper-sunk hover:text-ink-soft'
           }`}
         >
           {resetting ? 'Resetting…' : confirming ? 'Discard this run?' : 'Reset demo'}
-          <span className="ml-auto text-[10px] text-neutral-600">
+          <span className="ml-auto text-[10px] text-bark">
             {confirming ? 'click again' : 'back to start'}
           </span>
         </button>

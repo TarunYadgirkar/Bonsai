@@ -132,11 +132,14 @@ both builds.
   effort-keyed max_tokens/timeouts, Fable refusal handling, verified pricing (old table
   overstated savings ~3x), servedBy-rate pricing for OpenAI/xAI. 99 tests.
 
-**Decided (research-backed, sources in BUILDLOG):**
-- Surface: **Claude Code plugin primary** (full loop on the user's Pro/Max subscription —
-  sanctioned), claude.ai remote-MCP connector fast-follow (state+briefs+MCP-Apps tree UI only;
-  no sampling there), Chrome extension **cut** (auto-send = the pattern behind the April 2026
-  account bans).
+**Decided (research-backed, sources in BUILDLOG); all three surfaces since BUILT — see the top
+`## Ongoing` note for live state:**
+- **Claude Code plugin** — full loop on the Pro/Max subscription (sanctioned).
+- **claude.ai MCP connector** — Claude compiles in-conversation; connector stores/formats (no
+  sampling there). Deployed + wired live.
+- **Chrome extension** — kept, but STRICTLY human-in-the-loop: it reads + pre-fills, never
+  auto-sends (auto-send is the pattern behind the April 2026 account bans, so it is structurally
+  impossible in the bundle — no POST/send code).
 - Positioning: on the loop (compiled briefs + per-branch routing + distilled merge-back —
   unclaimed by any shipped product), not the tree (commoditized).
 

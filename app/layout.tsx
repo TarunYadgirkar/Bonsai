@@ -1,30 +1,33 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Fraunces, Instrument_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// Fraunces (display serif, hand-cut/botanical), Instrument Sans (humanist body, deliberately not
+// Inter), IBM Plex Mono (instrument-readout data). See DESIGN.md.
+const display = Fraunces({
+  variable: "--font-display",
   subsets: ["latin"],
+  axes: ["opsz", "SOFT", "WONK"],
 });
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const sans = Instrument_Sans({ variable: "--font-sans", subsets: ["latin"] });
+const mono = IBM_Plex_Mono({
+  variable: "--font-mono",
   subsets: ["latin"],
+  weight: ["400", "500"],
 });
 
 export const metadata: Metadata = {
-  title: "Bonsai",
-  description: "Grow conversations as trees. Prune context automatically.",
+  title: "Bonsai — prune the conversation to its living wood",
+  description:
+    "Tree-structured AI chat: branch a side question with a compiled minimal brief, auto-route the model and effort, merge one distilled insight back.",
 };
 
-// Plain ReactNode props rather than Next's generated LayoutProps global: the generated type
-// only exists after a build, which failed `tsc --noEmit` on fresh checkouts (CI).
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${display.variable} ${sans.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>
     </html>

@@ -1,20 +1,50 @@
 @import "tailwindcss";
 
 /*
- * Committed dark theme. The demo runs on a projector, and a fixed palette means
- * the screen looks the same on whichever laptop presents — no prefers-color-scheme
- * surprise mid-pitch.
+ * Bonsai — sumi-e ink on rice paper. A committed light theme (the original was a committed dark
+ * theme; this is its inverse). See DESIGN.md for the reasoning behind every value here.
  */
 :root {
-  --background: #171717;
-  --foreground: #ededed;
+  --paper: #eeece3;
+  --paper-raised: #f6f4ec;
+  --paper-sunk: #e7e4d8;
+  --ink: #20241e;
+  --ink-soft: #5a5f52;
+  --bark: #8a7f6a;
+  --rule: #d8d4c6;
+  --rule-strong: #c6c1b0;
+  --moss: #3e6b47;
+  --moss-bright: #5e8c55;
+  --moss-wash: #e3e8dc;
+  --ember: #b65a2e;
+
+  /* season scale — young growth → summer → ember (cheap → expensive) */
+  --season-young: #7fa05b;
+  --season-summer: #c8a24a;
+  --season-ember: #b65a2e;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
 }
 
 @theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-paper-sunk: var(--paper-sunk);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-bark: var(--bark);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-moss: var(--moss);
+  --color-moss-bright: var(--moss-bright);
+  --color-moss-wash: var(--moss-wash);
+  --color-ember: var(--ember);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: var(--font-display), Georgia, serif;
+  --font-sans: var(--font-sans), system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
 }
 
 html,
@@ -23,9 +53,50 @@ body {
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
   /* The panes scroll internally; the page itself never does. */
   overflow: hidden;
+  /* A faint laid-paper tooth, not a decorative texture — barely there. */
+  background-image: radial-gradient(rgba(32, 36, 30, 0.015) 1px, transparent 1px);
+  background-size: 4px 4px;
+}
+
+/* Data reads as an instrument: tabular, monospace, slightly tightened. */
+.tnum {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Eyebrow: a lowercase, letter-spaced region label in bark. Labels real regions, never decorates. */
+.eyebrow {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  color: var(--bark);
+  font-weight: 500;
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+/* Focus is a moss ring — visible, on-brand, never removed. */
+:focus-visible {
+  outline: 2px solid var(--moss-bright);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

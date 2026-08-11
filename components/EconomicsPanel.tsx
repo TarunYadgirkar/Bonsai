@@ -21,10 +21,21 @@ const clock = (ts: string) => {
     : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 };
 
-/** Hero number: one percentage, with the two raw figures it came from underneath. */
-function SavingsCard({
+/** Bonsai's share of the modeled baseline, clamped to the bar. */
+const share = (actual: number, baseline: number) =>
+  baseline > 0 ? Math.max(0, Math.min(100, (actual / baseline) * 100)) : 0;
+
+/**
+ * A season bar: the full track carries the horticultural spend scale (young growth → summer →
+ * ember), which is the one gradient the design permits because it encodes real cost. Bonsai's
+ * actual usage sits in the young end; the costly ember season it never paid for is ghosted back
+ * toward paper. The ink hairline marks where Bonsai actually landed against the full-history
+ * baseline.
+ */
+function SeasonBar({
   label,
   savedPct,
+  sharePct,
   actual,
   baseline,
   actualNote,
@@ -33,6 +44,7 @@ function SavingsCard({
 }: {
   label: string;
   savedPct: number;
+  sharePct: number;
   actual: string;
   baseline: string;
   actualNote: string;
@@ -41,21 +53,46 @@ function SavingsCard({
   baselineCaption: string;
 }) {
   return (
-    <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="text-[10px] uppercase tracking-wide text-neutral-500">{label}</div>
-      <div className="mt-1 font-mono text-4xl leading-none tabular-nums text-emerald-300">
-        {savedPct.toFixed(1)}%
+    <div>
+      <div className="flex items-baseline justify-between">
+        <span className="eyebrow">{label}</span>
+        <span className="text-[0.8125rem] text-moss">
+          <span className="tnum">{savedPct.toFixed(1)}%</span> pruned
+        </span>
       </div>
-      <div className="mt-1 text-[11px] text-neutral-500">saved</div>
-      <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-white/10 pt-3 text-[11px]">
-        <dt className="text-neutral-500">{actualNote}</dt>
-        <dd className="text-right font-mono tabular-nums text-white">{actual}</dd>
-        <dt className="text-neutral-500">{baselineNote}</dt>
-        <dd className="text-right font-mono tabular-nums text-neutral-400 line-through">
-          {baseline}
-        </dd>
-      </dl>
-      <p className="mt-2 text-[10px] leading-snug text-neutral-600">{baselineCaption}</p>
+
+      <div
+        className="relative mt-2.5 h-2.5 w-full overflow-hidden rounded-full ring-1 ring-inset ring-rule"
+        style={{
+          background:
+            'linear-gradient(90deg, var(--season-young) 0%, var(--season-summer) 55%, var(--season-ember) 100%)',
+        }}
+      >
+        {/* the ember season Bonsai pruned away — ghosted back toward paper, still faintly there */}
+        <div
+          className="absolute inset-y-0 right-0"
+          style={{
+            left: `${sharePct}%`,
+            background: 'color-mix(in oklab, var(--paper-raised) 80%, transparent)',
+          }}
+        />
+        {/* where Bonsai actually landed against the full-history baseline */}
+        <div
+          className="absolute inset-y-0 w-0.5 -translate-x-1/2 bg-ink"
+          style={{ left: `${sharePct}%` }}
+        />
+      </div>
+
+      <div className="mt-2 flex items-baseline justify-between text-xs">
+        <span className="text-ink-soft">
+          {actualNote} <span className="tnum text-ink">{actual}</span>
+        </span>
+        <span className="text-bark">
+          {baselineNote} <span className="tnum line-through">{baseline}</span>
+        </span>
+      </div>
+
+      <p className="mt-1.5 text-[0.6875rem] leading-snug text-bark">{baselineCaption}</p>
     </div>
   );
 }
@@ -98,7 +135,7 @@ export function EconomicsPanel({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-6 backdrop-blur-sm"
       onClick={onClose}
       role="presentation"
     >
@@ -107,141 +144,151 @@ export function EconomicsPanel({
         aria-modal="true"
         aria-label="Session economics"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[86vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-neutral-950 shadow-2xl"
+        className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-rule bg-paper-raised"
+        style={{ boxShadow: '0 18px 60px -24px color-mix(in oklab, var(--ink) 34%, transparent)' }}
       >
-        <header className="flex items-center gap-3 border-b border-white/10 px-6 py-4">
+        <header className="flex items-start gap-4 border-b border-rule px-8 py-6">
           <div>
-            <h2 className="text-sm font-semibold text-white">Session economics</h2>
-            <p className="text-[11px] text-neutral-500">
+            <div className="eyebrow">spend</div>
+            <h2 className="mt-1 font-display text-[1.375rem] leading-tight text-ink">
+              Session economics
+            </h2>
+            <p className="mt-1 text-[0.8125rem] text-ink-soft">
               Live from this session&apos;s inference log — every call Bonsai made.
             </p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="ml-auto rounded-lg border border-white/15 px-3 py-1.5 text-xs text-neutral-300 hover:bg-white/5"
+            className="ml-auto rounded-md border border-rule px-3 py-1.5 text-xs text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
           >
             Close
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
           {error && (
-            <p className="rounded-lg border border-white/10 bg-white/[0.03] p-4 font-mono text-xs text-neutral-400">
-              {error}
+            <p className="border border-rule bg-paper-sunk p-4 text-xs text-ember">
+              <span className="tnum">{error}</span>
             </p>
           )}
 
-          {!data && !error && <p className="text-sm text-neutral-500">Loading numbers…</p>}
+          {!data && !error && <p className="text-sm text-ink-soft">Loading numbers…</p>}
 
           {data && (
             <>
-              <div className="flex flex-col gap-3 sm:flex-row">
-                <SavingsCard
-                  label="Input tokens"
+              <section className="grid gap-x-10 gap-y-7 sm:grid-cols-2">
+                <SeasonBar
+                  label="input tokens"
                   savedPct={data.baseline.tokensSavedPct}
+                  sharePct={share(data.totals.inputTokens, data.baseline.inputTokens)}
                   actual={data.totals.inputTokens.toLocaleString()}
                   actualNote="Bonsai (compiled)"
                   baseline={data.baseline.inputTokens.toLocaleString()}
-                  baselineNote="Full-history baseline"
+                  baselineNote="full history"
                   baselineCaption="vs sending the full parent history every turn (modeled, not measured)"
                 />
-                <SavingsCard
-                  label="Spend"
+                <SeasonBar
+                  label="spend"
                   savedPct={data.baseline.costSavedPct}
+                  sharePct={share(data.totals.costUsd, data.baseline.costUsd)}
                   actual={formatUsd(data.totals.costUsd)}
-                  actualNote="Routed spend"
+                  actualNote="routed spend"
                   baseline={formatUsd(data.baseline.costUsd)}
-                  baselineNote="Strong model always"
+                  baselineNote="strong model always"
                   baselineCaption="vs full history on the strongest model (modeled at list rates)"
                 />
-                <div className="flex-1 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                  <div className="text-[10px] uppercase tracking-wide text-neutral-500">
-                    This session
-                  </div>
-                  <div className="mt-1 font-mono text-4xl leading-none tabular-nums text-white">
+              </section>
+
+              <section className="mt-7 flex flex-wrap items-baseline gap-x-10 gap-y-3 border-t border-rule pt-5">
+                <div className="flex items-baseline gap-2">
+                  <span className="tnum text-4xl leading-none text-ink">
                     {data.totals.inferenceCount}
-                  </div>
-                  <div className="mt-1 text-[11px] text-neutral-500">inferences</div>
-                  <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 border-t border-white/10 pt-3 text-[11px]">
-                    <dt className="text-neutral-500">Tokens in</dt>
-                    <dd className="text-right font-mono tabular-nums text-white">
-                      {data.totals.inputTokens.toLocaleString()}
-                    </dd>
-                    <dt className="text-neutral-500">Tokens out</dt>
-                    <dd className="text-right font-mono tabular-nums text-white">
-                      {data.totals.outputTokens.toLocaleString()}
-                    </dd>
-                  </dl>
+                  </span>
+                  <span className="text-xs text-bark">inferences this session</span>
                 </div>
-              </div>
+                <div className="text-xs text-ink-soft">
+                  <span className="tnum text-ink">
+                    {data.totals.inputTokens.toLocaleString()}
+                  </span>{' '}
+                  tokens in
+                </div>
+                <div className="text-xs text-ink-soft">
+                  <span className="tnum text-ink">
+                    {data.totals.outputTokens.toLocaleString()}
+                  </span>{' '}
+                  tokens out
+                </div>
+              </section>
 
-              {data.logs.length === 0 ? (
-                <p className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] p-6 text-center text-xs text-neutral-500">
-                  No inferences logged yet. Branch off the conversation and ask something —
-                  every call lands here.
-                </p>
-              ) : (
-                <div className="mt-5 overflow-x-auto rounded-xl border border-white/10">
-                  <table className="w-full min-w-[720px] border-collapse text-left text-[11px]">
-                    <thead className="bg-white/[0.04] text-[10px] uppercase tracking-wide text-neutral-500">
-                      <tr>
-                        <th className="px-3 py-2 font-medium">Time</th>
-                        <th className="px-3 py-2 font-medium">Branch</th>
-                        <th className="px-3 py-2 font-medium">Purpose</th>
-                        <th className="px-3 py-2 font-medium">Effort</th>
-                        <th className="px-3 py-2 font-medium">Model</th>
-                        <th className="px-3 py-2 text-right font-medium">Context in</th>
-                        <th className="px-3 py-2 text-right font-medium">Out</th>
-                        <th className="px-3 py-2 text-right font-medium">Cost</th>
-                        <th className="px-3 py-2 text-right font-medium">Baseline (modeled)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {data.logs.map((log) => (
-                        <tr key={log.id} className="border-t border-white/[0.06]">
-                          <td className="px-3 py-2 tabular-nums text-neutral-500">
-                            {clock(log.ts)}
-                          </td>
-                          <td className="max-w-[160px] truncate px-3 py-2 text-neutral-300">
-                            {branchTitles[log.branchId] ?? log.branchId}
-                          </td>
-                          <td className="px-3 py-2 text-neutral-400">
-                            {PURPOSE_LABEL[log.purpose] ?? log.purpose}
-                            {log.escalated && (
-                              <span className="ml-1.5 text-[10px] text-amber-300/80">
-                                escalated
-                              </span>
-                            )}
-                            {log.overridden && (
-                              <span className="ml-1.5 text-[10px] text-neutral-500">pinned</span>
-                            )}
-                          </td>
-                          <td className="px-3 py-2 text-neutral-300">
-                            {log.effort ? EFFORT_LABEL[log.effort] : '—'}
-                          </td>
-                          <td className="max-w-[180px] truncate px-3 py-2 font-mono text-neutral-400">
-                            {log.model}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-white">
-                            {log.inputTokens.toLocaleString()}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-neutral-400">
-                            {log.outputTokens.toLocaleString()}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-emerald-300">
-                            {formatUsd(log.estCostUsd)}
-                          </td>
-                          <td className="px-3 py-2 text-right font-mono tabular-nums text-neutral-500 line-through">
-                            {formatUsd(log.baselineCostUsd)}
-                          </td>
+              <section className="mt-7">
+                <div className="eyebrow mb-2.5">per-inference log</div>
+                {data.logs.length === 0 ? (
+                  <p className="border-t border-rule pt-6 text-center text-xs text-ink-soft">
+                    No inferences logged yet. Branch off the conversation and ask something —
+                    every call lands here.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-rule-strong">
+                          <th className="eyebrow px-3 py-2 text-left font-medium">time</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">branch</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">purpose</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">effort</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">model</th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">context in</th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">out</th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">cost</th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">
+                            baseline (modeled)
+                          </th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {data.logs.map((log) => (
+                          <tr key={log.id} className="border-t border-rule">
+                            <td className="tnum px-3 py-2 text-bark">{clock(log.ts)}</td>
+                            <td className="max-w-[160px] truncate px-3 py-2 text-ink-soft">
+                              {branchTitles[log.branchId] ?? log.branchId}
+                            </td>
+                            <td className="px-3 py-2 text-ink-soft">
+                              {PURPOSE_LABEL[log.purpose] ?? log.purpose}
+                              {log.escalated && (
+                                <span className="ml-1.5 text-[10px] text-ember">escalated</span>
+                              )}
+                              {log.overridden && (
+                                <span className="ml-1.5 text-[10px] text-bark">pinned</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-ink-soft">
+                              {log.effort ? EFFORT_LABEL[log.effort] : '—'}
+                            </td>
+                            <td className="tnum max-w-[180px] truncate px-3 py-2 text-bark">
+                              {log.model}
+                            </td>
+                            <td className="tnum px-3 py-2 text-right text-ink">
+                              {log.inputTokens.toLocaleString()}
+                            </td>
+                            <td className="tnum px-3 py-2 text-right text-ink-soft">
+                              {log.outputTokens.toLocaleString()}
+                            </td>
+                            <td className="tnum px-3 py-2 text-right text-moss">
+                              {formatUsd(log.estCostUsd)}
+                            </td>
+                            <td className="tnum px-3 py-2 text-right text-bark line-through">
+                              {formatUsd(log.baselineCostUsd)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
 
-              <p className="mt-3 text-[11px] leading-snug text-neutral-500">
+              <p className="mt-4 max-w-2xl text-[0.6875rem] leading-relaxed text-bark">
                 Baseline is a modeled counterfactual, not measured billing: the same requests
                 carrying the full parent history, answered on the strongest model every time,
                 priced at published per-token list rates. That is what a flat chat log would
