@@ -19,3 +19,6 @@ next-env.d.ts
 *.tsbuildinfo
 .vercel
 .env*
+
+# engine standalone build (built by tsup at publish; never committed)
+packages/engine/dist/

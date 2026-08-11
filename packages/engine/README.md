@@ -11,16 +11,16 @@ an extractive mock with real token math and zero keys.
 
 ## Install / status
 
-This is currently a **workspace / vendored package**, not a standalone npm publish. Inside this
-repo it is consumed as `@bonsai/engine` via npm workspaces, and Next.js compiles it from TS source
-(`transpilePackages` in `next.config.ts`); the Chrome extension bundles it with esbuild. Its
-`exports`/`types` intentionally point at `./src/index.ts` — the TS source — which is what makes the
-workspace build green without a build step.
+Inside this repo it is consumed via npm workspaces, and Next.js compiles it from TS source
+(`transpilePackages` in `next.config.ts`); the Chrome extension bundles it with esbuild. The
+top-level `exports`/`types` point at `./src/index.ts` on purpose — that keeps the workspace build
+green with no build step.
 
-**Importing it standalone (outside a bundler that transpiles TS) is a known open step, tracked in
-`PRODUCT.md`:** publishing would need a build (compiled `dist/` + `exports` conditions for
-`import`/`types`). Until then, use it inside the workspace, or through a bundler that handles TS
-(esbuild, Vite, Next).
+**To publish it standalone:** `cd packages/engine && pnpm publish`. `prepublishOnly` runs `tsup` to
+emit a typed `dist/` (ESM `dist/index.js` + `dist/index.d.ts`), and `publishConfig` swaps `exports`/
+`types` to `dist` in the published tarball — so bundler-less consumers (`node`, `tsc`, webpack) get
+compiled JS + types while the workspace keeps using the source. (Use `pnpm publish`; npm does not
+honor the `publishConfig` field-swap.) `npm run build` in the package produces `dist/` on demand.
 
 Zero runtime dependencies. Node `>=18`.
 

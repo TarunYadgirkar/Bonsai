@@ -105,3 +105,4 @@ export {
   type TokenBasis,
   type TokenFigure,
 } from './stats';
+export { setEngineLogger, silenceEngine, type EngineLogger } from './logger';

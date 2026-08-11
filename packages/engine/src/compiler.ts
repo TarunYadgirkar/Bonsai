@@ -9,6 +9,7 @@
  * compile input (see context.ts — briefs compose recursively).
  */
 import { complete as defaultComplete, type CompleteFn } from './llm';
+import { logger } from './logger';
 import { INTERNAL_TIER, MODEL_TIERS } from './models';
 import { estimateTokens, prunedPct } from './tokens';
 import type { ContextBrief, UserProfile } from './types';
@@ -155,7 +156,7 @@ function parseCompilerOutput(text: string, selection: string): CompilerOutput {
     }
   }
 
-  console.warn('[compiler] unparseable output — using fallback facts');
+  logger.warn('[compiler] unparseable output — using fallback facts');
   return {
     facts: [`Topic in focus: ${selection}.`],
     excludedNote: 'Excluded: the rest of the parent conversation (compiler fallback).',

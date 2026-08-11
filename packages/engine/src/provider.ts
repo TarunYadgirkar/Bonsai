@@ -15,6 +15,7 @@
  * Every failure returns null and the caller falls back to the mock. A dead key, a wrong model
  * name, a rate limit and a timeout all degrade to a working demo (rule 8).
  */
+import { logger } from './logger';
 import { MODELS } from './models';
 import type { Effort } from './types';
 
@@ -141,12 +142,12 @@ export async function providerComplete(params: ProviderParams): Promise<Provider
         ? await callAnthropic(upstream, params)
         : await callOpenAiCompatible(provider, upstream, params);
     if (!result?.text.trim()) {
-      console.warn(`[llm] ${provider} returned no content on ${upstream} — falling back to mock`);
+      logger.warn(`[llm] ${provider} returned no content on ${upstream} — falling back to mock`);
       return null;
     }
     return result;
   } catch (err) {
-    console.warn(`[llm] ${provider} failed (${(err as Error).message}) — falling back to mock`);
+    logger.warn(`[llm] ${provider} failed (${(err as Error).message}) — falling back to mock`);
     return null;
   }
 }

@@ -22,3 +22,9 @@ jobs:
       # No keys in CI: evals run against the mock, gating plumbing + routing thresholds.
       - run: npm run eval
       - run: npm run build
+      # Publish smoke: build the standalone dist and prove the ESM artifact loads with its exports.
+      - name: engine dist build + ESM load smoke
+        working-directory: packages/engine
+        run: |
+          npx tsup
+          node -e "import('./dist/index.js').then(m => { if (typeof m.compileBrief !== 'function' || typeof m.setEngineLogger !== 'function') throw new Error('dist artifact missing exports'); console.log('engine dist ESM load ok'); }).catch(e => { console.error(e); process.exit(1); })"

@@ -56,7 +56,9 @@ comes back. Bonsai is the loop those products don't have:
 | **MCP connector** (`app/api/mcp/`) | A claude.ai custom connector. Claude compiles the brief in-conversation; the connector holds the tree. Deployed + wired live. |
 
 The durable value is `@bonsai/engine` — a dependency-free TypeScript package the four surfaces all
-consume. Tree model, path assembly, brief compiler, learning router, honest pricing.
+consume, and publishable on its own (`cd packages/engine && pnpm publish` builds a typed `dist` via
+`prepublishOnly`). Tree model, path assembly, salience compiler, learning router, honest pricing.
+168 unit tests; the referent-resolution benchmark runs in CI.
 
 ## Run it
 

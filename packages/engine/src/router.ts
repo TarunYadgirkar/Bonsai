@@ -9,6 +9,7 @@
  */
 import { complete as defaultComplete, type CompleteFn } from './llm';
 import { adjustForProfile, QUESTION_KINDS, type RoutingProfile } from './learning';
+import { logger } from './logger';
 import {
   INTERNAL_TIER,
   CEILING_MODEL,
@@ -176,7 +177,7 @@ async function classify(params: RouteParams, deps: RouterDeps): Promise<Classifi
   const parsed = parseClassifier(result.text);
   if (parsed) return parsed;
 
-  console.warn('[router] unparseable classifier output — defaulting to thoughtful');
+  logger.warn('[router] unparseable classifier output — defaulting to thoughtful');
   return {
     complexity: 2,
     covered: true,
