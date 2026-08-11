@@ -55,21 +55,30 @@ export interface TreeTotals {
 
 const DEV_KEY = 'bonsai-dev-key';
 const LIST_LIMIT = 500;
+/** Per-key cap so one garden key can't grow Neon without bound. */
+const MAX_NODES_PER_KEY = 500;
+/** After a DB error, fall back to memory only briefly, then retry Neon — never permanently. */
+const DEGRADE_COOLDOWN_MS = 30_000;
 
 const memNodes = new Map<string, McpNode>();
-let degraded = false;
+/** Epoch ms until which the database is treated as degraded. 0 = healthy. Not a sticky boolean. */
+let degradedUntil = 0;
+
+function dbHealthy(): boolean {
+  return dbEnabled() && Date.now() >= degradedUntil;
+}
 
 export function storeMode(): 'neon' | 'memory' {
-  return dbEnabled() && !degraded ? 'neon' : 'memory';
+  return dbHealthy() ? 'neon' : 'memory';
 }
 
 async function withFallback<T>(op: string, dbFn: () => Promise<T>, memFn: () => T): Promise<T> {
-  if (storeMode() === 'memory') return memFn();
+  if (!dbHealthy()) return memFn();
   try {
     return await dbFn();
   } catch (err) {
     console.warn(`[mcp-store] ${op} failed (${(err as Error).message}) — memory fallback`);
-    degraded = true;
+    degradedUntil = Date.now() + DEGRADE_COOLDOWN_MS;
     return memFn();
   }
 }
@@ -98,14 +107,21 @@ function rowToNode(row: Record<string, unknown>): McpNode {
 
 export async function validateKey(key: string): Promise<boolean> {
   if (!key) return false;
-  return withFallback(
-    'validateKey',
-    async () => {
-      const rows = await sql()`SELECT key FROM mcp_users WHERE key = ${key}`;
+  if (dbEnabled()) {
+    // Production auth must be a real row AND must fail CLOSED. The literal dev key is never valid
+    // when a database is configured (even if a stale seed row exists), and a DB error rejects
+    // rather than silently falling back to accepting the publicly-known dev key.
+    if (key === DEV_KEY) return false;
+    try {
+      const rows = await sql()`SELECT 1 FROM mcp_users WHERE key = ${key}`;
       return rows.length > 0;
-    },
-    () => key === DEV_KEY,
-  );
+    } catch (err) {
+      console.warn(`[mcp-store] validateKey failed (${(err as Error).message}) — rejecting`);
+      return false;
+    }
+  }
+  // Keyless local dev: the dev key is the only accepted key.
+  return key === DEV_KEY;
 }
 
 function rootNode(userKey: string): McpNode {
@@ -223,6 +239,35 @@ export async function abandonNode(nodeId: string, key: string): Promise<McpNode 
       return rows.length > 0 ? rowToNode(rows[0]) : null;
     },
     () => memUpdate(nodeId, key, { status: 'abandoned' }),
+  );
+}
+
+export { MAX_NODES_PER_KEY };
+
+export async function countNodes(key: string): Promise<number> {
+  return withFallback(
+    'countNodes',
+    async () => {
+      const rows = (await sql()`
+        SELECT count(*)::int AS n FROM mcp_nodes WHERE user_key = ${key}
+      `) as unknown as { n: number }[];
+      return rows[0]?.n ?? 0;
+    },
+    () => [...memNodes.values()].filter((n) => n.userKey === key).length,
+  );
+}
+
+export async function nodeExists(key: string, id: string): Promise<boolean> {
+  return withFallback(
+    'nodeExists',
+    async () => {
+      const rows = await sql()`SELECT 1 FROM mcp_nodes WHERE id = ${id} AND user_key = ${key}`;
+      return rows.length > 0;
+    },
+    () => {
+      const node = memNodes.get(id);
+      return Boolean(node && node.userKey === key);
+    },
   );
 }
 

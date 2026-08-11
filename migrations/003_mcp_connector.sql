@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS mcp_nodes (
 
 CREATE INDEX IF NOT EXISTS mcp_nodes_user_idx ON mcp_nodes (user_key, created_at);
 
-INSERT INTO mcp_users (key, label)
-VALUES ('bonsai-dev-key', 'local dev')
-ON CONFLICT DO NOTHING;
+-- No demo/dev key is seeded here. A repo-literal key in a production table is a validated
+-- credential for anyone who reads the source. Local dev accepts 'bonsai-dev-key' only when
+-- DATABASE_URL is unset (see lib/mcp-store.ts validateKey); real keys are inserted out of band.
+-- If an earlier apply seeded it, remove it: DELETE FROM mcp_users WHERE key = 'bonsai-dev-key';

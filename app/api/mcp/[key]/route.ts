@@ -29,8 +29,14 @@ function buildHandler(userKey: string): (req: Request) => Promise<Response> {
 
 async function handle(req: Request, ctx: { params: Promise<{ key: string }> }): Promise<Response> {
   const { key: pathKey } = await ctx.params;
-  const key = bearerKey(req) ?? pathKey;
-  if (!(await validateKey(key))) {
+  const bearer = bearerKey(req);
+  // The path key is the canonical identity; a Bearer header is only an alternative carrier for the
+  // same credential. Accept whichever presents a VALID key, path first — so a bogus bearer can't
+  // mask a valid URL, and a valid bearer can't silently rewrite which garden the request targets.
+  let key: string | null = null;
+  if (await validateKey(pathKey)) key = pathKey;
+  else if (bearer && (await validateKey(bearer))) key = bearer;
+  if (!key) {
     // Plain 401, NO WWW-Authenticate: this is an authless connector whose key rides in the URL.
     // A WWW-Authenticate: Bearer header makes claude.ai treat the server as OAuth-protected and
     // attempt Dynamic Client Registration, which then fails ("couldn't register with sign-in").

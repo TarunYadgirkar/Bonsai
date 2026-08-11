@@ -1,9 +1,12 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import {
+  MAX_NODES_PER_KEY,
   abandonNode,
+  countNodes,
   createNode,
   listNodes,
+  nodeExists,
   setInsight,
   storeMode,
   summarize,
@@ -28,7 +31,7 @@ const STATUS_GLYPH: Record<McpNode['status'], string> = {
 };
 
 const forkInput = z.object({
-  parentId: z.string().optional(),
+  parentId: z.string().max(64).optional(),
   question: z.string().min(1).max(2000),
   brief: z.string().min(1).max(24000),
   facts: z.array(z.string().max(500)).max(12).optional(),
@@ -183,6 +186,17 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ parentId, question, brief, facts, excludedNote, model, effort, availableTokensEstimate }) => {
+      if ((await countNodes(userKey)) >= MAX_NODES_PER_KEY) {
+        return textResult(
+          `This garden has reached its ${MAX_NODES_PER_KEY}-branch limit. Merge or abandon branches before forking more.`,
+          true,
+        );
+      }
+      // A supplied parent must be one of this key's own nodes — never attach to another garden's
+      // node or a fabricated id (which would then render as an orphan root).
+      if (parentId && !(await nodeExists(userKey, parentId))) {
+        return textResult(`Unknown parentId "${parentId}" for this garden key.`, true);
+      }
       const briefTokens = Math.ceil(brief.length / 4);
       const prunedPct = availableTokensEstimate
         ? Math.max(0, Math.round((1 - briefTokens / availableTokensEstimate) * 1000) / 10)
