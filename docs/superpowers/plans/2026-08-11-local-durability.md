@@ -348,7 +348,7 @@ Do not manufacture a commit if existing coverage already proves the contract. Ot
 chore: keep fixtures memory-only
 ```
 
-## Task 7: Prove real restart survival
+## Task 7: Prove real restart survival — complete (`58621ec`, `66c60b5`)
 
 Status: complete. The focused process-boundary test first failed because its worker was absent, then passed with independent write/read Node processes. The file backend reports ready durable revision 5 after the write phase and revision 6 after the post-restart nested chat while preserving raw timestamps, the fixture, and every unrelated entry exactly.
 
