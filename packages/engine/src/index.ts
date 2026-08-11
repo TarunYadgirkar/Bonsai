@@ -11,6 +11,7 @@ export {
   TIER_EFFORT,
   TIER_LABEL,
   costForModel,
+  costForServedBy,
   effortNote,
   effortSpec,
   estimateCostUsd,
@@ -28,12 +29,14 @@ export {
   type LlmMessage,
 } from './llm';
 export {
+  anthropicBody,
   isLiveProvider,
   providerComplete,
   providerName,
   providerSummary,
   type ProviderMessage,
   type ProviderName,
+  type ProviderParams,
   type ProviderResult,
 } from './provider';
 export {

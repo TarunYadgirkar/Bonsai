@@ -24,6 +24,10 @@ export interface ModelSpec {
   blurb: string;
 }
 
+/**
+ * Rates verified against platform.claude.com pricing 2026-08-10. Sonnet 5 carries intro pricing
+ * ($2/$10) until 2026-08-31; the standard rate is stored because it is the durable number.
+ */
 export const MODELS: ModelSpec[] = [
   {
     id: 'claude-haiku-4-5',
@@ -45,16 +49,16 @@ export const MODELS: ModelSpec[] = [
     id: 'claude-opus-5',
     label: 'Opus 5',
     tier: 'deep',
-    input: 15,
-    output: 75,
+    input: 5,
+    output: 25,
     blurb: 'Deep reasoning. Multi-constraint ranking and weighing trade-offs.',
   },
   {
     id: 'claude-fable-5',
     label: 'Fable 5',
     tier: 'deep',
-    input: 25,
-    output: 125,
+    input: 10,
+    output: 50,
     blurb: 'The ceiling. Where a deep answer goes when it still is not good enough.',
   },
 ];
@@ -112,6 +116,32 @@ export function estimateCostUsd(tier: Tier, inputTokens: number, outputTokens: n
 
 export function costForModel(modelId: string, inputTokens: number, outputTokens: number): number {
   const rate = modelSpec(modelId);
+  const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1_000_000;
+  return Math.round(usd * 1e6) / 1e6;
+}
+
+/**
+ * Rates for non-Anthropic upstreams (provider.ts DEFAULT_UPSTREAM), USD per MTok, verified
+ * 2026-08-10. When `servedBy` names one of these, spend must be priced at ITS rate — pricing a
+ * gpt answer at Claude rates is fiction.
+ */
+const UPSTREAM_RATES: Record<string, { input: number; output: number }> = {
+  'gpt-5.4-mini': { input: 0.75, output: 4.5 },
+  'gpt-5.4': { input: 2.5, output: 15 },
+  'gpt-5.5': { input: 5, output: 30 },
+  'grok-4.3': { input: 1.25, output: 2.5 },
+  'grok-4.5': { input: 2, output: 6 },
+};
+
+/** Cost at the rate of whichever model actually answered; Bonsai-catalog rate otherwise. */
+export function costForServedBy(
+  servedBy: string | undefined,
+  bonsaiModelId: string,
+  inputTokens: number,
+  outputTokens: number,
+): number {
+  const rate = servedBy ? UPSTREAM_RATES[servedBy] : undefined;
+  if (!rate) return costForModel(bonsaiModelId, inputTokens, outputTokens);
   const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1_000_000;
   return Math.round(usd * 1e6) / 1e6;
 }

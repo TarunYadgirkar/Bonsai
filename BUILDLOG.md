@@ -3,6 +3,22 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-11 — Segment 3: live provider fixed, accounting honest
+
+- `provider.ts` rebuilt on per-model capability records: sampling params only on Haiku 4.5
+  (they 400 on the 5-family — this was silently mocking 3 of 4 rungs whenever a real key was
+  set); reasoning effort now maps onto the real `output_config.effort`; `max_tokens` raised to
+  an effort-keyed total on adaptive-thinking models (the cap covers thinking + text); Fable 5
+  `stop_reason: "refusal"` degrades to mock instead of surfacing half-answers; per-effort
+  timeouts (30s low → 120s max); AbortSignal pass-through. Request body building is exported
+  (`anthropicBody`) and tested as the param-policy contract.
+- Pricing corrected to verified rates (Opus 5 $5/$25, Fable 5 $10/$50 — the old table
+  overstated the headline savings ~3x). Non-Anthropic upstreams priced at their own rates via
+  `costForServedBy` (a gpt-5.5 answer no longer bills at Opus rates). OpenAI/xAI rungs updated
+  to current ids (gpt-5.4-mini/5.4/5.5, grok-4.3/4.5) with real ladder separation.
+- Streaming deliberately deferred until a surface consumes it (plugin uses the Agent SDK's own
+  streaming; web app is whole-response today).
+
 ## 2026-08-11 — Segment 2: engine semantics made true
 
 The three headline gaps closed:

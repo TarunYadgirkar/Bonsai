@@ -5,7 +5,7 @@
  *   1. A live provider (lib/provider.ts) when ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY is set.
  *   2. The mock, with realistic token math, so the app is walkable with zero keys.
  */
-import { MODEL_TIERS, TIER_DEFAULTS, costForModel, effortSpec } from './models';
+import { MODEL_TIERS, TIER_DEFAULTS, costForModel, costForServedBy, effortSpec } from './models';
 import { providerComplete } from './provider';
 import { estimateTokens } from './tokens';
 import type { Effort, InferencePurpose, Tier } from './types';
@@ -63,6 +63,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
     model,
     messages,
     maxTokens,
+    effort,
     temperature: params.temperature,
   });
   if (live) {
@@ -74,7 +75,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
       tier,
       inputTokens: usedInput,
       outputTokens: usedOutput,
-      estCostUsd: costForModel(model, usedInput, usedOutput),
+      estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
       servedBy: live.servedBy,
     };

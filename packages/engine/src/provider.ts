@@ -8,16 +8,15 @@
  *   OPENAI_API_KEY      → api.openai.com/v1/chat/completions
  *   XAI_API_KEY         → api.x.ai/v1/chat/completions
  *
- * OpenAI and xAI speak the same request shape, so they share a path. When either serves a request,
- * `servedBy` carries the real upstream model so the UI can say so — the chips keep Bonsai's
- * vocabulary, but nothing claims a Claude model answered when one did not.
+ * Request shape is driven by a per-model capability record — the 4.6+/5 Claude models reject
+ * sampling params (400) and take reasoning effort via output_config.effort, while Haiku 4.5 is
+ * the reverse. Never hand-build a request body outside `anthropicBody`.
  *
  * Every failure returns null and the caller falls back to the mock. A dead key, a wrong model
  * name, a rate limit and a timeout all degrade to a working demo (rule 8).
  */
 import { MODELS } from './models';
-
-const TIMEOUT_MS = 30_000;
+import type { Effort } from './types';
 
 export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'mock';
 
@@ -56,6 +55,7 @@ const RUNG_BY_MODEL: Record<string, Rung> = {
   'claude-fable-5': 'CEILING',
 };
 
+/** Verified against provider model pages 2026-08-10. Re-verify before shipping — ids rot. */
 const DEFAULT_UPSTREAM: Record<string, Record<Rung, string>> = {
   anthropic: {
     QUICK: 'claude-haiku-4-5-20251001',
@@ -64,17 +64,48 @@ const DEFAULT_UPSTREAM: Record<string, Record<Rung, string>> = {
     CEILING: 'claude-fable-5',
   },
   openai: {
-    QUICK: 'gpt-4o-mini',
-    MID: 'gpt-4o',
-    DEEP: 'gpt-4o',
-    CEILING: 'gpt-4o',
+    QUICK: 'gpt-5.4-mini',
+    MID: 'gpt-5.4',
+    DEEP: 'gpt-5.5',
+    CEILING: 'gpt-5.5',
   },
   xai: {
-    QUICK: 'grok-2-latest',
-    MID: 'grok-2-latest',
-    DEEP: 'grok-2-latest',
-    CEILING: 'grok-2-latest',
+    QUICK: 'grok-4.3',
+    MID: 'grok-4.3',
+    DEEP: 'grok-4.5',
+    CEILING: 'grok-4.5',
   },
+};
+
+/**
+ * What each Anthropic upstream accepts. The 4.6+/5 rules (verified 2026-08-10):
+ * sampling params 400 on Sonnet 5/Opus 5/Fable 5; output_config.effort exists there and NOT on
+ * Haiku 4.5; thinking is adaptive-by-default (always-on for Fable) and max_tokens caps
+ * thinking + text COMBINED, so effortful calls need far more headroom than the visible answer.
+ */
+interface AnthropicCaps {
+  sampling: boolean;
+  effort: boolean;
+}
+
+function anthropicCaps(upstream: string): AnthropicCaps {
+  if (upstream.startsWith('claude-haiku-4-5')) return { sampling: true, effort: false };
+  return { sampling: false, effort: true };
+}
+
+/** max_tokens must cover thinking + answer on adaptive models. Keyed by effort. */
+const TOTAL_CAP_BY_EFFORT: Record<Effort, number> = {
+  low: 4000,
+  medium: 6000,
+  high: 12000,
+  max: 16000,
+};
+
+const TIMEOUT_BY_EFFORT: Record<Effort, number> = {
+  low: 30_000,
+  medium: 45_000,
+  high: 90_000,
+  max: 120_000,
 };
 
 export interface ProviderMessage {
@@ -90,12 +121,16 @@ export interface ProviderResult {
   servedBy: string;
 }
 
-export async function providerComplete(params: {
+export interface ProviderParams {
   model: string;
   messages: ProviderMessage[];
   maxTokens: number;
+  effort?: Effort;
   temperature?: number;
-}): Promise<ProviderResult | null> {
+  signal?: AbortSignal;
+}
+
+export async function providerComplete(params: ProviderParams): Promise<ProviderResult | null> {
   const provider = providerName();
   if (provider === 'mock') return null;
 
@@ -118,17 +153,36 @@ export async function providerComplete(params: {
 
 /* ---------- anthropic ---------- */
 
-async function callAnthropic(
+/** Exported for tests: the request body IS the param-policy contract. */
+export function anthropicBody(
   upstream: string,
-  params: { messages: ProviderMessage[]; maxTokens: number; temperature?: number },
-): Promise<ProviderResult> {
+  params: Pick<ProviderParams, 'messages' | 'maxTokens' | 'effort' | 'temperature'>,
+): Record<string, unknown> {
+  const caps = anthropicCaps(upstream);
   // The Messages API takes the system prompt as a top-level field, not as a message.
   const system = params.messages
     .filter((m) => m.role === 'system')
     .map((m) => m.content)
     .join('\n\n');
   const turns = params.messages.filter((m) => m.role !== 'system');
+  const effort = params.effort ?? 'medium';
 
+  return {
+    model: upstream,
+    // On adaptive-thinking models the cap covers thinking + text; the caller's answer-sized
+    // ceiling would truncate mid-thought, so the effort-keyed total wins when larger.
+    max_tokens: caps.effort
+      ? Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort])
+      : params.maxTokens,
+    ...(caps.sampling ? { temperature: params.temperature ?? 0.2 } : {}),
+    ...(caps.effort ? { output_config: { effort } } : {}),
+    ...(system ? { system } : {}),
+    messages: turns.map((m) => ({ role: m.role, content: m.content })),
+  };
+}
+
+async function callAnthropic(upstream: string, params: ProviderParams): Promise<ProviderResult> {
+  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? 'medium']);
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -136,22 +190,20 @@ async function callAnthropic(
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json',
     },
-    body: JSON.stringify({
-      model: upstream,
-      max_tokens: params.maxTokens,
-      temperature: params.temperature ?? 0.2,
-      ...(system ? { system } : {}),
-      messages: turns.map((m) => ({ role: m.role, content: m.content })),
-    }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    body: JSON.stringify(anthropicBody(upstream, params)),
+    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout,
   });
 
   if (!res.ok) throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
 
   const body = (await res.json()) as {
     content?: { type: string; text?: string }[];
+    stop_reason?: string;
     usage?: { input_tokens?: number; output_tokens?: number };
   };
+  // Fable 5's safety classifiers can end a response with stop_reason "refusal" — degrade rather
+  // than surface a half-answer as if it were complete.
+  if (body.stop_reason === 'refusal') throw new Error(`anthropic refusal on ${upstream}`);
   return {
     text: (body.content ?? [])
       .filter((c) => c.type === 'text')
@@ -168,10 +220,11 @@ async function callAnthropic(
 async function callOpenAiCompatible(
   provider: 'openai' | 'xai',
   upstream: string,
-  params: { messages: ProviderMessage[]; maxTokens: number; temperature?: number },
+  params: ProviderParams,
 ): Promise<ProviderResult> {
   const base = provider === 'openai' ? 'https://api.openai.com/v1' : 'https://api.x.ai/v1';
   const key = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.XAI_API_KEY;
+  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? 'medium']);
 
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
@@ -180,9 +233,8 @@ async function callOpenAiCompatible(
       model: upstream,
       messages: params.messages,
       max_completion_tokens: params.maxTokens,
-      temperature: params.temperature ?? 0.2,
     }),
-    signal: AbortSignal.timeout(TIMEOUT_MS),
+    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout,
   });
 
   if (!res.ok) throw new Error(`${provider} ${res.status} ${(await res.text()).slice(0, 160)}`);

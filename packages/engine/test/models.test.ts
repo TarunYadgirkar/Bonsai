@@ -21,7 +21,7 @@ describe('modelSpec', () => {
     expect(modelSpec('claude-haiku-4-5').label).toBe('Haiku 4.5');
     expect(modelSpec('claude-sonnet-5').label).toBe('Sonnet 5');
     expect(modelSpec('claude-opus-5').label).toBe('Opus 5');
-    expect(modelSpec('claude-fable-5').input).toBe(25);
+    expect(modelSpec('claude-fable-5').input).toBe(10);
   });
 
   it('falls back to the first model on unknown ids', () => {
@@ -32,9 +32,9 @@ describe('modelSpec', () => {
 
 describe('costForModel', () => {
   it('prices per million tokens at the model rates', () => {
-    expect(costForModel('claude-opus-5', 1000, 200)).toBe(0.03);
+    expect(costForModel('claude-opus-5', 1000, 200)).toBe(0.01);
     expect(costForModel('claude-haiku-4-5', 123, 456)).toBe(0.002403);
-    expect(costForModel('claude-fable-5', 1_000_000, 0)).toBe(25);
+    expect(costForModel('claude-fable-5', 1_000_000, 0)).toBe(10);
     expect(costForModel('claude-sonnet-5', 0, 0)).toBe(0);
   });
 
