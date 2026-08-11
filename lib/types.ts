@@ -36,6 +36,24 @@ export interface UserProfile {
   goals: string[];
 }
 
+export type ContextSourceKind = 'profile' | 'brief' | 'message' | 'insight';
+
+export interface ContextSourceRef {
+  kind: ContextSourceKind;
+  conversationId: string;
+  sourceId: string;
+}
+
+export interface ContextSource extends ContextSourceRef {
+  content: string;
+}
+
+export interface AssembledContext {
+  markdown: string;
+  sources: ContextSource[];
+  tokens: number;
+}
+
 export interface Message {
   id: string;
   role: Role;
@@ -63,6 +81,8 @@ export interface ContextBrief {
   briefTokens: number;
   /** 0-100, rounded to one decimal. Rendered on the tree edge. */
   prunedPct: number;
+  sourceRefs?: ContextSourceRef[];
+  factSourceIds?: string[][];
 }
 
 export interface RoutingDecision {
@@ -98,6 +118,8 @@ export interface Insight {
   /** The single distilled line that merges into the parent. */
   text: string;
   createdAt: string;
+  sourceMessageIds?: string[];
+  active?: boolean;
 }
 
 /** One conversation node. The root has parentId === null and no brief. */

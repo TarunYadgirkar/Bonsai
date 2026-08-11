@@ -1,9 +1,11 @@
 import seed from '@/fixtures/seed-conversation.json';
 import tree from '@/fixtures/seed-tree.json';
+import { assembleVisibleContext } from './context';
 import { kvEnabled, kvGet, kvSet } from './kv';
 import { appendInferenceLogs } from './inference-log';
-import { messagesTokens, prunedPct } from './tokens';
+import { estimateTokens, messagesTokens, prunedPct } from './tokens';
 import type {
+  AssembledContext,
   BranchNode,
   Conversation,
   ContextBrief,
@@ -31,16 +33,27 @@ interface StoreShape {
   seq: number;
 }
 
+type LegacyContextBrief = Omit<ContextBrief, 'sourceRefs' | 'factSourceIds'> &
+  Partial<Pick<ContextBrief, 'sourceRefs' | 'factSourceIds'>>;
+
+type LegacyInsight = Omit<Insight, 'sourceMessageIds' | 'active'> &
+  Partial<Pick<Insight, 'sourceMessageIds' | 'active'>>;
+
+type StoredConversation = Omit<Conversation, 'brief' | 'insights'> & {
+  brief?: LegacyContextBrief;
+  insights: LegacyInsight[];
+};
+
 /** Shape of fixtures/seed-tree.json. Generated, never hand-edited. */
 interface SeedTree {
-  rootInsights?: Insight[];
-  branches?: Conversation[];
+  rootInsights?: LegacyInsight[];
+  branches?: StoredConversation[];
   logs?: InferenceLog[];
   seq?: number;
 }
 
 interface StoreSnapshot {
-  conversations: Conversation[];
+  conversations: StoredConversation[];
   logs: InferenceLog[];
   rootId: string;
   seq: number;
@@ -52,6 +65,31 @@ const KV_KEY = 'bonsai:store:v1';
 /** Logs written this request, waiting to be flushed to the local mirror by flushLogs(). */
 const pending: InferenceLog[] = [];
 
+function normalizeBrief(brief: LegacyContextBrief): ContextBrief {
+  return {
+    ...brief,
+    sourceRefs: brief.sourceRefs?.map((source) => ({ ...source })) ?? [],
+    factSourceIds:
+      brief.factSourceIds?.map((sourceIds) => [...sourceIds]) ?? brief.facts.map(() => []),
+  };
+}
+
+function normalizeInsight(insight: LegacyInsight): Insight {
+  return {
+    ...insight,
+    sourceMessageIds: [...(insight.sourceMessageIds ?? [])],
+    active: insight.active ?? true,
+  };
+}
+
+function normalizeConversation(conversation: StoredConversation): Conversation {
+  return {
+    ...conversation,
+    brief: conversation.brief ? normalizeBrief(conversation.brief) : undefined,
+    insights: conversation.insights.map(normalizeInsight),
+  };
+}
+
 /**
  * Boots the pre-built demo tree: the root transcript from `seed-conversation.json` plus the
  * scenario branches, insights and inference logs frozen in `seed-tree.json` (regenerate with
@@ -59,7 +97,7 @@ const pending: InferenceLog[] = [];
  * carries what the branches added, never a copy of the transcript.
  */
 function build(): StoreShape {
-  const fixture = seed as SeedConversation;
+  const fixture = structuredClone(seed) as SeedConversation;
   // Clone: an imported JSON module is a live singleton, and `logs` is pushed to in place by
   // logInference. Without this, rehearsal logs stayed in the fixture array for the life of the
   // process and every reset handed them straight back.
@@ -70,11 +108,11 @@ function build(): StoreShape {
     parentId: null,
     profile: fixture.profile,
     messages: fixture.messages,
-    insights: preloaded.rootInsights ?? [],
+    insights: (preloaded.rootInsights ?? []).map(normalizeInsight),
     pinnedTier: null,
     archived: false,
   };
-  const branches = (preloaded.branches ?? []) as Conversation[];
+  const branches = (preloaded.branches ?? []).map(normalizeConversation);
   return {
     conversations: new Map([root, ...branches].map((c) => [c.id, c])),
     logs: (preloaded.logs ?? []) as InferenceLog[],
@@ -103,8 +141,9 @@ function toSnapshot(s: StoreShape): StoreSnapshot {
 }
 
 function fromSnapshot(snapshot: StoreSnapshot): StoreShape {
+  const conversations = snapshot.conversations.map(normalizeConversation);
   return {
-    conversations: new Map(snapshot.conversations.map((c) => [c.id, c])),
+    conversations: new Map(conversations.map((conversation) => [conversation.id, conversation])),
     logs: snapshot.logs,
     rootId: snapshot.rootId,
     seq: snapshot.seq,
@@ -166,6 +205,11 @@ export function rootId(): string {
 
 export function getConversation(id: string): Conversation | undefined {
   return store().conversations.get(id);
+}
+
+export function visibleContextFor(id: string): AssembledContext | undefined {
+  if (!getConversation(id)) return undefined;
+  return assembleVisibleContext(id, getConversation);
 }
 
 export function listConversations(): Conversation[] {
@@ -231,7 +275,15 @@ export function availableTokensFor(parentId: string | null): number {
         },
       ])
     : 0;
-  return messagesTokens(parent.messages) + profileTokens + availableTokensFor(parent.parentId);
+  const insightTokens = parent.insights
+    .filter((insight) => insight.active !== false)
+    .reduce((sum, insight) => sum + estimateTokens(insight.text), 0);
+  return (
+    messagesTokens(parent.messages) +
+    profileTokens +
+    insightTokens +
+    availableTokensFor(parent.parentId)
+  );
 }
 
 function lastTier(c: Conversation): Tier | null {
