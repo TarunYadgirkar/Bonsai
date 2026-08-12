@@ -453,7 +453,7 @@ export function Workspace() {
   );
 
   return (
-    <main className="relative flex min-h-0 flex-1">
+    <main className="relative flex min-h-0 flex-1 flex-col md:flex-row">
       {/*
         Failures after first load (send, branch, merge, reset) surface here. An overlay rather
         than a swap: the workspace stays interactive underneath, nothing blanks. A later

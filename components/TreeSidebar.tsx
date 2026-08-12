@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import type { BranchNode, Effort } from '@/lib/types';
 import { ModeBadge } from './ModeBadge';
 import { formatTokens, formatUsd } from './tokens';
@@ -201,8 +201,8 @@ export function TreeSidebar({
 
   return (
     <aside
-      className="flex shrink-0 flex-col border-r border-rule bg-paper-raised"
-      style={{ width: CANVAS_WIDTH }}
+      className="flex max-h-[45dvh] w-full shrink-0 flex-col overflow-hidden border-b border-rule bg-paper-raised md:max-h-none md:w-[var(--canvas-w)] md:border-b-0 md:border-r"
+      style={{ '--canvas-w': `${CANVAS_WIDTH}px` } as CSSProperties}
     >
       <div className="flex items-start justify-between gap-2 border-b border-rule px-5 py-4">
         <div className="min-w-0">
