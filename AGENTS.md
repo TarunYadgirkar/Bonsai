@@ -97,29 +97,51 @@ the same.
 Updated: 2026-08-12T01:25:00Z by claude session (lane A)
 
 ### ▶ NEXT SESSION — do these first
-1. **Promote to production.** Migrate the LIVE Neon branch `br-old-fog` with `migrations/004`
-   (two `ALTER … ADD COLUMN session_id` + two `CREATE INDEX`; the DELETE is optional) in the Neon
-   console — the auto-mode classifier blocks DDL on that branch from here. Then `vercel --prod`
-   from `~/TarunsCode/bonsai-copy-a` (worktree linked to bonsai-connector). Migration MUST land
-   before the deploy or new-code writes 503.
-2. **(Optional) real models on the deploy.** `vercel env add ANTHROPIC_API_KEY preview`, then
-   redeploy the preview — flips it from the extractive mock to real Fable/Opus/Sonnet/Haiku (BYOK,
-   bills the API account, not the subscription).
-3. **Finish the extension smoke** (only unverified piece): confirm selection→Compile→Open branch
-   chat prefills the brief and NOTHING sends. Two ways:
-   - **(a) Local Playwright harness** — write a script (`extension/test-e2e.mjs` or similar) that
-     launches Chromium with `--load-extension=extension/`, reaches the extension **service worker**
-     to seed `chrome.storage.session[PENDING_KEY]`, opens `claude.ai/new`, and asserts the composer
-     prefilled + no send fired. This covers the whole prefill/never-send path AND the compile logic
-     (drive `compile.ts`/`store.ts` directly) — everything EXCEPT the literal side-panel button
-     clicks (`chrome.sidePanel` isn't page-addressable even locally). Claude Code CAN build + run
-     this from Bash.
-   - **(b) Screen-level** — Cowork's local computer use (next session is on the **Desktop app**,
-     where Cowork is available) or a human clicks the actual panel buttons. Claude Code can't invoke
-     Cowork itself.
-   Do (a) for regression coverage; (b) once to confirm the real panel UI end-to-end.
+1. **Promote to production** — now UNBLOCKED: migrations 004 + 005 are applied to `br-old-fog`
+   (done 2026-08-12 via the Neon MCP, Tarun-approved; additive DDL only, the optional legacy
+   DELETE was NOT run). Just `vercel --prod` from `~/TarunsCode/bonsai-copy-a` (worktree linked
+   to bonsai-connector). Needs Tarun's Vercel auth.
+2. **(Optional) real models on the deploy.** `vercel env add ANTHROPIC_API_KEY preview` (and/or
+   `production`), then redeploy. Local dev already runs real models (key in `.env.local`,
+   verified live: Haiku 4.5 Low answered, cost ledger measured).
+3. **Live-model eval run** (Tarun: `ANTHROPIC_API_KEY=… npm run eval` — the hook blocks agents
+   from anything env-shaped; tsx does not read `.env.local`). Mock run is 15/15.
+4. **Side-panel buttons** — the ONLY remaining unverified UI: a human or Cowork clicks
+   Compile / Open branch chat once. Everything else the panel drives is now covered by
+   `extension/test-e2e.mjs` (npm run test:e2e in extension/ — 13 checks, real Chromium,
+   never-send proven at the network layer with a canary self-test).
+5. Then: `pnpm publish @bonsai/engine`, MCP Apps tree UI, connector OAuth, streaming chat,
+   and REAL fix for the population-prior Sybil residual (signed session cookies + rate limiting)
+   if the demo ever grows real traffic.
 
-Note: next session runs on the **Claude Desktop app** (Cowork available there for the panel smoke).
+**Session 2026-08-12 — extension e2e, population prior, benchmark expansion (6 commits, gates:
+175 tests, 15/15 evals, both builds green):**
+- **Extension e2e harness** (`extension/test-e2e.mjs`, `npm run test:e2e`): real Chromium via
+  Playwright `--load-extension`, claude.ai fully intercepted with a local fixture (no login, no
+  account risk). Proves: pending brief prefills the composer, pending key consumed, LINK_NODE
+  binds draft→conversation, Branch chip lifecycle, and **zero non-GET requests all run** — with a
+  deliberate canary POST proving the detection isn't vacuous. Also fixed a real cold-start race:
+  content script now retries `storage.session` reads while the SW's `setAccessLevel` lands.
+- **Population prior shipped** (the moat plumbing PLAN item 4): `loadPopulationPrior()` folds all
+  sessions' profiles via `mergeProfiles` into the community cold-start, injected into `route()` in
+  chat + branch; public `GET /api/priors`. Security review (fix-first verdict) hardened it same
+  session: per-contributor weight clamp (PRIOR_STAT_CAP 20, proportional so rates survive), k
+  raised 3→10, sub-k contributor count suppressed (no Sybil countdown oracle), single-flight
+  cache, `normalizeProfile` instead of a cast, migration 005 index on `routing_profiles
+  (updated_at)`. Residual accepted + documented: unsigned free sessions mean a determined Sybil
+  can still cross k — the clamp bounds recovery to a capped shadow; real fix is signed sessions.
+- **Benchmark 10→15 cases** (BENCHMARK.md table updated): ambiguous antecedent (two deadlines,
+  selection anchors), long-trunk salience (buried fact + ≥60% pruned), depth-3 chain, population
+  prior end-to-end, closed merge loop. **Depth-3 FAILED on first run — real bug**: the compiler
+  pruned the inherited entity when the fork's question never named it ("It closes September 11",
+  dangling referent). Fix: `assemblePath` exposes `anchorFact` (inherited brief's top fact),
+  `compileBrief` pins it through every composition. Unit-tested (pin + dedupe), evals 15/15.
+- **DB**: migrations 004 + 005 applied to `br-old-fog-avfznwqu` (Neon MCP, Tarun-approved,
+  additive only). Local dev verified end-to-end with REAL models: fresh session → empty root →
+  chat → Haiku 4.5 Low answer → survives reload; `/api/priors` returns `{contributors:null,
+  prior:null}` below threshold as designed.
+- Housekeeping: 12 stray session screenshots moved into `assets/generated/`; playwright added as
+  root devDep (CI does NOT run test:e2e — deliberate, needs a browser download).
 
 **Session 2026-08-11 PM — audit + fixes (7 commits on copy-a, all gates green: 172 tests, 10/10
 evals, build clean). A 56-agent adversarial review surfaced 36 verified bugs; the load-bearing

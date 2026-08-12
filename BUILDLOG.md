@@ -320,3 +320,28 @@ verified facts that gate later segments:
 tsx/vitest/typecheck declared; PLAN.md added. Deep-read of the whole repo (6-agent workflow)
 established the three load-bearing gaps: merge never re-enters context, compile is depth-1
 (not path-based), live provider 400s on every rung above Haiku. Vercel prod healthy on `main`.
+
+## 2026-08-12 — Extension e2e, population prior, benchmark v2
+
+Six commits (`a8fa27a`…`9591fc9`), all gates green (175 unit tests, 15/15 evals, web + extension
+builds, extension e2e 13/13).
+
+- **`extension/test-e2e.mjs`** — the smoke the last handoff asked for, as a permanent harness:
+  Playwright + real Chromium + `--load-extension`, claude.ai fully route-intercepted with a local
+  ProseMirror fixture (no login, zero account risk). Asserts prefill, pending-key consumption,
+  LINK_NODE, chip lifecycle, and never-send at the network layer with a canary POST proving the
+  detector isn't vacuous. Review of the harness surfaced a real extension bug: cold-start race
+  between the SW's `setAccessLevel` and the content script's `storage.session` read — fixed with
+  a bounded retry.
+- **Population prior** (PLAN item 4 — the network-effect moat's missing plumbing):
+  `loadPopulationPrior()` + injection into chat/branch `route()` + public `GET /api/priors`.
+  Security review same session (verdict fix-first) → per-contributor clamp, k=10, sub-k count
+  suppression, single-flight cache, `updated_at` index (migration 005). Sybil residual accepted
+  and documented — unsigned free sessions cap what the clamp can't.
+- **Benchmark 10→15**: ambiguous antecedent, long-trunk salience (retention AND ≥60% pruning),
+  depth-3, population prior, merge loop. Depth-3 failed honestly on first run — the compiler
+  compiled a dangling "It closes September 11" — and drove the engine fix: `anchorFact` pinning
+  through compositions (`assemblePath` → `compileBrief`), unit-tested.
+- **DB**: 004 + 005 applied to `br-old-fog-avfznwqu` via Neon MCP (Tarun-approved, additive only;
+  legacy DELETE skipped). Local dev verified with real models end-to-end. Prod promote is now just
+  `vercel --prod`.
