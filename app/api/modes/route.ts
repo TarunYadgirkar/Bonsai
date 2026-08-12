@@ -1,4 +1,4 @@
-import { EFFORTS, MODELS, TIER_DEFAULTS, TIER_LABEL } from '@bonsai/engine';
+import { EFFORTS, MODELS, providerName, TIER_DEFAULTS, TIER_LABEL } from '@bonsai/engine';
 
 /**
  * The mode picker's catalog: three models × four effort levels, plus Auto. Additive route (M5) so
@@ -15,6 +15,8 @@ export async function GET() {
     efforts: EFFORTS,
     autoPicks: TIER_DEFAULTS,
     autoLabels: TIER_LABEL,
+    /** 'mock' when no provider key is set — the UI says so instead of passing mock text off as real. */
+    provider: providerName(),
     modeNote: 'Auto classifies the question and picks both halves; Manual names them.',
     /** Rates are published-list, applied to locally generated text — modeled spend, not billed. */
     pricingNote: 'Cost is modeled at published per-token rates.',

@@ -110,6 +110,22 @@ export function Workspace() {
   /** The insight that just landed, so the parent node and the line itself can glow. */
   const [merged, setMerged] = useState<{ parentId: string; insightId: string } | null>(null);
   const [economicsOpen, setEconomicsOpen] = useState(false);
+  const [demoMode, setDemoMode] = useState(false);
+
+  // Honesty ribbon: without a provider key the answers come from the extractive mock. Say so —
+  // a stranger reading mock output as a real model's is worse than a smaller-looking demo.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/modes')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((modes: { provider?: string } | null) => {
+        if (!cancelled && modes?.provider === 'mock') setDemoMode(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!merged) return;
@@ -516,6 +532,12 @@ export function Workspace() {
         <section className="flex flex-1 items-center justify-center bg-paper">
           <p className="text-sm text-ink-soft">Pick a branch from the garden.</p>
         </section>
+      )}
+
+      {demoMode && (
+        <p className="pointer-events-none absolute bottom-3 left-1/2 z-40 max-w-[92vw] -translate-x-1/2 rounded-full border border-rule bg-paper-raised px-3 py-1 text-center text-[10px] text-bark shadow-sm">
+          demo mode · answers are an extractive mock — briefs, routing, and pruning are real
+        </p>
       )}
 
       {flight && (
