@@ -146,17 +146,18 @@ async function runCompiler(
 }
 
 /**
- * Has the compiler already carried the anchor's content through, possibly rephrased? True when
- * every entity-bearing token of the anchor (capitalized words, numbers) appears somewhere across
- * the kept facts — "Free Ventures closes September 11" carries "Free Ventures applications close
- * September 11." even though no fact matches verbatim. Anchors with no entity tokens fall back to
- * verbatim comparison.
+ * Has the compiler already carried the anchor through in its TOP fact, possibly rephrased? True
+ * when every entity-bearing token of the anchor (capitalized words, numbers) appears in facts[0]
+ * — "Free Ventures closes September 11" carries "Free Ventures applications close September 11."
+ * even though it doesn't match verbatim. Position 0 matters, not mere presence: the next
+ * composition's anchor IS facts[0], so entities scattered anywhere else would satisfy this brief
+ * yet break the chain one level down. Anchors with no entity tokens compare verbatim.
  */
 function anchorCarriedThrough(anchor: string, facts: string[]): boolean {
+  const top = facts[0] ?? '';
   const entityTokens = anchor.match(/\b(?:[A-Z][\w'-]*|\d[\d,.]*)\b/g) ?? [];
-  if (!entityTokens.length) return facts.some((f) => f.trim() === anchor);
-  const union = facts.join(' ');
-  return entityTokens.every((t) => union.includes(t));
+  if (!entityTokens.length) return top.trim() === anchor;
+  return entityTokens.every((t) => top.includes(t));
 }
 
 function parseCompilerOutput(text: string, selection: string): CompilerOutput {
