@@ -6,7 +6,8 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "node build.mjs && node test-e2e.mjs"
   },
   "dependencies": {
     "@bonsai/engine": "*"
