@@ -1,5 +1,6 @@
 {
   "name": "bonsai",
+  "description": "Branch side questions into subagents with compiled briefs; merge one insight back.",
   "owner": { "name": "Tarun Yadgirkar" },
   "plugins": [
     {

@@ -17,6 +17,10 @@ immune to context poisoning — and unlike anything native, the branch's conclus
 /plugin install bonsai@bonsai
 ```
 
+> Caveat: the plugin currently lives on branch `copy-a`, not `main` — the marketplace add must
+> reference this branch, or wait for promotion to main. The repo must also be public for
+> `/plugin marketplace add` to work.
+
 The tree server ships pre-bundled (`mcp/dist/server.mjs`, self-contained) — no install
 step. Contributors editing `mcp/server.mjs` must rebuild it: `node mcp/build.mjs`.
 

@@ -18,6 +18,15 @@ jobs:
       - run: npm run typecheck
       - run: npx tsc --noEmit --project extension/tsconfig.json
       - run: node extension/build.mjs
+      # Strangers install from the committed bundles without building — CI proves the committed
+      # dist matches a fresh build of src (maps are gitignored; diff only the tracked .js).
+      - name: extension dist in sync with src
+        run: git diff --exit-code -- extension/dist/*.js
+      - name: plugin MCP smoke + dist in sync
+        run: |
+          node plugin/mcp/smoke.mjs
+          node plugin/mcp/build.mjs
+          git diff --exit-code -- plugin/mcp/dist/server.mjs
       - run: npm run test
       # No keys in CI: evals run against the mock, gating plumbing + routing thresholds.
       - run: npm run eval

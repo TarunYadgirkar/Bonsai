@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 // Bundle the stdio MCP server and its deps (@modelcontextprotocol/sdk, zod) into ONE committed
 // file, so a marketplace install (which clones the repo without node_modules) can run it with a
-// bare `node dist/server.mjs` — no install step. Re-run after editing server.mjs; CI checks it.
+// bare `node dist/server.mjs` — no install step. Rebuild with `node plugin/mcp/build.mjs` after editing server.mjs.
 const root = dirname(fileURLToPath(import.meta.url));
 
 await esbuild.build({

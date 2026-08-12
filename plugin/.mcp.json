@@ -1,6 +1,8 @@
 {
-  "bonsai-tree": {
-    "command": "node",
-    "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/dist/server.mjs"]
+  "mcpServers": {
+    "bonsai-tree": {
+      "command": "node",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/mcp/dist/server.mjs"]
+    }
   }
 }

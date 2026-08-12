@@ -49,6 +49,9 @@ a model + effort matched to the question, so cheap questions stop riding on expe
 - One insight per merge. The parent learns a conclusion, not a transcript.
 - Never spawn a branch without registering it via `bonsai_fork` first — an unregistered branch
   is invisible to the tree and its economics are lost.
+- Forking off an existing branch: pass its `parentId` to `bonsai_fork` and carry the parent
+  brief's FIRST fact verbatim as the new brief's first fact — referent closure across depth
+  (mirrors the engine's `anchorFact` pinning).
 - The user can pin: "branch this on opus max" → pass `pinned: {model, effort}` to
   `bonsai_fork`; routing respects it and never silently upgrades.
 - `bonsai_tree` renders the current tree with per-edge economics whenever the user asks where

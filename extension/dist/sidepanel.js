@@ -384,6 +384,10 @@ That is what this branch's brief supports; anything beyond it would need more of
     const budget = params.budgetTokens ?? DEFAULT_BRIEF_BUDGET_TOKENS;
     const { parsed, usage } = await runCompiler(params, deps);
     let facts = parsed.facts.slice(0, MAX_FACTS);
+    const anchor = params.anchorFact?.trim();
+    if (anchor && !anchorCarriedThrough(anchor, facts)) {
+      facts = [anchor, ...facts].slice(0, MAX_FACTS);
+    }
     let markdown = renderBrief({ selection, question, facts, profile: params.profile });
     while (facts.length > 1 && estimateTokens(markdown) > budget) {
       facts = facts.slice(0, -1);
@@ -441,6 +445,12 @@ That is what this branch's brief supports; anything beyond it would need more of
         ...result.servedBy ? { servedBy: result.servedBy } : {}
       }
     };
+  }
+  function anchorCarriedThrough(anchor, facts) {
+    const top = facts[0] ?? "";
+    const entityTokens = anchor.match(/\b(?:[A-Z][\w'-]*|\d[\d,.]*)\b/g) ?? [];
+    if (!entityTokens.length) return top.trim() === anchor;
+    return entityTokens.every((t) => top.includes(t));
   }
   function parseCompilerOutput(text, selection) {
     const start = text.indexOf("{");
@@ -895,7 +905,7 @@ Question: ${params.question}`
     status.textContent = "Reading the conversation\u2026";
     const active2 = await toContent({ type: "GET_ACTIVE" });
     if (!active2?.conversationId) {
-      status.textContent = "Open a Claude chat first, then compile.";
+      status.textContent = "Open a Claude chat (or reload one that was already open \u2014 the content script attaches on page load), then compile.";
       return;
     }
     if (selectionConversationId && selectionConversationId !== active2.conversationId) {

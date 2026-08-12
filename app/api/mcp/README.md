@@ -11,6 +11,10 @@ Built on [`mcp-handler`](https://www.npmjs.com/package/mcp-handler); the route i
 per-process memory map when `DATABASE_URL` is unset or a query fails, with honest
 `[storage: memory only]` labeling).
 
+The hosted instance has **no self-serve key provisioning** — an operator inserts every key by
+hand. If nobody handed you a key, self-hosting is the supported path: see
+[Deploy your own](#deploy-your-own).
+
 ## Tools
 
 | Tool | What it does |
@@ -36,9 +40,21 @@ ON CONFLICT DO NOTHING;
 Generate a high-entropy value (it rides in the URL — treat it like a bearer token, e.g.
 `openssl rand -hex 24`). `validateKey` checks `mcp_users`; unknown keys get a plain `401`.
 
-> The `bonsai-dev-key` row seeded by `migrations/003` is for **local dev only** — with
-> `DATABASE_URL` unset the store runs in memory and only `bonsai-dev-key` validates. Do not use it
-> in a real deployment.
+> `bonsai-dev-key` works **only** when `DATABASE_URL` is unset (in-memory mode); no key is ever
+> seeded into the database. With a database configured, `validateKey` rejects the dev key outright
+> — even a stale seed row from an earlier apply doesn't make it valid (`migrations/003` says to
+> delete such rows).
+
+## Deploy your own
+
+1. Deploy the repo to Vercel — it is a Next.js app; the connector route ships with it.
+2. Create a Neon database and set `DATABASE_URL` on the deployment. Unset, the store runs in
+   memory and only `bonsai-dev-key` validates — fine locally, useless hosted.
+3. Apply `migrations/001` → `005` **in order** (Neon console or `psql`). Each file says
+   apply-per-branch — run them against the Neon branch this deployment points at.
+4. Insert your operator key: the same `INSERT INTO mcp_users` as above, with your own
+   `openssl rand -hex 24` value.
+5. Your connector URL is `https://<your-vercel-domain>/api/mcp/<key>`.
 
 ## Connector URL
 
@@ -50,6 +66,10 @@ The key may also be sent as `Authorization: Bearer <key>` — the same key, an a
 but claude.ai's custom-connector UI only takes a URL, so the path form is what you hand out.
 
 ## Add it in claude.ai
+
+Prerequisites: custom connectors require a **paid claude.ai plan**, and the endpoint must be
+public HTTPS — claude.ai cannot reach `localhost`. For local dev, open a tunnel first
+(e.g. `ngrok http 3000`) and use the tunnel URL as `<host>`.
 
 1. **Settings → Connectors → Add custom connector**.
 2. Paste the connector URL (`https://<host>/api/mcp/<key>`). No auth to configure — it is authless.

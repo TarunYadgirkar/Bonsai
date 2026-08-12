@@ -53,7 +53,7 @@ async function compile(): Promise<void> {
 
   const active = await toContent<ActiveInfo>({ type: 'GET_ACTIVE' });
   if (!active?.conversationId) {
-    status.textContent = 'Open a Claude chat first, then compile.';
+    status.textContent = 'Open a Claude chat (or reload one that was already open — the content script attaches on page load), then compile.';
     return;
   }
   // The selection came from a specific chat; if the active tab has since moved to a different one,

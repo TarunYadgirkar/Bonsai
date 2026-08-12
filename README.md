@@ -55,6 +55,15 @@ comes back. Bonsai is the loop those products don't have:
 | **Chrome extension** (`extension/`) | MV3 side panel over claude.ai. Reads your chat, compiles a brief locally, pre-fills the branch — strictly human-in-the-loop, it never sends. |
 | **MCP connector** (`app/api/mcp/`) | A claude.ai custom connector. Claude compiles the brief in-conversation; the connector holds the tree. Deployed + wired live. |
 
+Install the plugin:
+
+```
+/plugin marketplace add TarunYadgirkar/Bonsai
+/plugin install bonsai@bonsai
+```
+
+(The plugin currently lives on branch `copy-a`, not `main` — reference this branch until promotion, and the repo must be public.)
+
 The durable value is `@bonsai/engine` — a dependency-free TypeScript package the four surfaces all
 consume, and publishable on its own (`cd packages/engine && pnpm publish` builds a typed `dist` via
 `prepublishOnly`). Tree model, path assembly, salience compiler, learning router, honest pricing.

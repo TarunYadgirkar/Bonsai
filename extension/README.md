@@ -42,13 +42,20 @@ forbid). Two consequences you should know:
 
 ## Install (developer / unpacked)
 
+There is no Chrome Web Store listing yet; developer-mode load-unpacked is the only install path.
+
+Run `npm install` at the **repo root** first — esbuild resolves from the root workspaces. `dist/`
+is prebuilt and committed, so the build step is skippable.
+
 ```
 cd extension && node build.mjs   # bundles src/ → dist/ (esbuild)
 ```
 
 Then in Chrome: `chrome://extensions` → enable **Developer mode** → **Load unpacked** →
-select this `extension/` folder. Open any claude.ai chat and click the Bonsai toolbar icon to
-open the side panel.
+select this `extension/` folder. Open any claude.ai chat, then open Chrome's puzzle-piece
+extensions menu, pin Bonsai, and click it to open the side panel (the manifest ships no icons,
+so there's no toolbar icon until you pin it). If a claude.ai tab was already open when you
+loaded the extension, reload that tab — content scripts attach on page load.
 
 ## Verified
 
