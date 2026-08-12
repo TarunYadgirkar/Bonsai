@@ -6,6 +6,7 @@ import {
   abandonNode,
   countNodes,
   createNode,
+  getNode,
   listNodes,
   setInsight,
   storeMode,
@@ -228,20 +229,23 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
       }
       // A supplied parent must be one of this key's own nodes — never attach to another garden's
       // node or a fabricated id (which would then render as an orphan root).
-      const parent = parentId
-        ? (await listNodes(userKey)).find((n) => n.id === parentId)
-        : undefined;
+      const parent = parentId ? await getNode(userKey, parentId) : null;
       if (parentId && !parent) {
         return textResult(`Unknown parentId "${parentId}" for this garden key.`, true);
       }
 
+      // Facts render into the paste block AND become the anchor a descendant fork inherits —
+      // collapse control chars now (same rule as titles/insights) so a crafted fact can't forge
+      // instruction-shaped lines, and can't propagate them down the chain via the pin below.
+      let briefFacts = facts?.length ? facts.map(oneLine) : null;
+
       // Referent closure across compositions, same invariant as the engine (anchorFact pinning):
       // a sub-branch whose question never names the chain's entity must still carry it, or its
       // brief compiles to a dangling "it". The caller is asked to carry the parent's top fact;
-      // if the incoming brief dropped it, pin it server-side.
-      const anchor = parent?.facts?.[0]?.trim();
+      // if the incoming brief dropped it, pin it server-side. The anchor is server-injected
+      // without caller review, so it gets the same one-line collapsing regardless of source.
+      const anchor = parent?.facts?.[0] ? oneLine(parent.facts[0]) : undefined;
       let briefText = brief;
-      let briefFacts = facts ?? null;
       let anchorPinned = false;
       if (anchor) {
         const carrier = briefFacts?.length ? briefFacts : [briefText.split('\n')[0] ?? ''];

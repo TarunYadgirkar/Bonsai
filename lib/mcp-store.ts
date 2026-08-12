@@ -272,6 +272,21 @@ export async function nodeExists(key: string, id: string): Promise<boolean> {
   );
 }
 
+/** Key-scoped point lookup — fork's parent check needs one row, not a listNodes() sweep. */
+export async function getNode(key: string, id: string): Promise<McpNode | null> {
+  return withFallback(
+    'getNode',
+    async () => {
+      const rows = await sql()`SELECT * FROM mcp_nodes WHERE id = ${id} AND user_key = ${key}`;
+      return rows.length > 0 ? rowToNode(rows[0]) : null;
+    },
+    () => {
+      const node = memNodes.get(id);
+      return node && node.userKey === key ? node : null;
+    },
+  );
+}
+
 export async function listNodes(key: string): Promise<McpNode[]> {
   return withFallback(
     'listNodes',
