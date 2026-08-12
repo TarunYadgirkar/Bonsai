@@ -606,60 +606,113 @@ export async function recordRoutingFeedback(
 
 /* ---------- population prior (community cold-start) ---------- */
 
-/** Fewer contributors than this and no prior is served — one user's counters must never be
- *  readable back out of the "community" aggregate. */
-const MIN_PRIOR_CONTRIBUTORS = 3;
+/** Fewer contributors than this and no prior is served. Sessions are free to mint (an unsigned
+ *  cookie, no rate limit), so the bar is well above the k=3 a costly identity would justify. */
+const MIN_PRIOR_CONTRIBUTORS = 10;
 /** How many most-recent profiles feed the fold — recency keeps the prior current and bounds work. */
 const PRIOR_SAMPLE_LIMIT = 1000;
+/** Max value any single counter contributes to the fold. Caps how far one session (organic OR a
+ *  feedback-spamming attacker) can drag the community sum, and bounds what a subtraction attack
+ *  against the aggregate could recover to a clamped shadow of a profile. */
+const PRIOR_STAT_CAP = 20;
 const PRIOR_TTL_MS = 60_000;
 const PRIOR_GLOBAL = Symbol.for('bonsai.population.v1');
 
 export interface PopulationPrior {
-  contributors: number;
+  /** Exact count at/above the threshold; null below it, so the public endpoint never counts
+   *  down how many Sybil sessions an attacker still needs to unlock the aggregate. */
+  contributors: number | null;
   /** Null until enough distinct sessions have contributed, and always null without a database. */
   prior: RoutingProfile | null;
 }
 
-interface PriorCache {
-  at: number;
-  value: PopulationPrior;
+interface PriorCacheSlot {
+  at?: number;
+  value?: PopulationPrior;
+  inflight?: Promise<PopulationPrior>;
 }
 
-function priorCache(): { get: () => PriorCache | undefined; set: (v: PriorCache) => void } {
-  const g = globalThis as typeof globalThis & { [PRIOR_GLOBAL]?: PriorCache };
-  return { get: () => g[PRIOR_GLOBAL], set: (v) => void (g[PRIOR_GLOBAL] = v) };
+function priorSlot(): PriorCacheSlot {
+  const g = globalThis as typeof globalThis & { [PRIOR_GLOBAL]?: PriorCacheSlot };
+  if (!g[PRIOR_GLOBAL]) g[PRIOR_GLOBAL] = {};
+  return g[PRIOR_GLOBAL];
+}
+
+/** Scale a contributor's stats so no counter exceeds the cap — proportional, so the up/down
+ *  RATES the router acts on survive; only the magnitude (one session's voting power) is bounded. */
+function clampProfile(profile: RoutingProfile): RoutingProfile {
+  const clampStats = (stats: RoutingProfile['tiers']): RoutingProfile['tiers'] => {
+    const out = {} as RoutingProfile['tiers'];
+    for (const tier of Object.keys(stats) as (keyof RoutingProfile['tiers'])[]) {
+      const s = stats[tier];
+      const peak = Math.max(s.up, s.down, s.kept, s.dropped, s.moves);
+      if (peak <= PRIOR_STAT_CAP) {
+        out[tier] = { ...s };
+        continue;
+      }
+      const f = PRIOR_STAT_CAP / peak;
+      const up = Math.floor(s.up * f);
+      const down = Math.floor(s.down * f);
+      out[tier] = {
+        up,
+        down,
+        kept: Math.floor(s.kept * f),
+        dropped: Math.floor(s.dropped * f),
+        moves: up + down,
+      };
+    }
+    return out;
+  };
+  const kinds: RoutingProfile['kinds'] = {};
+  for (const [kind, stats] of Object.entries(profile.kinds)) {
+    if (stats) kinds[kind as keyof RoutingProfile['kinds']] = clampStats(stats);
+  }
+  return { version: 2, tiers: clampStats(profile.tiers), kinds };
+}
+
+async function fetchPopulationPrior(): Promise<PopulationPrior> {
+  const rows = (await sql()`
+    SELECT profile FROM routing_profiles ORDER BY updated_at DESC LIMIT ${PRIOR_SAMPLE_LIMIT}
+  `) as unknown as { profile: unknown }[];
+  if (rows.length < MIN_PRIOR_CONTRIBUTORS) return { contributors: null, prior: null };
+  return {
+    contributors: rows.length,
+    prior: mergeProfiles(rows.map((r) => clampProfile(normalizeProfile(r.profile)))),
+  };
 }
 
 /**
  * The community's collective routing memory: every session's learned profile summed into one
  * anonymous aggregate (`mergeProfiles`), served to the router as the cold-start for sessions that
  * have no history of their own. Only behavioral counters are aggregated — no session ids, no text
- * — and nothing is served until MIN_PRIOR_CONTRIBUTORS distinct sessions have contributed.
- * Cached per instance for PRIOR_TTL_MS; failure serves no prior rather than stale panic.
+ * — each contributor's weight is clamped (PRIOR_STAT_CAP), and nothing at all is served until
+ * MIN_PRIOR_CONTRIBUTORS distinct sessions have contributed. Cached per instance for PRIOR_TTL_MS
+ * with a single-flight guard; failure serves no prior rather than stale panic.
+ *
+ * Residual risk, accepted for a keyless demo and noted for the day sessions carry auth: session
+ * cookies are unsigned and free to create, so a determined attacker can still Sybil past the
+ * threshold — the clamp bounds what that recovers to at most a capped, unattributable shadow.
  */
 export async function loadPopulationPrior(): Promise<PopulationPrior> {
-  const none: PopulationPrior = { contributors: 0, prior: null };
+  const none: PopulationPrior = { contributors: null, prior: null };
   if (!dbEnabled()) return none;
-  const cache = priorCache();
-  const hit = cache.get();
-  if (hit && Date.now() - hit.at < PRIOR_TTL_MS) return hit.value;
-  try {
-    const rows = (await sql()`
-      SELECT profile FROM routing_profiles ORDER BY updated_at DESC LIMIT ${PRIOR_SAMPLE_LIMIT}
-    `) as unknown as { profile: unknown }[];
-    const value: PopulationPrior =
-      rows.length >= MIN_PRIOR_CONTRIBUTORS
-        ? {
-            contributors: rows.length,
-            prior: mergeProfiles(rows.map((r) => r.profile as RoutingProfile)),
-          }
-        : { contributors: rows.length, prior: null };
-    cache.set({ at: Date.now(), value });
-    return value;
-  } catch (err) {
-    console.warn(`[store] population prior load failed (${(err as Error).message}) — no prior`);
-    return none;
-  }
+  const slot = priorSlot();
+  if (slot.value && slot.at && Date.now() - slot.at < PRIOR_TTL_MS) return slot.value;
+  if (slot.inflight) return slot.inflight;
+  slot.inflight = fetchPopulationPrior()
+    .then((value) => {
+      slot.at = Date.now();
+      slot.value = value;
+      return value;
+    })
+    .catch((err: Error) => {
+      console.warn(`[store] population prior load failed (${err.message}) — no prior`);
+      return none;
+    })
+    .finally(() => {
+      slot.inflight = undefined;
+    });
+  return slot.inflight;
 }
 
 /* ---------- derived ---------- */

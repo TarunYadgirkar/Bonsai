@@ -12,6 +12,6 @@ export const dynamic = 'force-dynamic';
 export const GET = apiRoute(null, async () => {
   const body: PopulationPrior = await loadPopulationPrior();
   return Response.json(body, {
-    headers: { 'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300' },
+    headers: { 'Cache-Control': 'public, max-age=60, s-maxage=60, stale-while-revalidate=300' },
   });
 });
