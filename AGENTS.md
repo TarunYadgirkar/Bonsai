@@ -105,11 +105,21 @@ Updated: 2026-08-12T01:25:00Z by claude session (lane A)
 2. **(Optional) real models on the deploy.** `vercel env add ANTHROPIC_API_KEY preview`, then
    redeploy the preview — flips it from the extractive mock to real Fable/Opus/Sonnet/Haiku (BYOK,
    bills the API account, not the subscription).
-3. **Finish the extension side-panel smoke** (only unverified piece): open panel → selection lands
-   → Compile → Open branch chat → confirm the brief prefills and NOTHING sends. Chrome's side panel
-   is window chrome, so browser automation (Playwright / claude-in-chrome) can't click it — but
-   **Cowork's local computer use CAN** (screen-level), or a human. Claude Code itself cannot invoke
-   Cowork.
+3. **Finish the extension smoke** (only unverified piece): confirm selection→Compile→Open branch
+   chat prefills the brief and NOTHING sends. Two ways:
+   - **(a) Local Playwright harness** — write a script (`extension/test-e2e.mjs` or similar) that
+     launches Chromium with `--load-extension=extension/`, reaches the extension **service worker**
+     to seed `chrome.storage.session[PENDING_KEY]`, opens `claude.ai/new`, and asserts the composer
+     prefilled + no send fired. This covers the whole prefill/never-send path AND the compile logic
+     (drive `compile.ts`/`store.ts` directly) — everything EXCEPT the literal side-panel button
+     clicks (`chrome.sidePanel` isn't page-addressable even locally). Claude Code CAN build + run
+     this from Bash.
+   - **(b) Screen-level** — Cowork's local computer use (next session is on the **Desktop app**,
+     where Cowork is available) or a human clicks the actual panel buttons. Claude Code can't invoke
+     Cowork itself.
+   Do (a) for regression coverage; (b) once to confirm the real panel UI end-to-end.
+
+Note: next session runs on the **Claude Desktop app** (Cowork available there for the panel smoke).
 
 **Session 2026-08-11 PM — audit + fixes (7 commits on copy-a, all gates green: 172 tests, 10/10
 evals, build clean). A 56-agent adversarial review surfaced 36 verified bugs; the load-bearing
