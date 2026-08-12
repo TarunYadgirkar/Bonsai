@@ -35,7 +35,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "prepublishOnly": "tsup",
+    "prepublishOnly": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm')) { console.error('publish with pnpm — npm ignores the publishConfig exports swap'); process.exit(1) }\" && tsup",
     "clean": "rm -rf dist"
   },
   "publishConfig": {

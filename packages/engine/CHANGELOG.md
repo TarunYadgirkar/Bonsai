@@ -36,6 +36,6 @@ a conversation as a tree rather than a transcript.
 ### Packaging
 
 - Publish-time build via `tsup`: `src/index.ts` → `dist/index.js` (ESM) + `dist/index.d.ts`,
-  targeting Node 18 with sourcemaps. `prepublishOnly` runs the build, and `publishConfig.exports`
+  with sourcemaps. Node `>=20.3` at runtime (`AbortSignal.any`). `prepublishOnly` runs the build, and `publishConfig.exports`
   points the published tarball at `dist/`. The workspace continues to resolve the TS source
   (`exports` → `./src/index.ts`), so no build step is needed in-repo.
