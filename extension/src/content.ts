@@ -84,13 +84,24 @@ function showChip(x: number, y: number, text: string): void {
       text,
       conversationId: conversationIdFromUrl(location.href),
     });
+    // Clearing the selection here means the click's own mouseup sees no text and won't re-show
+    // the chip; the flag also guards against the (rare) case the browser keeps the range alive.
+    suppressNextMouseup = true;
+    window.getSelection()?.removeAllRanges();
     removeChip();
   });
   document.body.appendChild(host);
   chip = host;
 }
 
+/** Set when the Branch chip was just clicked, so the ensuing mouseup doesn't re-open the chip. */
+let suppressNextMouseup = false;
+
 document.addEventListener('mouseup', () => {
+  if (suppressNextMouseup) {
+    suppressNextMouseup = false;
+    return;
+  }
   const sel = window.getSelection();
   const text = sel?.toString().trim() ?? '';
   if (!text || text.length < 3) {

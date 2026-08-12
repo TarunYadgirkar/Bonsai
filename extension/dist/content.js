@@ -115,12 +115,19 @@
         text,
         conversationId: conversationIdFromUrl(location.href)
       });
+      suppressNextMouseup = true;
+      window.getSelection()?.removeAllRanges();
       removeChip();
     });
     document.body.appendChild(host);
     chip = host;
   }
+  var suppressNextMouseup = false;
   document.addEventListener("mouseup", () => {
+    if (suppressNextMouseup) {
+      suppressNextMouseup = false;
+      return;
+    }
     const sel = window.getSelection();
     const text = sel?.toString().trim() ?? "";
     if (!text || text.length < 3) {
