@@ -57,6 +57,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
     question,
     availableTokens,
     anchorMessageId: body.anchorMessageId,
+    anchorFact: path.anchorFact,
   });
   const brief = compiled.brief;
 

@@ -30,6 +30,9 @@ export interface CompileParams {
   availableTokens: number;
   anchorMessageId?: string;
   budgetTokens?: number;
+  /** The inherited brief's top fact (AssembledPath.anchorFact) — pinned into the output so the
+   *  chain's grounding entity survives composition even when this question never names it. */
+  anchorFact?: string;
 }
 
 export interface EngineDeps {
@@ -67,6 +70,12 @@ export async function compileBrief(
 
   // The compiler ranks facts by importance, so trimming from the tail is the cheapest cut.
   let facts = parsed.facts.slice(0, MAX_FACTS);
+  // Referent closure across compositions: the chain's anchor fact leads the brief unless the
+  // compiler already carried it through. One bounded line buys self-containment at any depth.
+  const anchor = params.anchorFact?.trim();
+  if (anchor && !facts.some((f) => f.trim() === anchor)) {
+    facts = [anchor, ...facts].slice(0, MAX_FACTS);
+  }
   let markdown = renderBrief({ selection, question, facts, profile: params.profile });
   while (facts.length > 1 && estimateTokens(markdown) > budget) {
     facts = facts.slice(0, -1);

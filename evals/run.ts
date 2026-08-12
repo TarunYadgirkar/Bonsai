@@ -11,9 +11,11 @@ import {
   complete,
   emptyProfile,
   estimateTokens,
+  mergeProfiles,
   profileFor,
   providerName,
   recordFeedback,
+  renderChatContext,
   route,
   type Conversation,
   type ContextBrief,
@@ -48,6 +50,7 @@ async function compileFor(
     selection,
     question,
     availableTokens: estimateTokens(path.markdown),
+    anchorFact: path.anchorFact,
   });
   return brief;
 }
@@ -56,12 +59,15 @@ async function runCase(c: EvalCase): Promise<Verdict> {
   if (c.kind === 'brief') {
     const brief = await compileFor(c.parent, c.ancestors ?? [], c.selection, c.question);
     const missing = contains(brief.markdown, c.mustContain);
+    const pruneOk = c.minPrunedPct === undefined || brief.prunedPct >= c.minPrunedPct;
     return {
       name: c.name,
-      pass: missing.length === 0,
+      pass: missing.length === 0 && pruneOk,
       detail: missing.length
         ? `brief missing: ${missing.join(', ')} — facts: ${brief.facts.join(' | ').slice(0, 200)}`
-        : `${brief.facts.length} facts, ${brief.briefTokens} tokens`,
+        : `${brief.facts.length} facts, ${brief.briefTokens} tokens, ${brief.prunedPct}% pruned${
+            pruneOk ? '' : ` (want ≥${c.minPrunedPct}%)`
+          }`,
     };
   }
 
@@ -215,13 +221,141 @@ async function learningCase(): Promise<Verdict> {
   };
 }
 
+/**
+ * The depth-2 proof extended one hop: root → timeline branch → deadline branch → a third fork
+ * asking about "an extension on it". Three brief compositions in a row; the grandparent entity
+ * must survive all of them, because no transcript below the root ever names it.
+ */
+async function depthThreeCase(): Promise<Verdict> {
+  const level1 = await compileFor(clubsRoot, [], 'Free Ventures', 'what is the application timeline?');
+  const branch1 = conv({
+    id: 'eval_clubs_c1',
+    title: 'Application timeline',
+    parentId: clubsRoot.id,
+    brief: { ...level1, branchId: 'eval_clubs_c1' },
+    messages: [
+      msg('user', 'what is the application timeline?'),
+      msg('assistant', 'Applications close September 11 with an info session on September 3.'),
+    ],
+  });
+  const level2 = await compileFor(branch1, [clubsRoot], 'the deadline', 'when is the deadline?');
+  const branch2 = conv({
+    id: 'eval_clubs_c2',
+    title: 'The deadline',
+    parentId: branch1.id,
+    brief: { ...level2, branchId: 'eval_clubs_c2' },
+    messages: [
+      msg('user', 'when is the deadline?'),
+      msg('assistant', 'It closes September 11; late submissions are not accepted.'),
+    ],
+  });
+  const depth3 = await compileFor(
+    branch2,
+    [clubsRoot, branch1],
+    'late submissions',
+    'can I get an extension on it?',
+  );
+  const missing = contains(depth3.markdown, ['Free Ventures']);
+  return {
+    name: 'depth-3 referent: entity survives three brief compositions',
+    pass: missing.length === 0,
+    detail: missing.length
+      ? `depth-3 brief lost the referent — facts: ${depth3.facts.join(' | ').slice(0, 200)}`
+      : `resolved through three composed briefs (${depth3.facts.length} facts)`,
+  };
+}
+
+/**
+ * The population prior, end to end: a brand-new user (empty profile) inherits the community's
+ * routing memory. Three users who each upgraded this lookup are folded with mergeProfiles; the
+ * cold-start then routes the same question a tier up, and says the community is why. This is the
+ * network-effect claim — more users → better cold-start — executed rather than asserted.
+ */
+async function populationPriorCase(): Promise<Verdict> {
+  const question = 'When do Free Ventures applications close?';
+  const brief: ContextBrief = {
+    id: 'eval_brief_p',
+    branchId: 'eval_branch_p',
+    selection: 'Free Ventures',
+    markdown: '- Free Ventures applications close September 11.',
+    facts: ['Free Ventures applications close September 11.'],
+    excludedNote: 'Excluded: everything else.',
+    availableTokens: 5000,
+    briefTokens: 60,
+    prunedPct: 98.8,
+  };
+
+  let one = emptyProfile();
+  for (let i = 0; i < 3; i += 1) {
+    one = recordFeedback(one, { kind: 'override', classifiedTier: 'quick', chosenTier: 'deep' });
+  }
+  const population = mergeProfiles([one, one, one]);
+
+  const cold = await route({ question, brief, contextTokens: 60 });
+  const warm = await route({
+    question,
+    brief,
+    contextTokens: 60,
+    profile: emptyProfile(),
+    population,
+  });
+
+  const pass =
+    cold.tier === 'quick' &&
+    warm.tier === 'thoughtful' &&
+    warm.learned === true &&
+    /community/i.test(warm.reason);
+  return {
+    name: 'population prior: a new user cold-starts from the community and the reason says so',
+    pass,
+    detail: `cold=${cold.tier} → warm=${warm.tier} (learned=${warm.learned}) — "${warm.reason.slice(0, 90)}"`,
+  };
+}
+
+/**
+ * The merge loop is closed: an insight distilled from a branch actually re-enters the parent's
+ * prompt. The original deep-read finding was "merge is theater — insights are stored and rendered
+ * but never re-enter any prompt"; this executes the fix.
+ */
+async function mergeLoopCase(): Promise<Verdict> {
+  const parent = conv({
+    id: 'eval_merge_parent',
+    title: 'Berkeley clubs research',
+    messages: [
+      msg('user', 'I am figuring out which Berkeley clubs to join this fall.'),
+      msg('assistant', 'Worth a look: Free Ventures, ML@B, and Blueprint.'),
+    ],
+    insights: [
+      {
+        id: 'eval_insight_1',
+        branchId: 'eval_merge_branch',
+        parentId: 'eval_merge_parent',
+        text: 'Free Ventures applications close September 11.',
+        createdAt: new Date().toISOString(),
+      },
+    ],
+  });
+  const { context } = renderChatContext(parent);
+  const missing = contains(context, ['Learned from branches', 'September 11']);
+  return {
+    name: 'merge loop: a merged insight re-enters the parent prompt context',
+    pass: missing.length === 0,
+    detail: missing.length
+      ? `parent context missing: ${missing.join(', ')}`
+      : 'insight present under "Learned from branches"',
+  };
+}
+
 async function main() {
   console.log(`bonsai evals — provider: ${providerName()}\n`);
   const verdicts: Verdict[] = [];
   for (const c of CASES) verdicts.push(await runCase(c));
   verdicts.push(await depthTwoCase());
+  verdicts.push(await depthThreeCase());
   verdicts.push(await salienceCase());
   verdicts.push(await learningCase());
+  verdicts.push(await populationPriorCase());
+  verdicts.push(await mergeLoopCase());
 
   let failed = 0;
   for (const v of verdicts) {

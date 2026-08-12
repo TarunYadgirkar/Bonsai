@@ -21,6 +21,12 @@ export interface AssembledPath {
   tokens: number;
   /** Parent messages actually in scope (anchor-truncated), for downstream widen decisions. */
   scopedMessages: Message[];
+  /**
+   * The inherited brief's top fact — the chain's anchor. Pass to compileBrief so the entity
+   * grounding the whole branch chain survives every composition (without it, a deep fork whose
+   * question never names the entity can compile to "It closes September 11" — dangling referent).
+   */
+  anchorFact?: string;
 }
 
 /** Nearest ancestor profile — only the root carries one, but any node may be forked. */
@@ -58,7 +64,13 @@ export function assemblePath(params: {
   sections.push(`## Conversation\n${renderTurns(scopedMessages)}`);
 
   const markdown = sections.join('\n\n');
-  return { markdown, tokens: estimateTokens(markdown), scopedMessages };
+  const anchorFact = parent.brief?.facts[0];
+  return {
+    markdown,
+    tokens: estimateTokens(markdown),
+    scopedMessages,
+    ...(anchorFact ? { anchorFact } : {}),
+  };
 }
 
 /**

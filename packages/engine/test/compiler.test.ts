@@ -182,4 +182,30 @@ describe('compileBrief', () => {
     expect(user.content).toContain('Branch question: When do applications close?');
     expect(user.content).toContain(`Parent conversation:\n${pathMarkdown}`);
   });
+  it('pins the inherited anchor fact first so the chain entity survives composition', async () => {
+    const facts = ['It closes September 11.', 'Late submissions are not accepted.'];
+    const { complete } = fakeComplete([
+      llmResult(JSON.stringify({ facts, excludedNote: 'Excluded: everything else.' })),
+    ]);
+    const { brief } = await compileBrief(
+      { ...baseParams, anchorFact: 'Free Ventures applications close September 11.' },
+      { complete },
+    );
+
+    expect(brief.facts[0]).toBe('Free Ventures applications close September 11.');
+    expect(brief.facts).toHaveLength(3);
+  });
+
+  it('does not duplicate the anchor fact when the compiler already carried it through', async () => {
+    const facts = ['Free Ventures applications close September 11.', 'Info session September 3.'];
+    const { complete } = fakeComplete([
+      llmResult(JSON.stringify({ facts, excludedNote: 'Excluded: everything else.' })),
+    ]);
+    const { brief } = await compileBrief(
+      { ...baseParams, anchorFact: 'Free Ventures applications close September 11.' },
+      { complete },
+    );
+
+    expect(brief.facts).toEqual(facts);
+  });
 });

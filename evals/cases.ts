@@ -106,6 +106,65 @@ export const fundingRoot = conv({
   ],
 });
 
+/* ---------- scenario: research funding (TWO deadlines — the referent is ambiguous) ---------- */
+
+export const grantsRoot = conv({
+  id: 'eval_grants_root',
+  title: 'Research funding deadlines',
+  messages: [
+    msg('user', 'Track the deadlines for my research funding applications this fall.'),
+    msg(
+      'assistant',
+      'Two are live: the NSF GRFP fellowship application closes October 21, and the NeurIPS workshop paper deadline is September 30. Both matter for your funding story.',
+    ),
+    msg('user', 'Which one needs letters of recommendation?'),
+    msg(
+      'assistant',
+      'The NeurIPS workshop needs none for papers; the NSF GRFP requires three reference letters, due with the October 21 submission.',
+    ),
+  ],
+});
+
+/* ---------- scenario: long noisy trunk (one buried fact among 12 filler exchanges) ---------- */
+
+function longTrunkMessages(): Message[] {
+  const turns: Message[] = [
+    msg('user', 'Walk me through every financial aid option Berkeley offers.'),
+  ];
+  for (let i = 1; i <= 6; i += 1) {
+    turns.push(msg('user', `What about aid option ${i}?`));
+    turns.push(
+      msg(
+        'assistant',
+        `Aid option ${i} offers standard support with general resources and typical terms for eligible members of the program.`,
+      ),
+    );
+  }
+  turns.push(msg('user', 'Any scholarships tied to housing specifically?'));
+  turns.push(
+    msg(
+      'assistant',
+      'The Regents scholarship covers 9,500 dollars of housing per year, through a separate March 2 FAFSA-linked application.',
+    ),
+  );
+  for (let i = 7; i <= 12; i += 1) {
+    turns.push(msg('user', `And aid option ${i}?`));
+    turns.push(
+      msg(
+        'assistant',
+        `Aid option ${i} offers standard support with general resources and typical terms for eligible members of the program.`,
+      ),
+    );
+  }
+  return turns;
+}
+
+export const aidRoot = conv({
+  id: 'eval_aid_root',
+  title: 'Financial aid sweep',
+  messages: longTrunkMessages(),
+});
+
 /* ---------- case definitions ---------- */
 
 export interface BriefCase {
@@ -117,6 +176,8 @@ export interface BriefCase {
   question: string;
   /** Every entry must appear (case-insensitive) somewhere in the compiled brief's markdown. */
   mustContain: string[];
+  /** When set, the brief must have pruned at least this much of the available context. */
+  minPrunedPct?: number;
 }
 
 export interface RouteCase {
@@ -162,6 +223,23 @@ export const CASES: EvalCase[] = [
     selection: 'stipend amounts',
     question: 'how large is the stipend the programs offer?',
     mustContain: ['Hertz', '55,000'],
+  },
+  {
+    kind: 'brief',
+    name: 'ambiguous antecedent: selection anchors "the deadline" to the NSF GRFP, not NeurIPS',
+    parent: grantsRoot,
+    selection: 'NSF GRFP',
+    question: 'when is the deadline?',
+    mustContain: ['NSF GRFP', 'October 21'],
+  },
+  {
+    kind: 'brief',
+    name: 'long trunk: one buried rare-term fact survives 12 filler exchanges, heavily pruned',
+    parent: aidRoot,
+    selection: 'Regents scholarship',
+    question: 'how much housing money does the scholarship give?',
+    mustContain: ['Regents', '9,500'],
+    minPrunedPct: 60,
   },
   {
     kind: 'route',
