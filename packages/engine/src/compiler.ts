@@ -73,7 +73,7 @@ export async function compileBrief(
   // Referent closure across compositions: the chain's anchor fact leads the brief unless the
   // compiler already carried it through. One bounded line buys self-containment at any depth.
   const anchor = params.anchorFact?.trim();
-  if (anchor && !facts.some((f) => f.trim() === anchor)) {
+  if (anchor && !anchorCarriedThrough(anchor, facts)) {
     facts = [anchor, ...facts].slice(0, MAX_FACTS);
   }
   let markdown = renderBrief({ selection, question, facts, profile: params.profile });
@@ -143,6 +143,20 @@ async function runCompiler(
       ...(result.servedBy ? { servedBy: result.servedBy } : {}),
     },
   };
+}
+
+/**
+ * Has the compiler already carried the anchor's content through, possibly rephrased? True when
+ * every entity-bearing token of the anchor (capitalized words, numbers) appears somewhere across
+ * the kept facts — "Free Ventures closes September 11" carries "Free Ventures applications close
+ * September 11." even though no fact matches verbatim. Anchors with no entity tokens fall back to
+ * verbatim comparison.
+ */
+function anchorCarriedThrough(anchor: string, facts: string[]): boolean {
+  const entityTokens = anchor.match(/\b(?:[A-Z][\w'-]*|\d[\d,.]*)\b/g) ?? [];
+  if (!entityTokens.length) return facts.some((f) => f.trim() === anchor);
+  const union = facts.join(' ');
+  return entityTokens.every((t) => union.includes(t));
 }
 
 function parseCompilerOutput(text: string, selection: string): CompilerOutput {

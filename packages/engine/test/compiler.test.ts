@@ -208,4 +208,16 @@ describe('compileBrief', () => {
 
     expect(brief.facts).toEqual(facts);
   });
+  it('skips the pin when the compiler carried the anchor through rephrased', async () => {
+    const facts = ['Free Ventures closes September 11.', 'Late submissions are not accepted.'];
+    const { complete } = fakeComplete([
+      llmResult(JSON.stringify({ facts, excludedNote: 'Excluded: everything else.' })),
+    ]);
+    const { brief } = await compileBrief(
+      { ...baseParams, anchorFact: 'Free Ventures applications close September 11.' },
+      { complete },
+    );
+
+    expect(brief.facts).toEqual(facts);
+  });
 });
