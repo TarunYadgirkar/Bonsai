@@ -1,12 +1,12 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
+import { anchorCarriedThrough } from '@bonsai/engine';
 import {
   MAX_NODES_PER_KEY,
   abandonNode,
   countNodes,
   createNode,
   listNodes,
-  nodeExists,
   setInsight,
   storeMode,
   summarize,
@@ -41,6 +41,35 @@ const forkInput = z.object({
   availableTokensEstimate: z.number().int().positive().optional(),
 });
 
+const totalsOutput = z.object({
+  branches: z.number(),
+  open: z.number(),
+  merged: z.number(),
+  abandoned: z.number(),
+  availableTokens: z.number(),
+  briefTokens: z.number(),
+  prunedPct: z.number().nullable(),
+});
+
+const forkOutput = z.object({
+  branchId: z.string(),
+  routing: z.object({ model: z.string(), effort: z.string(), tier: z.string() }),
+  economics: z.object({
+    briefTokens: z.number(),
+    availableTokens: z.number().nullable(),
+    prunedPct: z.number().nullable(),
+  }),
+  /** True when the server pinned the parent brief's anchor fact the caller dropped. */
+  anchorPinned: z.boolean(),
+  pasteBlock: z.string(),
+});
+
+const mergeOutput = z.object({
+  branchId: z.string(),
+  insight: z.string(),
+  totals: totalsOutput,
+});
+
 const treeNodeOutput = z.object({
   id: z.string(),
   parentId: z.string().nullable(),
@@ -57,15 +86,7 @@ const treeNodeOutput = z.object({
 
 const treeOutput = z.object({
   nodes: z.array(treeNodeOutput),
-  totals: z.object({
-    branches: z.number(),
-    open: z.number(),
-    merged: z.number(),
-    abandoned: z.number(),
-    availableTokens: z.number(),
-    briefTokens: z.number(),
-    prunedPct: z.number().nullable(),
-  }),
+  totals: totalsOutput,
 });
 
 function fmt(n: number): string {
@@ -192,8 +213,10 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         "every referent resolved (no bare 'it', 'the deadline', 'that approach'; name the actual thing), " +
         'plus one line stating what was deliberately excluded. Send the compiled brief, never raw transcript. ' +
         'Returns a paste-ready brief for a NEW claude.ai chat, the branchId, the routing (model · effort), ' +
-        'and the pruning economics.',
+        'and the pruning economics. When forking off an existing branch (parentId set), carry the parent ' +
+        "brief's FIRST fact as this brief's first fact — the server pins it for you if you drop it.",
       inputSchema: forkInput,
+      outputSchema: forkOutput,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
     },
     async ({ parentId, question, brief, facts, excludedNote, model, effort, availableTokensEstimate }) => {
@@ -205,10 +228,31 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
       }
       // A supplied parent must be one of this key's own nodes — never attach to another garden's
       // node or a fabricated id (which would then render as an orphan root).
-      if (parentId && !(await nodeExists(userKey, parentId))) {
+      const parent = parentId
+        ? (await listNodes(userKey)).find((n) => n.id === parentId)
+        : undefined;
+      if (parentId && !parent) {
         return textResult(`Unknown parentId "${parentId}" for this garden key.`, true);
       }
-      const briefTokens = Math.ceil(brief.length / 4);
+
+      // Referent closure across compositions, same invariant as the engine (anchorFact pinning):
+      // a sub-branch whose question never names the chain's entity must still carry it, or its
+      // brief compiles to a dangling "it". The caller is asked to carry the parent's top fact;
+      // if the incoming brief dropped it, pin it server-side.
+      const anchor = parent?.facts?.[0]?.trim();
+      let briefText = brief;
+      let briefFacts = facts ?? null;
+      let anchorPinned = false;
+      if (anchor) {
+        const carrier = briefFacts?.length ? briefFacts : [briefText.split('\n')[0] ?? ''];
+        if (!anchorCarriedThrough(anchor, carrier)) {
+          briefFacts = [anchor, ...(briefFacts ?? [])];
+          briefText = `- ${anchor}\n${briefText}`;
+          anchorPinned = true;
+        }
+      }
+
+      const briefTokens = Math.ceil(briefText.length / 4);
       const prunedPct = availableTokensEstimate
         ? Math.max(0, Math.round((1 - briefTokens / availableTokensEstimate) * 1000) / 10)
         : null;
@@ -217,8 +261,8 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         parentId: parentId ?? null,
         title: question.replace(/\s+/g, ' ').trim().slice(0, 60),
         question,
-        brief,
-        facts: facts ?? null,
+        brief: briefText,
+        facts: briefFacts,
         excludedNote: excludedNote ?? null,
         model,
         effort,
@@ -227,18 +271,35 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         briefTokens,
         prunedPct,
       });
+      const paste = pasteBlock(node);
       const text = [
         `Branch created.`,
         `branchId: ${node.id}`,
         `Routing: ${model} · ${effort} (${node.tier})`,
         `Economics: ${economicsLine(node)}${storageNote()}`,
+        ...(anchorPinned
+          ? [`Note: the parent brief's anchor fact was missing and has been pinned as fact 1.`]
+          : []),
         '',
         'Paste everything between the rules into a NEW claude.ai chat:',
         '─'.repeat(40),
-        pasteBlock(node),
+        paste,
         '─'.repeat(40),
       ].join('\n');
-      return textResult(text);
+      return {
+        content: [{ type: 'text' as const, text }],
+        structuredContent: {
+          branchId: node.id,
+          routing: { model, effort, tier: node.tier ?? TIER_BY_MODEL[model] },
+          economics: {
+            briefTokens,
+            availableTokens: availableTokensEstimate ?? null,
+            prunedPct,
+          },
+          anchorPinned,
+          pasteBlock: paste,
+        },
+      };
     },
   );
 
@@ -254,6 +315,7 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         branchId: z.string().min(1),
         insight: z.string().min(1).max(600),
       }),
+      outputSchema: mergeOutput,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
     async ({ branchId, insight: rawInsight }) => {
@@ -262,7 +324,15 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
       const node = await setInsight(branchId, insight, userKey);
       if (!node) return textResult(`Unknown branchId "${branchId}" for this garden key.`, true);
       const totals = await treeSummary(userKey);
-      return textResult(`Merged ${branchId}: "${insight}"\nTree: ${summaryLine(totals)}${storageNote()}`);
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Merged ${branchId}: "${insight}"\nTree: ${summaryLine(totals)}${storageNote()}`,
+          },
+        ],
+        structuredContent: { branchId: node.id, insight, totals },
+      };
     },
   );
 

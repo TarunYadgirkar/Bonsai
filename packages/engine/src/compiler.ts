@@ -153,7 +153,7 @@ async function runCompiler(
  * composition's anchor IS facts[0], so entities scattered anywhere else would satisfy this brief
  * yet break the chain one level down. Anchors with no entity tokens compare verbatim.
  */
-function anchorCarriedThrough(anchor: string, facts: string[]): boolean {
+export function anchorCarriedThrough(anchor: string, facts: string[]): boolean {
   const top = facts[0] ?? '';
   const entityTokens = anchor.match(/\b(?:[A-Z][\w'-]*|\d[\d,.]*)\b/g) ?? [];
   if (!entityTokens.length) return top.trim() === anchor;

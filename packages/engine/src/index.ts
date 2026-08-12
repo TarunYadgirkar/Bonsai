@@ -40,6 +40,7 @@ export {
   type ProviderResult,
 } from './provider';
 export {
+  anchorCarriedThrough,
   compileBrief,
   type CompileParams,
   type CompileResult,
