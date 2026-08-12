@@ -12,6 +12,7 @@ import {
   availableTokensFor,
   commit,
   getConversation,
+  loadPopulationPrior,
   loadProfile,
   loadWorkingSet,
   logInference,
@@ -67,6 +68,10 @@ export const POST = apiRoute(ChatRequestSchema, async (body, request) => {
   const { context, contextTokens } = renderChatContext(conversation);
 
   const pinnedTier = body.pinnedTier ?? conversation.pinnedTier;
+  const [profile, population] = await Promise.all([
+    loadProfile(session.id),
+    loadPopulationPrior(),
+  ]);
   const initial = await route({
     question: body.content,
     brief: conversation.brief,
@@ -74,7 +79,8 @@ export const POST = apiRoute(ChatRequestSchema, async (body, request) => {
     pinnedTier,
     mode: body.mode,
     pinnedMode: conversation.pinnedMode,
-    profile: await loadProfile(session.id),
+    profile,
+    population: population.prior ?? undefined,
   });
 
   const result = await completeWithEscalation({

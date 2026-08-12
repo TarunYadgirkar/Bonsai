@@ -16,6 +16,7 @@ import {
   buildTree,
   commit,
   getConversation,
+  loadPopulationPrior,
   loadProfile,
   loadWorkingSet,
   logInference,
@@ -91,12 +92,17 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
   let escalatedFrom: { tier: RoutingDecision['tier']; kind?: RoutingDecision['kind'] } | null = null;
 
   if (question) {
+    const [profile, population] = await Promise.all([
+      loadProfile(session.id),
+      loadPopulationPrior(),
+    ]);
     const initial = await route({
       question,
       brief,
       contextTokens: brief.briefTokens,
       mode: body.mode,
-      profile: await loadProfile(session.id),
+      profile,
+      population: population.prior ?? undefined,
     });
     const result = await completeWithEscalation({
       routing: initial,

@@ -17,6 +17,7 @@ import {
   availableTokensFor as availableTokensForIn,
   buildTree as buildTreeOf,
   emptyProfile,
+  mergeProfiles,
   normalizeProfile,
   prunedPct,
   recordFeedback,
@@ -601,6 +602,64 @@ export async function recordRoutingFeedback(
     }
   }
   profileMap().set(sessionId, next);
+}
+
+/* ---------- population prior (community cold-start) ---------- */
+
+/** Fewer contributors than this and no prior is served — one user's counters must never be
+ *  readable back out of the "community" aggregate. */
+const MIN_PRIOR_CONTRIBUTORS = 3;
+/** How many most-recent profiles feed the fold — recency keeps the prior current and bounds work. */
+const PRIOR_SAMPLE_LIMIT = 1000;
+const PRIOR_TTL_MS = 60_000;
+const PRIOR_GLOBAL = Symbol.for('bonsai.population.v1');
+
+export interface PopulationPrior {
+  contributors: number;
+  /** Null until enough distinct sessions have contributed, and always null without a database. */
+  prior: RoutingProfile | null;
+}
+
+interface PriorCache {
+  at: number;
+  value: PopulationPrior;
+}
+
+function priorCache(): { get: () => PriorCache | undefined; set: (v: PriorCache) => void } {
+  const g = globalThis as typeof globalThis & { [PRIOR_GLOBAL]?: PriorCache };
+  return { get: () => g[PRIOR_GLOBAL], set: (v) => void (g[PRIOR_GLOBAL] = v) };
+}
+
+/**
+ * The community's collective routing memory: every session's learned profile summed into one
+ * anonymous aggregate (`mergeProfiles`), served to the router as the cold-start for sessions that
+ * have no history of their own. Only behavioral counters are aggregated — no session ids, no text
+ * — and nothing is served until MIN_PRIOR_CONTRIBUTORS distinct sessions have contributed.
+ * Cached per instance for PRIOR_TTL_MS; failure serves no prior rather than stale panic.
+ */
+export async function loadPopulationPrior(): Promise<PopulationPrior> {
+  const none: PopulationPrior = { contributors: 0, prior: null };
+  if (!dbEnabled()) return none;
+  const cache = priorCache();
+  const hit = cache.get();
+  if (hit && Date.now() - hit.at < PRIOR_TTL_MS) return hit.value;
+  try {
+    const rows = (await sql()`
+      SELECT profile FROM routing_profiles ORDER BY updated_at DESC LIMIT ${PRIOR_SAMPLE_LIMIT}
+    `) as unknown as { profile: unknown }[];
+    const value: PopulationPrior =
+      rows.length >= MIN_PRIOR_CONTRIBUTORS
+        ? {
+            contributors: rows.length,
+            prior: mergeProfiles(rows.map((r) => r.profile as RoutingProfile)),
+          }
+        : { contributors: rows.length, prior: null };
+    cache.set({ at: Date.now(), value });
+    return value;
+  } catch (err) {
+    console.warn(`[store] population prior load failed (${(err as Error).message}) — no prior`);
+    return none;
+  }
 }
 
 /* ---------- derived ---------- */
