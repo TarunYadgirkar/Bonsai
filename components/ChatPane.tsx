@@ -62,6 +62,7 @@ export function ChatPane({
   highlightInsightId,
   initialDraft,
   onDraftRestored,
+  onLoadDemo,
 }: {
   conversation: Conversation;
   /** Resolves false when the send failed, so the composer can restore the draft. */
@@ -79,11 +80,14 @@ export function ChatPane({
   initialDraft?: string;
   /** Called once this branch's recovered draft has been seeded, so the parent can drop it. */
   onDraftRestored?: () => void;
+  /** Fresh-root empty state's CTA — loads the example tree into this session. */
+  onLoadDemo?: () => Promise<void>;
 }) {
   // Seed from a recovered failed-send draft: ChatPane remounts per branch, so a plain local
   // restore is lost if the user switched branches mid-send. The parent hands it back here.
   const [draft, setDraft] = useState(initialDraft ?? '');
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [demoLoading, setDemoLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -224,6 +228,9 @@ export function ChatPane({
       <div
         ref={scrollRef}
         onMouseUp={captureSelection}
+        // Touch selection settles after touchend fires — read it a beat later or the Branch
+        // button never appears on phones.
+        onTouchEnd={() => setTimeout(captureSelection, 120)}
         onScroll={captureSelection}
         className="flex-1 overflow-y-auto px-6 py-4"
       >
@@ -244,6 +251,54 @@ export function ChatPane({
                 {brief.excludedNote}
               </p>
             </details>
+          )}
+
+          {/* Fresh root: the loop is invisible until there is text to select — explain it. */}
+          {conversation.messages.length === 0 && !conversation.parentId && !branching && (
+            <div className="mx-auto mt-12 max-w-sm text-center">
+              <p className="eyebrow">how bonsai works</p>
+              <ol className="mt-3 flex flex-col gap-2 text-left text-xs leading-relaxed text-ink-soft">
+                <li>
+                  <span className="text-ink">1 · Ask anything below.</span> The router picks a
+                  model and effort per question.
+                </li>
+                <li>
+                  <span className="text-ink">2 · Select text in an answer → Branch.</span> The
+                  side question forks off with a compiled minimal brief instead of the whole
+                  history.
+                </li>
+                <li>
+                  <span className="text-ink">3 · Merge insight.</span> One distilled line returns
+                  to the trunk — the rest of the branch stays pruned.
+                </li>
+              </ol>
+              {onLoadDemo && (
+                <button
+                  onClick={async () => {
+                    setDemoLoading(true);
+                    try {
+                      await onLoadDemo();
+                    } finally {
+                      setDemoLoading(false);
+                    }
+                  }}
+                  disabled={demoLoading}
+                  className="mt-5 rounded-md border border-moss px-4 py-1.5 text-xs font-medium text-moss transition-colors hover:bg-moss-wash disabled:opacity-40"
+                >
+                  {demoLoading ? 'Growing…' : 'Load an example conversation tree'}
+                </button>
+              )}
+              <p className="mt-4 text-[10px] text-bark">
+                <a
+                  href="https://github.com/TarunYadgirkar/Bonsai"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline hover:text-ink-soft"
+                >
+                  How it works, honestly — the repo
+                </a>
+              </p>
+            </div>
           )}
 
           {conversation.messages.map((message) => (

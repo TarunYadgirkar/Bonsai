@@ -17,10 +17,26 @@ const mono = IBM_Plex_Mono({
   weight: ["400", "500"],
 });
 
+const TITLE = "Bonsai — prune the conversation to its living wood";
+const DESCRIPTION =
+  "Tree-structured AI chat: branch a side question with a compiled minimal brief, auto-route the model and effort, merge one distilled insight back.";
+
 export const metadata: Metadata = {
-  title: "Bonsai — prune the conversation to its living wood",
-  description:
-    "Tree-structured AI chat: branch a side question with a compiled minimal brief, auto-route the model and effort, merge one distilled insight back.",
+  metadataBase: new URL("https://bonsai-connector.vercel.app"),
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    type: "website",
+    images: [{ url: "/og.jpg", width: 1200, height: 630, alt: "The Bonsai garden and chat pane" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESCRIPTION,
+    images: ["/og.jpg"],
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

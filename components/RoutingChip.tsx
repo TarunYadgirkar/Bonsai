@@ -82,6 +82,13 @@ export function RoutingChip({
         {routing.overridden && (
           <span className="text-[10px] text-bark">pinned</span>
         )}
+        {/* servedBy is set only by a live provider — its absence means the extractive mock
+            answered, and that must be visible on the message, not buried in a hover card. */}
+        {!routing.servedBy && (
+          <span className="rounded-full border border-rule bg-paper-sunk px-1.5 py-0.5 text-[10px] text-bark">
+            demo answer
+          </span>
+        )}
 
         {/* Hover card — "Why did Bonsai choose this?" A paper note, not a dark tooltip. */}
         {!menuOpen && (

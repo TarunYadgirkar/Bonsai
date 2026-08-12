@@ -16,10 +16,25 @@ import { MergeFlight, type Flight } from './MergeFlight';
 import { TreeSidebar, type NodeStats } from './TreeSidebar';
 import { conversationTokens } from './tokens';
 
+/**
+ * The API writes human-readable error bodies ("state not persisted — database write failed",
+ * zod field issues) — surface those, not `POST /api/x → 400`. Falls back to the status line
+ * when the body isn't the ApiError shape.
+ */
+async function httpError(res: Response, label: string): Promise<Error> {
+  const fallback = `${label} → ${res.status}`;
+  try {
+    const body = (await res.json()) as { error?: unknown };
+    return new Error(typeof body.error === 'string' && body.error ? body.error : fallback);
+  } catch {
+    return new Error(fallback);
+  }
+}
+
 /** Pure fetch — returns data, touches no state, so effects can own their own setState. */
 async function fetchState(): Promise<StateResponse> {
   const res = await fetch('/api/state');
-  if (!res.ok) throw new Error(`GET /api/state → ${res.status}`);
+  if (!res.ok) throw await httpError(res, 'GET /api/state');
   return res.json();
 }
 
@@ -218,7 +233,7 @@ export function Workspace() {
           mode: hadPending ? (pending ?? { mode: 'auto' as const }) : undefined,
         }),
       });
-      if (!res.ok) throw new Error(`POST /api/chat → ${res.status}`);
+      if (!res.ok) throw await httpError(res, 'POST /api/chat');
       const data: ChatResponse = await res.json();
 
       // The server persisted the pick — pinnedMode is the truth from here on. Drop the entry
@@ -284,7 +299,7 @@ export function Workspace() {
           mode: (parent && modeFor(parent)) ?? undefined,
         }),
       });
-      if (!res.ok) throw new Error(`POST /api/branch → ${res.status}`);
+      if (!res.ok) throw await httpError(res, 'POST /api/branch');
       const data: BranchResponse = await res.json();
       applyState(await fetchState());
       select(data.node.id); // drop the user straight into the new branch
@@ -305,7 +320,7 @@ export function Workspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ branchId: activeId, archive: true }),
       });
-      if (!res.ok) throw new Error(`POST /api/merge → ${res.status}`);
+      if (!res.ok) throw await httpError(res, 'POST /api/merge');
       const data: MergeResponse = await res.json();
 
       // Measure the target before the refetch reflows anything.
@@ -328,7 +343,7 @@ export function Workspace() {
   const loadDemo = async () => {
     try {
       const res = await fetch('/api/demo', { method: 'POST' });
-      if (!res.ok) throw new Error(`POST /api/demo → ${res.status}`);
+      if (!res.ok) throw await httpError(res, 'POST /api/demo');
       const data: StateResponse = await res.json();
       setState(data);
       setPendingModes({});
@@ -351,7 +366,7 @@ export function Workspace() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
-      if (!res.ok) throw new Error(`POST /api/conversation → ${res.status}`);
+      if (!res.ok) throw await httpError(res, 'POST /api/conversation');
       const data: { node: { id: string } } = await res.json();
       applyState(await fetchState());
       select(data.node.id);
@@ -378,7 +393,7 @@ export function Workspace() {
   const reset = async () => {
     try {
       const res = await fetch('/api/reset', { method: 'POST' });
-      if (!res.ok) throw new Error(`POST /api/reset → ${res.status}`);
+      if (!res.ok) throw await httpError(res, 'POST /api/reset');
       const data: StateResponse = await res.json();
       setState(data);
       setPendingModes({});
@@ -527,6 +542,7 @@ export function Workspace() {
           }
           initialDraft={failedDraft?.branchId === active.id ? failedDraft.content : undefined}
           onDraftRestored={() => setFailedDraft(null)}
+          onLoadDemo={loadDemo}
         />
       ) : (
         <section className="flex flex-1 items-center justify-center bg-paper">
