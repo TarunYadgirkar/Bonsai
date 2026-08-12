@@ -57,9 +57,10 @@ deploy — see BUILDLOG. Open items, in order:
 0. **Promote to production.** Migrate the LIVE Neon branch `br-old-fog` with `migrations/004`
    (the classifier blocked DDL there — do it in the Neon console), then `vercel --prod` from the
    worktree (linked to bonsai-connector). Migration must land BEFORE the deploy or writes 503.
-1. **Finish the extension smoke** (human-watched): open the side panel → selection lands → Compile
-   → Open branch chat → confirm brief prefills and nothing sends. Only the panel's own buttons are
-   unverified; the content script + Branch chip are confirmed live.
+1. **Finish the extension smoke**: open the side panel → selection lands → Compile → Open branch
+   chat → confirm brief prefills and nothing sends. Only the panel's own buttons are unverified
+   (content script + Branch chip are confirmed live). Chrome's side panel is window chrome, so
+   page automation can't click it — use Cowork's local computer use or a human.
 2. (Optional) real models on the web deploy: `vercel env add ANTHROPIC_API_KEY preview` → redeploy.
 3. Promote `copy-a` → `main`/live demo when ready.
 4. **Population-prior data pipeline** (the moat's remaining work) — server-side anonymized

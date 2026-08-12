@@ -94,7 +94,22 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-12T01:10:00Z by claude session (lane A)
+Updated: 2026-08-12T01:25:00Z by claude session (lane A)
+
+### ▶ NEXT SESSION — do these first
+1. **Promote to production.** Migrate the LIVE Neon branch `br-old-fog` with `migrations/004`
+   (two `ALTER … ADD COLUMN session_id` + two `CREATE INDEX`; the DELETE is optional) in the Neon
+   console — the auto-mode classifier blocks DDL on that branch from here. Then `vercel --prod`
+   from `~/TarunsCode/bonsai-copy-a` (worktree linked to bonsai-connector). Migration MUST land
+   before the deploy or new-code writes 503.
+2. **(Optional) real models on the deploy.** `vercel env add ANTHROPIC_API_KEY preview`, then
+   redeploy the preview — flips it from the extractive mock to real Fable/Opus/Sonnet/Haiku (BYOK,
+   bills the API account, not the subscription).
+3. **Finish the extension side-panel smoke** (only unverified piece): open panel → selection lands
+   → Compile → Open branch chat → confirm the brief prefills and NOTHING sends. Chrome's side panel
+   is window chrome, so browser automation (Playwright / claude-in-chrome) can't click it — but
+   **Cowork's local computer use CAN** (screen-level), or a human. Claude Code itself cannot invoke
+   Cowork.
 
 **Session 2026-08-11 PM — audit + fixes (7 commits on copy-a, all gates green: 172 tests, 10/10
 evals, build clean). A 56-agent adversarial review surfaced 36 verified bugs; the load-bearing
@@ -154,11 +169,10 @@ then `vercel --prod`.
 
 **Extension** loaded unpacked + verified live: content script injects, Branch chip appears on
 selection and dismisses cleanly (chip-clear fix). **NOT verified:** the side panel's own buttons
-(Compile / Open branch chat) — Chrome's side panel is browser chrome, not page DOM, so no browser
-automation (Playwright, claude-in-chrome, or cloud Cowork) can click it. Needs a human-watched
-pass: open panel → confirm selection lands → Compile → Open branch chat → confirm the brief
-prefills and NOTHING sends. Rebuild after edits: `node extension/build.mjs`, then ↻ on the
-chrome://extensions card.
+(Compile / Open branch chat) — Chrome's side panel is browser chrome, not page DOM, so page-scoped
+browser automation (Playwright, claude-in-chrome) can't click it. Cowork's local screen-level
+computer use CAN (Claude Code can't invoke Cowork), or a human. Rebuild after edits:
+`node extension/build.mjs`, then ↻ on the chrome://extensions card.
 
 **Bonsai is a four-surface product with a defensible engine, a designed UI, and OSS-grade docs.**
 
