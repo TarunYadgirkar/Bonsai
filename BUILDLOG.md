@@ -3,6 +3,59 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-08-12 — Adversarial audit → all 36 findings fixed → live-deployed + tested
+
+A 56-agent adversarial review (8 dimensions, verify pass) of the whole copy-a diff surfaced 36
+verified bugs. All fixed across five committed batches; gates green throughout (173 tests, 10/10
+evals, plugin smoke 12/12, root + extension typecheck, both builds).
+
+- **Per-session gardens** (the user's headline ask): the web app no longer preloads the Berkeley
+  fixture for everyone. `lib/session.ts` cookie + `session_id` column (`migrations/004`); a fresh
+  visitor lands on an EMPTY root that answers from its own transcript; Berkeley is opt-in via
+  `/api/demo` ("Load Berkeley demo"). Store rewritten around this; a memory-fallback working set
+  refuses to write back over a DB that only failed to READ (was clobbering real rows).
+- **Connector auth fails closed**: rejects the repo-literal `bonsai-dev-key` whenever DATABASE_URL
+  is set, rejects (not memory-falls-back) on DB error; sticky degrade → 30s cooldown; per-key node
+  cap + parentId ownership check; path key canonical vs bearer; dev-key seed removed from mig 003.
+- **Learning router**: feedback attributed to the classifier's PRE-adjustment tier
+  (`RoutingDecision.classifiedTier`) so a bad learned shift self-corrects; inherited pins no longer
+  re-log an override every turn.
+- **Engine**: fork anchors honoured + fail closed on unknown anchor; mock compiler carries the
+  inherited brief forward instead of injecting the Berkeley fixture (depth-2 proof now genuine —
+  it had been passing on the fixture); non-string facts filtered before the empty-brief gate;
+  provider propagates a caller abort; baseline scaled onto the strong model's 1.3x tokenizer;
+  `buildLog` persists the engine's real per-attempt cost (escalation + `costForServedBy`).
+- **Plugin**: bundled self-contained (`mcp/dist/server.mjs`, install needs no npm); cross-process
+  store lock; coverage retry supersedes phantom siblings + abandoned drop out of economics; routed
+  effort rendered into the subagent prompt; insight cap 20 everywhere.
+- **Extension**: session storage opened to the content script (prefill was a silent no-op);
+  fresh-chat link guard; selection-tab guard; orgId UUID validation; per-kind feedback;
+  **structural never-send** (esbuild stub — 0 model-POST refs in the bundle); dropped `tabs`
+  permission; Branch chip clears the selection on click so it dismisses cleanly.
+- **Web UI**: failed-send draft survives a branch switch; routing chip no longer flickers to Auto;
+  economics dialog traps focus.
+- **Garden artifact** reworked into a real left-to-right tree diagram (same URL b1b44d60).
+- Left deliberately (documented in place): connector open CORS/origin (claude.ai initialize breaks
+  with strict validation); per-session routing-profile read-modify-write (last-write-wins,
+  negligible per-session contention).
+
+**Live-deployed + tested.** Preview deploy of the new code + migrated Neon branch
+(`br-small-mode-avqh6i55`) at
+https://bonsai-connector-kqdihj0ni-taruns-projects-248def65.vercel.app — production
+bonsai-connector.vercel.app UNTOUCHED and verified healthy. Drove a full multi-turn conversation
+via Playwright: per-session empty root, routing (open-ended escalates, brief-covered lookup →
+Haiku Low), text-select→branch→compiled brief (85%+ pruned)→merge insight to trunk→persists across
+reload; economics ledger with the cost fixes visible. Connector fork/merge exercised live on the
+claude.ai account. Extension loaded unpacked + verified in the browser: content script injects,
+Branch chip appears on selection and (after the fix) dismisses cleanly. **Not verified:** the side
+panel's own buttons (Compile / Open branch chat) — Chrome's side panel is browser chrome, not page
+DOM, so no automation tool can drive it; needs a human-watched pass. Web deploy runs in MOCK mode
+(no ANTHROPIC_API_KEY set) — extractive, not real models; a key makes it BYOK-real.
+
+**Still needs Tarun:** promote to production (migrate the LIVE branch `br-old-fog` — classifier
+blocked my DDL there — then `vercel --prod`); optionally add ANTHROPIC_API_KEY to the preview for
+real models; finish the manual side-panel smoke of the extension.
+
 ## 2026-08-11 — Engine intelligence + moat + OSS A- (advanced-features round)
 
 Driven by "make the advanced stuff insane; explore the moat; A+ open source; recruiter-grade."

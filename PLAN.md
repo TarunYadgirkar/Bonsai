@@ -51,11 +51,21 @@ Each segment: build clean → commit → push. Reviews per repo auto-routing.
 
 ## Next (a fresh session picks; nothing in flight)
 
-1. Promote `copy-a` → `main`/live demo when Tarun is ready.
-2. **Population-prior data pipeline** (the moat's remaining work) — server-side anonymized
+Phase 3 (2026-08-12): the 36-finding adversarial audit is fully fixed + live-tested on a preview
+deploy — see BUILDLOG. Open items, in order:
+
+0. **Promote to production.** Migrate the LIVE Neon branch `br-old-fog` with `migrations/004`
+   (the classifier blocked DDL there — do it in the Neon console), then `vercel --prod` from the
+   worktree (linked to bonsai-connector). Migration must land BEFORE the deploy or writes 503.
+1. **Finish the extension smoke** (human-watched): open the side panel → selection lands → Compile
+   → Open branch chat → confirm brief prefills and nothing sends. Only the panel's own buttons are
+   unverified; the content script + Branch chip are confirmed live.
+2. (Optional) real models on the web deploy: `vercel env add ANTHROPIC_API_KEY preview` → redeploy.
+3. Promote `copy-a` → `main`/live demo when ready.
+4. **Population-prior data pipeline** (the moat's remaining work) — server-side anonymized
    aggregation feeding `mergeProfiles`; the engine mechanism is built + tested, the plumbing isn't.
-3. Publish the brief-fidelity benchmark publicly; expand scenarios.
-4. `pnpm publish @bonsai/engine`; MCP Apps interactive tree inline in claude.ai (connector already
+5. Publish the brief-fidelity benchmark publicly; expand scenarios.
+6. `pnpm publish @bonsai/engine`; MCP Apps interactive tree inline in claude.ai (connector already
    returns `structuredContent`); connector OAuth; streaming chat.
 
 ## Surface decision (segment 6) — DECIDED 2026-08-11

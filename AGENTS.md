@@ -94,7 +94,7 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-11T21:30:00Z by claude session (lane A)
+Updated: 2026-08-12T01:10:00Z by claude session (lane A)
 
 **Session 2026-08-11 PM — audit + fixes (7 commits on copy-a, all gates green: 172 tests, 10/10
 evals, build clean). A 56-agent adversarial review surfaced 36 verified bugs; the load-bearing
@@ -142,10 +142,23 @@ me from running DDL on the live Neon branch):**
 3. Re-verify: fresh web session is empty; `bonsai-dev-key` → 401; real key still inits + fork/merge.
 Migration MUST land before the deploy or new-code writes 503 (no session_id column yet).
 
-**Extension caveat:** its fixes typecheck + build + unit-test clean and the never-send stub is
-verified, but the prefill/session-storage and tab-guard changes were NOT retested against live
-claude.ai (needs a human-watched load-unpacked smoke). Worth a quick manual pass before relying on
-the extension in a demo.
+**Live-deployed + tested (2026-08-12).** New code on a **preview** deploy with a migrated Neon
+branch: https://bonsai-connector-kqdihj0ni-taruns-projects-248def65.vercel.app
+(`-e DATABASE_URL=` → `br-small-mode-avqh6i55`; production bonsai-connector.vercel.app UNTOUCHED +
+verified healthy). Full loop driven via Playwright: per-session empty root, routing (open-ended
+escalates, brief-covered lookup → Haiku Low), select→branch→brief (85%+ pruned)→merge→persists on
+reload; economics ledger shows the cost fixes. Web deploy is MOCK (no ANTHROPIC_API_KEY) — real
+models need a key (`vercel env add ANTHROPIC_API_KEY preview`, then redeploy). To promote to prod:
+migrate the LIVE branch `br-old-fog` (classifier blocked my DDL there — do it in the Neon console)
+then `vercel --prod`.
+
+**Extension** loaded unpacked + verified live: content script injects, Branch chip appears on
+selection and dismisses cleanly (chip-clear fix). **NOT verified:** the side panel's own buttons
+(Compile / Open branch chat) — Chrome's side panel is browser chrome, not page DOM, so no browser
+automation (Playwright, claude-in-chrome, or cloud Cowork) can click it. Needs a human-watched
+pass: open panel → confirm selection lands → Compile → Open branch chat → confirm the brief
+prefills and NOTHING sends. Rebuild after edits: `node extension/build.mjs`, then ↻ on the
+chrome://extensions card.
 
 **Bonsai is a four-surface product with a defensible engine, a designed UI, and OSS-grade docs.**
 
