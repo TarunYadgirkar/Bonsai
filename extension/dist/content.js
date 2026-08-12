@@ -142,7 +142,15 @@
   async function tryPendingPrefill() {
     const composer = findComposer();
     if (!composer) return;
-    const got = await chrome.storage.session.get(PENDING_KEY);
+    let got = null;
+    for (let attempt = 0; attempt < 4 && !got; attempt++) {
+      try {
+        got = await chrome.storage.session.get(PENDING_KEY);
+      } catch {
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+    if (!got) return;
     const pending = got[PENDING_KEY];
     if (!pending) return;
     prefillComposer(pending.text);

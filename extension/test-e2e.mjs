@@ -77,13 +77,14 @@ const context = await chromium.launchPersistentContext('', {
 });
 
 try {
-  context.on('request', (req) => {
-    if (req.method() !== 'GET') posts.push(`${req.method()} ${req.url()}`);
-    if (/completion|append_message|retry/.test(req.url())) sends.push(req.url());
-  });
+  // Record inside the route handler, not a 'request' listener — the handler is guaranteed to see
+  // every request (including ones it aborts), so the never-send assertions cannot pass vacuously.
   await context.route('**/*', (route) => {
-    const url = route.request().url();
-    if (url.startsWith('https://claude.ai/') && route.request().resourceType() === 'document') {
+    const req = route.request();
+    const url = req.url();
+    if (req.method() !== 'GET') posts.push(`${req.method()} ${url}`);
+    if (/completion|append_message|retry/.test(url)) sends.push(url);
+    if (url.startsWith('https://claude.ai/') && req.resourceType() === 'document') {
       return route.fulfill({ contentType: 'text/html', body: FIXTURE });
     }
     return route.abort();
@@ -198,6 +199,15 @@ try {
 
   /* final network sweep — the whole session, all contexts */
   check('never-send held for the entire run', posts.length === 0 && sends.length === 0);
+
+  /* canary — prove the harness would actually catch a send. A deliberate POST from the page must
+   * land in the log; without this, the zero-POST checks could pass because detection is broken. */
+  await page.evaluate(() =>
+    fetch('https://claude.ai/api/canary_completion', { method: 'POST', body: '{}' }).catch(() => {}),
+  );
+  await page.waitForTimeout(300);
+  check('canary POST detected (harness is not vacuous)', posts.some((p) => p.includes('canary')));
+  check('canary flagged as completion-shaped', sends.some((u) => u.includes('canary')));
 } finally {
   await context.close();
 }

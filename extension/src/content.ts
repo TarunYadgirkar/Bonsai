@@ -120,7 +120,18 @@ let linkedNodeId: string | null = null;
 async function tryPendingPrefill(): Promise<void> {
   const composer = findComposer();
   if (!composer) return;
-  const got = await chrome.storage.session.get(PENDING_KEY);
+  // The service worker opens session storage to untrusted contexts at startup but cannot await
+  // that before this script runs; until it lands, get() throws. Retry briefly instead of dropping
+  // the pending branch on the floor during a cold start.
+  let got: Record<string, unknown> | null = null;
+  for (let attempt = 0; attempt < 4 && !got; attempt++) {
+    try {
+      got = await chrome.storage.session.get(PENDING_KEY);
+    } catch {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+  }
+  if (!got) return;
   const pending = got[PENDING_KEY] as PendingBranch | undefined;
   if (!pending) return;
   prefillComposer(pending.text);
