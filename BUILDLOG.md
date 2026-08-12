@@ -345,3 +345,15 @@ builds, extension e2e 13/13).
 - **DB**: 004 + 005 applied to `br-old-fog-avfznwqu` via Neon MCP (Tarun-approved, additive only;
   legacy DELETE skipped). Local dev verified with real models end-to-end. Prod promote is now just
   `vercel --prod`.
+
+## 2026-08-12 — Five-surface audit + product hardening
+
+Tarun promoted to production (`vercel --prod`) and ran the live-model eval. A 5-auditor sweep
+graded every access surface "can a stranger use this today?"; the ranked gaps got fixed the same
+session (commits `1a80412`…`a529033`): web onboarding/mobile/touch/mock-honesty/OG, connector
+anchor enforcement + structured output (live-verified over MCP JSON-RPC), honest install docs on
+extension/plugin/engine, CI dist-freshness + plugin smoke gates. Access policy decided: the API
+key never rides a public deployment — previews behind Vercel Auth + shareable links carry it;
+production stays keyless mock with the demo ribbon. Remaining for promotion day: plugin lives
+only on copy-a (marketplace install fails from main), extension has no icons, connector routing
+hints don't yet consult the priors.

@@ -114,6 +114,32 @@ Updated: 2026-08-12T01:25:00Z by claude session (lane A)
    and REAL fix for the population-prior Sybil residual (signed session cookies + rate limiting)
    if the demo ever grows real traffic.
 
+**Session 2026-08-12 (later) — five-surface product audit + fixes (prod deployed by Tarun and
+verified: new code live, chat loop works, mock honest). 5-auditor sweep over web/plugin/connector/
+extension/engine, ranked gaps fixed:**
+- **Web**: first-visit onboarding empty-state (loop explained + demo CTA + repo link — CTA
+  verified loading the tree), mobile stacks below `md` (was a 58px chat pane), touch selection
+  (`touchend`), per-message "demo answer" chip (`!servedBy`) + session demo-mode ribbon
+  (`/api/modes.provider`), error overlays surface the API's human bodies, OG/twitter cards
+  (`public/og.jpg`).
+- **Connector**: fork now enforces the engine's anchor invariant server-side (pins the parent
+  brief's top fact when the caller drops it — live-verified over real MCP JSON-RPC against the
+  copy-a DB) and returns `structuredContent` on fork+merge; `anchorCarriedThrough` exported from
+  the engine. Docs: dev-key contradiction fixed, self-host walkthrough, claude.ai prereqs.
+- **Extension/plugin/engine docs**: honest install paths everywhere (no-store-listing note, repo-
+  root `npm install`, reload-open-tabs trap, copy-a branch caveat for the plugin, engine README
+  quickstart now compiles as written incl. anchorFact, Node floor 20.3, LICENSE in the tarball,
+  pnpm-publish guard). CI now gates extension + plugin dist freshness and runs the plugin smoke.
+- **Access policy (Tarun's call): the key never goes public.** Production stays keyless mock
+  (honest ribbon). Real-model access = preview deployments behind Vercel Authentication +
+  shareable links; Tarun flips it in dashboard (Deployment Protection → previews), then
+  `vercel env add ANTHROPIC_API_KEY preview` + `vercel`. The MCP token here couldn't change
+  project settings (403).
+- **Prod needs one more `vercel --prod`** to pick up today's UX/connector fixes.
+- Known-open: plugin install DOA until plugin/ reaches `main` (lane boundary — Tarun promotes);
+  extension icons missing (puzzle-menu note shipped instead); connector learning/population
+  routing hint still absent (documented, next session).
+
 **Session 2026-08-12 — extension e2e, population prior, benchmark expansion (6 commits, gates:
 175 tests, 15/15 evals, both builds green):**
 - **Extension e2e harness** (`extension/test-e2e.mjs`, `npm run test:e2e`): real Chromium via
