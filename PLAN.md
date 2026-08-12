@@ -51,25 +51,22 @@ Each segment: build clean → commit → push. Reviews per repo auto-routing.
 
 ## Next (a fresh session picks; nothing in flight)
 
-Phase 3 (2026-08-12): the 36-finding adversarial audit is fully fixed + live-tested on a preview
-deploy — see BUILDLOG. Open items, in order:
+Phase 3 progress (2026-08-12, second session): extension e2e harness DONE (`extension/
+test-e2e.mjs`, 13 checks incl. structural never-send with canary), population-prior pipeline
+DONE + security-hardened (clamp, k=10, sub-k suppression — see BUILDLOG), benchmark expanded
+10→15 (the new depth-3 case caught a real dangling-referent bug; fixed via `anchorFact`
+pinning), migrations 004+005 applied to `br-old-fog`. Open items, in order:
 
-0. **Promote to production.** Migrate the LIVE Neon branch `br-old-fog` with `migrations/004`
-   (the classifier blocked DDL there — do it in the Neon console), then `vercel --prod` from the
-   worktree (linked to bonsai-connector). Migration must land BEFORE the deploy or writes 503.
-1. **Finish the extension smoke**: confirm selection → Compile → Open branch chat prefills the
-   brief and nothing sends (only the panel buttons are unverified; content script + Branch chip are
-   confirmed live). Two paths — (a) a **local Playwright harness** with `--load-extension` that
-   seeds the extension service worker's `chrome.storage.session` and asserts prefill/no-send
-   (Claude Code can build+run this; covers everything but the literal panel clicks); (b) Cowork
-   local computer use (next session on Desktop) or a human for the actual panel buttons.
-2. (Optional) real models on the web deploy: `vercel env add ANTHROPIC_API_KEY preview` → redeploy.
+0. **Promote to production** — now just `vercel --prod` from the worktree (Tarun's auth).
+1. Real models on the deploy: `vercel env add ANTHROPIC_API_KEY preview` → redeploy. (Local dev
+   already verified with real models.)
+2. Side-panel buttons: one human/Cowork click-through of Compile / Open branch chat — the only
+   UI path the harness can't reach.
 3. Promote `copy-a` → `main`/live demo when ready.
-4. **Population-prior data pipeline** (the moat's remaining work) — server-side anonymized
-   aggregation feeding `mergeProfiles`; the engine mechanism is built + tested, the plumbing isn't.
-5. Publish the brief-fidelity benchmark publicly; expand scenarios.
-6. `pnpm publish @bonsai/engine`; MCP Apps interactive tree inline in claude.ai (connector already
+4. `pnpm publish @bonsai/engine`; MCP Apps interactive tree inline in claude.ai (connector already
    returns `structuredContent`); connector OAuth; streaming chat.
+5. If the demo grows real traffic: signed session cookies + rate limiting (closes the documented
+   population-prior Sybil residual).
 
 ## Surface decision (segment 6) — DECIDED 2026-08-11
 
