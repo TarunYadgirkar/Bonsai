@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   BranchResponse,
   ChatResponse,
@@ -370,11 +370,14 @@ export function Workspace() {
   const editMessage = (messageId: string, content: string) =>
     messageAction({ messageId, op: 'edit', content });
 
+  const nodeActionInFlight = useRef(false);
   const nodeAction = async (payload: {
     id: string;
     op: 'rename' | 'archive' | 'unarchive';
     title?: string;
   }): Promise<void> => {
+    if (nodeActionInFlight.current) return;
+    nodeActionInFlight.current = true;
     try {
       const res = await fetch('/api/node', {
         method: 'POST',
@@ -385,6 +388,8 @@ export function Workspace() {
       await loadState();
     } catch (err) {
       setError(describe(err));
+    } finally {
+      nodeActionInFlight.current = false;
     }
   };
 

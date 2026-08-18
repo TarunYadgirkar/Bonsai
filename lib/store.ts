@@ -511,9 +511,11 @@ export async function commit(ws: WorkingSet): Promise<CommitOutcome> {
   if (ws.source !== 'db') return 'failed';
   try {
     const q = sql();
+    // Delete-before-insert is load-bearing (freed seq slots), but the set is only cleared
+    // after the whole commit lands: deletes are idempotent, so a mid-commit failure leaves a
+    // retryable working set instead of half-vanished history.
     if (ws.pendingMessageDeletes.size > 0) {
       await q`DELETE FROM messages WHERE id = ANY(${[...ws.pendingMessageDeletes]})`;
-      ws.pendingMessageDeletes.clear();
     }
     for (const id of ws.dirty) {
       const c = ws.byId.get(id);
@@ -539,6 +541,7 @@ export async function commit(ws: WorkingSet): Promise<CommitOutcome> {
         ON CONFLICT (id) DO NOTHING
       `;
     }
+    ws.pendingMessageDeletes.clear();
     ws.dirty.clear();
     ws.newLogs = [];
     return 'persisted';

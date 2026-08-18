@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Conversation, Message, ModeSelection } from '@/lib/types';
 import { RoutingChip } from './RoutingChip';
@@ -149,10 +149,12 @@ export function ChatPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep the newest message in view as the thread grows.
+  // Keep the newest message in view as the thread grows — keyed on the last message's
+  // identity, not the count: regenerate and edit replace turns without changing the count.
+  const lastMessageId = conversation.messages[conversation.messages.length - 1]?.id ?? null;
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [conversation.messages.length, conversation.id]);
+  }, [lastMessageId, conversation.id]);
 
   const brief = conversation.brief;
   // A branch's context is its compiled brief plus whatever has been said since — not just
@@ -185,20 +187,33 @@ export function ChatPane({
   };
 
   const messages = conversation.messages;
-  const lastAssistantId =
-    messages.length > 0 && messages[messages.length - 1].role === 'assistant'
-      ? messages[messages.length - 1].id
-      : null;
-  const lastUserId = (() => {
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (messages[i].role === 'assistant') break;
-      if (messages[i].role === 'user') return null; // unanswered turn — edit would double-send
+  const { lastAssistantId, lastUserId } = useMemo(() => {
+    const assistantId =
+      messages.length > 0 && messages[messages.length - 1].role === 'assistant'
+        ? messages[messages.length - 1].id
+        : null;
+    let userId: string | null = null;
+    // An unanswered trailing user turn means a send is in flight — editing it would double-send.
+    if (messages.length === 0 || messages[messages.length - 1].role === 'assistant') {
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i].role === 'user') {
+          userId = messages[i].id;
+          break;
+        }
+      }
     }
-    for (let i = messages.length - 1; i >= 0; i -= 1) {
-      if (messages[i].role === 'user') return messages[i].id;
-    }
-    return null;
-  })();
+    return { lastAssistantId: assistantId, lastUserId: userId };
+  }, [messages]);
+
+  // Stable identities: these reach the memoized last bubbles; fresh closures per keystroke
+  // would re-parse their markdown on every draft change.
+  const regenerateLast = useCallback(() => {
+    if (lastAssistantId) onRegenerate(lastAssistantId);
+  }, [lastAssistantId, onRegenerate]);
+  const startEditLast = useCallback(() => {
+    const target = messages.find((m) => m.id === lastUserId);
+    if (target) setEditing({ id: target.id, text: target.content });
+  }, [lastUserId, messages]);
 
   const submitEdit = async () => {
     if (!editing || sending) return;
@@ -459,12 +474,12 @@ export function ChatPane({
                 busy={sending}
                 onRegenerate={
                   message.id === lastAssistantId && !conversation.archived
-                    ? () => onRegenerate(message.id)
+                    ? regenerateLast
                     : undefined
                 }
                 onStartEdit={
                   message.id === lastUserId && !conversation.archived
-                    ? () => setEditing({ id: message.id, text: message.content })
+                    ? startEditLast
                     : undefined
                 }
               />
