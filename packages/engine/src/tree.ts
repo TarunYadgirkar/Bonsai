@@ -90,3 +90,39 @@ export function buildTree(all: Conversation[]): BranchNode[] {
     };
   });
 }
+
+export type RerunOp = 'regenerate' | 'edit';
+
+export interface RerunPlan {
+  /** How many leading messages the conversation keeps. */
+  keep: number;
+  /** The user turn being replayed; edits substitute their new content for it. */
+  userContent: string;
+}
+
+/**
+ * Conversation surgery behind regenerate and edit-and-rerun. Both reduce to the same move: cut
+ * the thread back to just before a user turn, then replay that turn through the normal chat
+ * path (which re-appends it). Regenerate targets an assistant message and replays the user turn
+ * that produced it; edit targets the user message itself. Null when the target doesn't exist,
+ * has the wrong role for the op, or an assistant message has no user turn before it.
+ */
+export function truncateForRerun(
+  conversation: Conversation,
+  messageId: string,
+  op: RerunOp,
+): RerunPlan | null {
+  const idx = conversation.messages.findIndex((m) => m.id === messageId);
+  if (idx === -1) return null;
+  const target = conversation.messages[idx];
+  if (op === 'edit') {
+    if (target.role !== 'user') return null;
+    return { keep: idx, userContent: target.content };
+  }
+  if (target.role !== 'assistant') return null;
+  for (let i = idx - 1; i >= 0; i -= 1) {
+    const m = conversation.messages[i];
+    if (m.role === 'user') return { keep: i, userContent: m.content };
+  }
+  return null;
+}

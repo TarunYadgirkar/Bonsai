@@ -339,6 +339,55 @@ export function Workspace() {
     }
   };
 
+  /** Shared by regenerate and edit — both replay a turn through POST /api/message. */
+  const messageAction = async (payload: {
+    messageId: string;
+    op: 'regenerate' | 'edit';
+    content?: string;
+  }): Promise<boolean> => {
+    if (!activeId || sending) return false;
+    setSending(true);
+    try {
+      const res = await fetch('/api/message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branchId: activeId, ...payload }),
+      });
+      if (!res.ok) throw await httpError(res, 'POST /api/message');
+      // History changed shape server-side (truncation + replay) — refetch rather than splice.
+      await loadState();
+      return true;
+    } catch (err) {
+      setError(describe(err));
+      return false;
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const regenerate = (messageId: string) =>
+    messageAction({ messageId, op: 'regenerate' });
+  const editMessage = (messageId: string, content: string) =>
+    messageAction({ messageId, op: 'edit', content });
+
+  const nodeAction = async (payload: {
+    id: string;
+    op: 'rename' | 'archive' | 'unarchive';
+    title?: string;
+  }): Promise<void> => {
+    try {
+      const res = await fetch('/api/node', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw await httpError(res, 'POST /api/node');
+      await loadState();
+    } catch (err) {
+      setError(describe(err));
+    }
+  };
+
   /** Pull the Berkeley Clubs example into this session, replacing whatever is here. */
   const loadDemo = async () => {
     try {
@@ -533,6 +582,15 @@ export function Workspace() {
           onBranch={branch}
           onSelectMode={selectMode}
           onMerge={merge}
+          onRegenerate={regenerate}
+          onEditMessage={editMessage}
+          onRename={(title) => nodeAction({ id: active.id, op: 'rename', title })}
+          onArchive={
+            active.parentId
+              ? (archived) =>
+                  nodeAction({ id: active.id, op: archived ? 'archive' : 'unarchive' })
+              : undefined
+          }
           mode={modeFor(active)}
           sending={sending}
           branching={branching}

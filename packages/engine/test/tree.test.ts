@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { messagesTokens } from '../src/tokens';
-import { availableTokensFor, buildTree, depthOf, lastTier } from '../src/tree';
+import { availableTokensFor, buildTree, depthOf, lastTier, truncateForRerun } from '../src/tree';
 import type { Conversation, Message, RoutingDecision, Tier } from '../src/types';
 
 function routingFor(tier: Tier): RoutingDecision {
@@ -170,5 +170,48 @@ describe('availableTokensFor', () => {
 
   it('recurses through ancestors', () => {
     expect(availableTokensFor('b1', byId)).toBe(messagesTokens(branch.messages) + rootTokens);
+  });
+});
+
+describe('truncateForRerun', () => {
+  const thread: Conversation = {
+    id: 'c',
+    title: 'Thread',
+    parentId: null,
+    messages: [
+      msg('u1', 'user', 'first question'),
+      msg('a1', 'assistant', 'first answer'),
+      msg('u2', 'user', 'second question'),
+      msg('a2', 'assistant', 'second answer'),
+    ],
+    insights: [],
+    pinnedTier: null,
+    archived: false,
+  };
+
+  it('regenerate cuts back to before the user turn that produced the answer', () => {
+    expect(truncateForRerun(thread, 'a2', 'regenerate')).toEqual({
+      keep: 2,
+      userContent: 'second question',
+    });
+    expect(truncateForRerun(thread, 'a1', 'regenerate')).toEqual({
+      keep: 0,
+      userContent: 'first question',
+    });
+  });
+
+  it('edit cuts back to before the user message itself', () => {
+    expect(truncateForRerun(thread, 'u2', 'edit')).toEqual({
+      keep: 2,
+      userContent: 'second question',
+    });
+  });
+
+  it('rejects wrong roles, unknown ids, and answers with no user turn before them', () => {
+    expect(truncateForRerun(thread, 'u2', 'regenerate')).toBeNull();
+    expect(truncateForRerun(thread, 'a2', 'edit')).toBeNull();
+    expect(truncateForRerun(thread, 'nope', 'regenerate')).toBeNull();
+    const orphan: Conversation = { ...thread, messages: [msg('a0', 'assistant', 'stray')] };
+    expect(truncateForRerun(orphan, 'a0', 'regenerate')).toBeNull();
   });
 });

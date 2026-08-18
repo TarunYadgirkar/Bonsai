@@ -68,7 +68,10 @@ export {
   buildTree,
   depthOf,
   lastTier,
+  truncateForRerun,
   type ConversationLookup,
+  type RerunOp,
+  type RerunPlan,
 } from './tree';
 export {
   adjustForProfile,

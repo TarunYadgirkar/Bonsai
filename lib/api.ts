@@ -35,6 +35,32 @@ export const NewConversationRequestSchema = z.object({
   title: z.string().max(200).optional(),
 });
 
+export const MessageActionRequestSchema = z
+  .object({
+    branchId: z.string().min(1).max(120),
+    messageId: z.string().min(1).max(120),
+    op: z.enum(['regenerate', 'edit']),
+    /** Replacement text — required for 'edit', ignored for 'regenerate'. */
+    content: z.string().min(1).max(8000).optional(),
+    pinnedTier: z.enum(['quick', 'thoughtful', 'deep']).nullish(),
+    mode: ModeSelectionSchema.optional(),
+  })
+  .refine((b) => b.op !== 'edit' || Boolean(b.content?.trim()), {
+    message: 'edit requires content',
+    path: ['content'],
+  });
+
+export const NodeActionRequestSchema = z
+  .object({
+    id: z.string().min(1).max(120),
+    op: z.enum(['rename', 'archive', 'unarchive']),
+    title: z.string().max(200).optional(),
+  })
+  .refine((b) => b.op !== 'rename' || Boolean(b.title?.trim()), {
+    message: 'rename requires title',
+    path: ['title'],
+  });
+
 export function apiError(message: string, status: number): Response {
   return Response.json({ error: message } satisfies ApiError, { status });
 }

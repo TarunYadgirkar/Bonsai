@@ -117,6 +117,31 @@ export interface NewConversationResponse {
   conversation: Conversation;
 }
 
+/** POST /api/message — regenerate an answer or edit-and-rerun a user turn. */
+export interface MessageActionRequest {
+  branchId: string;
+  messageId: string;
+  op: 'regenerate' | 'edit';
+  content?: string;
+  pinnedTier?: Tier | null;
+  mode?: ModeSelection;
+}
+
+/** Same shape as ChatResponse — the replayed turn is a normal turn. */
+export type MessageActionResponse = ChatResponse;
+
+/** POST /api/node — rename or archive/unarchive a branch. */
+export interface NodeActionRequest {
+  id: string;
+  op: 'rename' | 'archive' | 'unarchive';
+  title?: string;
+}
+
+export interface NodeActionResponse {
+  node: BranchNode;
+  conversation: Conversation;
+}
+
 /** GET /api/economics */
 export interface EconomicsResponse {
   logs: InferenceLog[];

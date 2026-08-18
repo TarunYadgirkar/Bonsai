@@ -48,6 +48,8 @@ export interface WorkingSet {
   /** Message ids already persisted, per conversation — commit() inserts only the delta. */
   persistedMessages: Map<string, Set<string>>;
   persistedInsights: Set<string>;
+  /** Rows truncation dropped; commit() deletes them before inserting the replay's delta. */
+  pendingMessageDeletes: Set<string>;
   dirty: Set<string>;
   newLogs: InferenceLog[];
 }
@@ -297,6 +299,7 @@ async function loadAssembled(sessionId: string, withLogs: boolean): Promise<Work
     logs: logRows.map((r) => r.payload),
     persistedMessages,
     persistedInsights,
+    pendingMessageDeletes: new Set(),
     dirty: new Set(),
     newLogs: [],
   };
@@ -420,6 +423,7 @@ export async function loadWorkingSet(
     logs: mem.logs,
     persistedMessages: new Map(),
     persistedInsights: new Set(),
+    pendingMessageDeletes: new Set(),
     dirty: new Set(),
     newLogs: [],
   };
@@ -465,6 +469,26 @@ export function appendMessage(
   return updateConversation(ws, id, (c) => ({ ...c, messages: [...c.messages, message] }));
 }
 
+/**
+ * Cut a conversation's thread to its first `keep` messages. The store's message writes are
+ * append-only (insert + persisted-set), so the dropped rows are queued for a real DELETE at
+ * commit — without it they would resurrect on the next load.
+ */
+export function truncateMessages(
+  ws: WorkingSet,
+  id: string,
+  keep: number,
+): Conversation | undefined {
+  const current = ws.byId.get(id);
+  if (!current) return undefined;
+  const persisted = ws.persistedMessages.get(id);
+  for (const m of current.messages.slice(keep)) {
+    ws.pendingMessageDeletes.add(m.id);
+    persisted?.delete(m.id);
+  }
+  return updateConversation(ws, id, (c) => ({ ...c, messages: c.messages.slice(0, keep) }));
+}
+
 export function appendInsight(
   ws: WorkingSet,
   parentId: string,
@@ -487,6 +511,10 @@ export async function commit(ws: WorkingSet): Promise<CommitOutcome> {
   if (ws.source !== 'db') return 'failed';
   try {
     const q = sql();
+    if (ws.pendingMessageDeletes.size > 0) {
+      await q`DELETE FROM messages WHERE id = ANY(${[...ws.pendingMessageDeletes]})`;
+      ws.pendingMessageDeletes.clear();
+    }
     for (const id of ws.dirty) {
       const c = ws.byId.get(id);
       if (!c) continue;

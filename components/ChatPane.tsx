@@ -16,13 +16,30 @@ const MessageBubble = memo(function MessageBubble({
   message,
   mode,
   onSelectMode,
+  onRegenerate,
+  onStartEdit,
+  busy,
 }: {
   message: Message;
   mode: ModeSelection | null;
   onSelectMode: (mode: ModeSelection | null) => void;
+  /** Present only on the last assistant message — regenerating earlier ones would drop history. */
+  onRegenerate?: () => void;
+  /** Present only on the last user message, for the same reason. */
+  onStartEdit?: () => void;
+  busy: boolean;
 }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(message.content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    });
+  };
   return (
-    <div className={message.role === 'user' ? 'flex justify-end' : 'flex justify-start'}>
+    <div
+      className={`group ${message.role === 'user' ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}
+    >
       <div
         className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm leading-relaxed text-ink ${
           message.role === 'user'
@@ -45,6 +62,29 @@ const MessageBubble = memo(function MessageBubble({
           </span>
         )}
       </div>
+      <div className="mt-1 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+        <button onClick={copy} className="text-[10px] text-bark hover:text-ink-soft">
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+        {onStartEdit && (
+          <button
+            onClick={onStartEdit}
+            disabled={busy}
+            className="text-[10px] text-bark hover:text-ink-soft disabled:opacity-40"
+          >
+            Edit
+          </button>
+        )}
+        {onRegenerate && (
+          <button
+            onClick={onRegenerate}
+            disabled={busy}
+            className="text-[10px] text-bark hover:text-ink-soft disabled:opacity-40"
+          >
+            Regenerate
+          </button>
+        )}
+      </div>
     </div>
   );
 });
@@ -55,6 +95,10 @@ export function ChatPane({
   onBranch,
   onSelectMode,
   onMerge,
+  onRegenerate,
+  onEditMessage,
+  onRename,
+  onArchive,
   mode,
   sending,
   branching,
@@ -71,6 +115,13 @@ export function ChatPane({
   onSelectMode: (mode: ModeSelection | null) => void;
   /** Takes the button's viewport centre so the merge animation starts where it was clicked. */
   onMerge: (origin: { x: number; y: number }) => void;
+  /** Rerun the last exchange; resolves false on failure. */
+  onRegenerate: (messageId: string) => Promise<boolean>;
+  /** Replace the last user turn and rerun it; resolves false on failure. */
+  onEditMessage: (messageId: string, content: string) => Promise<boolean>;
+  onRename: (title: string) => Promise<void>;
+  /** Toggle archived on this branch. Absent on roots. */
+  onArchive?: (archived: boolean) => Promise<void>;
   mode: ModeSelection | null;
   sending: boolean;
   branching: boolean;
@@ -87,6 +138,8 @@ export function ChatPane({
   // restore is lost if the user switched branches mid-send. The parent hands it back here.
   const [draft, setDraft] = useState(initialDraft ?? '');
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -131,6 +184,30 @@ export function ChatPane({
     setSelection({ text, x: rect.left + rect.width / 2, y: rect.top });
   };
 
+  const messages = conversation.messages;
+  const lastAssistantId =
+    messages.length > 0 && messages[messages.length - 1].role === 'assistant'
+      ? messages[messages.length - 1].id
+      : null;
+  const lastUserId = (() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === 'assistant') break;
+      if (messages[i].role === 'user') return null; // unanswered turn — edit would double-send
+    }
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i].role === 'user') return messages[i].id;
+    }
+    return null;
+  })();
+
+  const submitEdit = async () => {
+    if (!editing || sending) return;
+    const text = editing.text.trim();
+    if (!text) return;
+    const ok = await onEditMessage(editing.id, text);
+    if (ok) setEditing(null);
+  };
+
   const submit = async () => {
     const content = draft.trim();
     if (!content || sending) return;
@@ -145,9 +222,31 @@ export function ChatPane({
     <section className="relative flex min-w-0 flex-1 flex-col bg-paper">
       <header className="flex items-center gap-3 border-b border-rule px-6 py-3">
         <div className="min-w-0">
-          <h2 className="truncate font-display text-base text-ink">
-            {conversation.title}
-          </h2>
+          {renaming !== null ? (
+            <input
+              autoFocus
+              value={renaming}
+              onChange={(e) => setRenaming(e.target.value)}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  const title = renaming.trim();
+                  if (title && title !== conversation.title) await onRename(title);
+                  setRenaming(null);
+                }
+                if (e.key === 'Escape') setRenaming(null);
+              }}
+              onBlur={() => setRenaming(null)}
+              className="w-full rounded border border-rule bg-paper-raised px-1.5 py-0.5 font-display text-base text-ink focus:border-moss focus:outline-none"
+            />
+          ) : (
+            <h2
+              onDoubleClick={() => setRenaming(conversation.title)}
+              title="Double-click to rename"
+              className="cursor-text truncate font-display text-base text-ink"
+            >
+              {conversation.title}
+            </h2>
+          )}
           {brief ? (
             <p className="truncate text-[11px] text-bark">
               <span className="tnum text-ink-soft">{brief.availableTokens.toLocaleString()}</span>{' '}
@@ -165,10 +264,27 @@ export function ChatPane({
 
         <div className="ml-auto flex shrink-0 items-center gap-4">
           {/* Merge insight — only branches have a parent to merge into. */}
+          {conversation.parentId && conversation.archived && onArchive && (
+            <button
+              onClick={() => onArchive(false)}
+              className="rounded-full border border-rule px-2.5 py-1 text-[11px] text-bark transition-colors hover:border-rule-strong hover:text-ink-soft"
+            >
+              Unarchive
+            </button>
+          )}
+          {conversation.parentId && !conversation.archived && onArchive && (
+            <button
+              onClick={() => onArchive(true)}
+              title="Set the branch aside without merging"
+              className="rounded-full border border-rule px-2.5 py-1 text-[11px] text-bark transition-colors hover:border-rule-strong hover:text-ink-soft"
+            >
+              Archive
+            </button>
+          )}
           {conversation.parentId &&
             (conversation.archived ? (
               <span className="rounded-full border border-moss/30 bg-moss-wash px-2.5 py-1 text-[11px] text-moss">
-                Merged · archived
+                Archived
               </span>
             ) : (
               <button
@@ -301,14 +417,59 @@ export function ChatPane({
             </div>
           )}
 
-          {conversation.messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              mode={mode}
-              onSelectMode={onSelectMode}
-            />
-          ))}
+          {conversation.messages.map((message) =>
+            editing?.id === message.id ? (
+              <div key={message.id} className="flex flex-col items-end gap-1.5">
+                <textarea
+                  autoFocus
+                  value={editing.text}
+                  onChange={(e) => setEditing({ id: message.id, text: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      submitEdit();
+                    }
+                    if (e.key === 'Escape') setEditing(null);
+                  }}
+                  rows={Math.min(8, Math.max(2, editing.text.split('\n').length))}
+                  className="w-[80%] resize-none rounded-lg border border-moss bg-moss-wash px-4 py-2.5 text-sm leading-relaxed text-ink focus:outline-none"
+                />
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditing(null)}
+                    className="text-[10px] text-bark hover:text-ink-soft"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={submitEdit}
+                    disabled={sending || !editing.text.trim()}
+                    className="text-[10px] font-medium text-moss hover:text-moss-bright disabled:opacity-40"
+                  >
+                    {sending ? 'Rerunning…' : 'Save & rerun'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                mode={mode}
+                onSelectMode={onSelectMode}
+                busy={sending}
+                onRegenerate={
+                  message.id === lastAssistantId && !conversation.archived
+                    ? () => onRegenerate(message.id)
+                    : undefined
+                }
+                onStartEdit={
+                  message.id === lastUserId && !conversation.archived
+                    ? () => setEditing({ id: message.id, text: message.content })
+                    : undefined
+                }
+              />
+            ),
+          )}
 
           {branching && (
             <div className="text-xs text-moss">Compiling branch context…</div>
