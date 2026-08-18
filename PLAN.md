@@ -102,3 +102,19 @@ contract, so the segment-5 eval harness is strategic, not hygiene.
 - No durable cross-conversation memory layer — still an open decision per AGENTS.md.
 - No coordination with copy-b.
 - Web app stays a demo/testbed; it is not the product bet.
+
+## Segments — Phase 4 (usable as a daily app) — 2026-08-18
+
+The engine is honest and the surfaces exist; what the web app lacks is the interaction depth of
+a real chat tool. Phase 4 closes that, then the two documented integration holes.
+
+| # | Segment | State |
+|---|---------|-------|
+| 12 | Message actions (regenerate, edit-and-rerun) + branch rename/archive from the UI | todo |
+| 13 | Streaming chat — SSE route, provider streaming (mock chunks too), incremental render | todo |
+| 14 | Command palette (⌘K) — fuzzy search across all nodes/messages, jump, new chat, merge | todo |
+| 15 | Export — tree or branch as Markdown/JSON (`GET /api/export`), UI affordance | todo |
+| 16 | Connector routing hints consult the population prior; extension icons | todo |
+
+Rules as ever: build clean → typecheck → tests → commit → push per segment; reviews batched per
+segment (react/ts reviewers on UI, api+security on new routes).
