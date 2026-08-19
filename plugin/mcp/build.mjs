@@ -11,6 +11,9 @@ await esbuild.build({
   entryPoints: ['server.mjs'],
   absWorkingDir: root,
   bundle: true,
+  // The plugin routes with the REAL engine: alias the workspace package to its TS source and
+  // let esbuild transpile it into the bundle. server.mjs is therefore not runnable unbundled.
+  alias: { 'bonsai-engine': '../../packages/engine/src/index.ts' },
   platform: 'node',
   format: 'esm',
   target: 'node18',

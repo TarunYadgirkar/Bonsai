@@ -4482,13 +4482,13 @@ var require_core = __commonJS({
     }, warn() {
     }, error() {
     } };
-    function getLogger(logger) {
-      if (logger === false)
+    function getLogger(logger2) {
+      if (logger2 === false)
         return noLogs;
-      if (logger === void 0)
+      if (logger2 === void 0)
         return console;
-      if (logger.log && logger.warn && logger.error)
-        return logger;
+      if (logger2.log && logger2.warn && logger2.error)
+        return logger2;
       throw new Error("logger must implement log, warn and error methods");
     }
     var KEYWORD_NAME = /^[a-z_$][a-z0-9_$:-]*$/i;
@@ -8366,12 +8366,12 @@ ZodString.create = (params) => {
     ...processCreateParams(params)
   });
 };
-function floatSafeRemainder(val, step) {
+function floatSafeRemainder(val, step2) {
   const valDecCount = (val.toString().split(".")[1] || "").length;
-  const stepDecCount = (step.toString().split(".")[1] || "").length;
+  const stepDecCount = (step2.toString().split(".")[1] || "").length;
   const decCount = valDecCount > stepDecCount ? valDecCount : stepDecCount;
   const valInt = Number.parseInt(val.toFixed(decCount).replace(".", ""));
-  const stepInt = Number.parseInt(step.toFixed(decCount).replace(".", ""));
+  const stepInt = Number.parseInt(step2.toFixed(decCount).replace(".", ""));
   return valInt % stepInt / 10 ** decCount;
 }
 var ZodNumber = class _ZodNumber extends ZodType {
@@ -11268,8 +11268,8 @@ function cleanRegex(source) {
   const end = source.endsWith("$") ? source.length - 1 : source.length;
   return source.slice(start, end);
 }
-function floatSafeRemainder2(val, step) {
-  const ratio = val / step;
+function floatSafeRemainder2(val, step2) {
+  const ratio = val / step2;
   const roundedRatio = Math.round(ratio);
   const tolerance = Number.EPSILON * Math.max(Math.abs(ratio), 1);
   if (Math.abs(ratio - roundedRatio) < tolerance)
@@ -31007,7 +31007,7 @@ var StdioServerTransport = class {
   }
 };
 
-// server.mjs
+// ../../packages/engine/src/tokens.ts
 function estimateTokens(text) {
   return Math.ceil(text.length / 4);
 }
@@ -31015,7 +31015,413 @@ function prunedPct(available, kept) {
   if (available <= 0) return 0;
   return Math.max(0, Math.round((available - kept) / available * 1e3) / 10);
 }
-function classify(question) {
+
+// ../../packages/engine/src/models.ts
+var MODELS = [
+  {
+    id: "claude-haiku-4-5",
+    label: "Haiku 4.5",
+    tier: "quick",
+    input: 1,
+    output: 5,
+    blurb: "Fastest and cheapest. Fact lookups answerable straight from the brief."
+  },
+  {
+    id: "claude-sonnet-5",
+    label: "Sonnet 5",
+    tier: "thoughtful",
+    input: 3,
+    output: 15,
+    blurb: "Balanced. Synthesis and explanation across a handful of facts."
+  },
+  {
+    id: "claude-opus-5",
+    label: "Opus 5",
+    tier: "deep",
+    input: 5,
+    output: 25,
+    blurb: "Deep reasoning. Multi-constraint ranking and weighing trade-offs."
+  },
+  {
+    id: "claude-fable-5",
+    label: "Fable 5",
+    tier: "deep",
+    input: 10,
+    output: 50,
+    blurb: "The ceiling. Where a deep answer goes when it still is not good enough."
+  }
+];
+var EFFORTS = [
+  { level: "low", label: "Low", maxTokens: 300, note: "single pass, no self-check" },
+  { level: "medium", label: "Medium", maxTokens: 700, note: "one self-check" },
+  { level: "high", label: "High", maxTokens: 1500, note: "multi-step reasoning" },
+  { level: "max", label: "Max", maxTokens: 3e3, note: "exhaustive, weighs alternatives" }
+];
+var TIER_DEFAULTS = {
+  quick: { model: "claude-haiku-4-5", effort: "low" },
+  thoughtful: { model: "claude-sonnet-5", effort: "medium" },
+  deep: { model: "claude-opus-5", effort: "high" }
+};
+var MODEL_TIERS = {
+  quick: TIER_DEFAULTS.quick.model,
+  thoughtful: TIER_DEFAULTS.thoughtful.model,
+  deep: TIER_DEFAULTS.deep.model
+};
+function modelSpec(id) {
+  return MODELS.find((m) => m.id === id) ?? MODELS[0];
+}
+function effortSpec(level) {
+  return EFFORTS.find((e) => e.level === level) ?? EFFORTS[0];
+}
+var INTERNAL_TIER = "quick";
+function costForModel(modelId, inputTokens, outputTokens) {
+  const rate = modelSpec(modelId);
+  const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
+  return Math.round(usd * 1e6) / 1e6;
+}
+var UPSTREAM_RATES = {
+  "gpt-5.4-mini": { input: 0.75, output: 4.5 },
+  "gpt-5.4": { input: 2.5, output: 15 },
+  "gpt-5.5": { input: 5, output: 30 },
+  "grok-4.3": { input: 1.25, output: 2.5 },
+  "grok-4.5": { input: 2, output: 6 }
+};
+function costForServedBy(servedBy, bonsaiModelId, inputTokens, outputTokens) {
+  const rate = servedBy ? UPSTREAM_RATES[servedBy] : void 0;
+  if (!rate) return costForModel(bonsaiModelId, inputTokens, outputTokens);
+  const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
+  return Math.round(usd * 1e6) / 1e6;
+}
+var MODEL_PRICING = {
+  quick: { input: modelSpec(MODEL_TIERS.quick).input, output: modelSpec(MODEL_TIERS.quick).output },
+  thoughtful: {
+    input: modelSpec(MODEL_TIERS.thoughtful).input,
+    output: modelSpec(MODEL_TIERS.thoughtful).output
+  },
+  deep: { input: modelSpec(MODEL_TIERS.deep).input, output: modelSpec(MODEL_TIERS.deep).output }
+};
+function effortNote(modelId, effort) {
+  return `${modelSpec(modelId).label} \xB7 ${effortSpec(effort).label} effort \u2014 ${effortSpec(effort).note}`;
+}
+var TIER_EFFORT = {
+  quick: effortNote(MODEL_TIERS.quick, "low"),
+  thoughtful: effortNote(MODEL_TIERS.thoughtful, "medium"),
+  deep: effortNote(MODEL_TIERS.deep, "high")
+};
+function routingLabel(modelId, effort) {
+  return `${modelSpec(modelId).label} \xB7 ${effortSpec(effort).label} effort`;
+}
+var TIER_LABEL = {
+  quick: routingLabel(TIER_DEFAULTS.quick.model, TIER_DEFAULTS.quick.effort),
+  thoughtful: routingLabel(TIER_DEFAULTS.thoughtful.model, TIER_DEFAULTS.thoughtful.effort),
+  deep: routingLabel(TIER_DEFAULTS.deep.model, TIER_DEFAULTS.deep.effort)
+};
+
+// ../../packages/engine/src/logger.ts
+var active = console;
+var logger = {
+  warn: (...args) => active.warn(...args),
+  error: (...args) => active.error(...args)
+};
+
+// ../../packages/engine/src/provider.ts
+function providerName() {
+  if (process.env.ANTHROPIC_API_KEY) return "anthropic";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.XAI_API_KEY) return "xai";
+  return "mock";
+}
+function upstreamModel(bonsaiModelId) {
+  const rung = RUNG_BY_MODEL[bonsaiModelId] ?? "QUICK";
+  const provider = providerName();
+  const override = process.env[`BONSAI_MODEL_${provider.toUpperCase()}_${rung}`];
+  if (override) return override;
+  return DEFAULT_UPSTREAM[provider]?.[rung] ?? bonsaiModelId;
+}
+var RUNG_BY_MODEL = {
+  "claude-haiku-4-5": "QUICK",
+  "claude-sonnet-5": "MID",
+  "claude-opus-5": "DEEP",
+  "claude-fable-5": "CEILING"
+};
+var DEFAULT_UPSTREAM = {
+  anthropic: {
+    QUICK: "claude-haiku-4-5-20251001",
+    MID: "claude-sonnet-5",
+    DEEP: "claude-opus-5",
+    CEILING: "claude-fable-5"
+  },
+  openai: {
+    QUICK: "gpt-5.4-mini",
+    MID: "gpt-5.4",
+    DEEP: "gpt-5.5",
+    CEILING: "gpt-5.5"
+  },
+  xai: {
+    QUICK: "grok-4.3",
+    MID: "grok-4.3",
+    DEEP: "grok-4.5",
+    CEILING: "grok-4.5"
+  }
+};
+function anthropicCaps(upstream) {
+  if (upstream.startsWith("claude-haiku-4-5")) return { sampling: true, effort: false };
+  return { sampling: false, effort: true };
+}
+var TOTAL_CAP_BY_EFFORT = {
+  low: 4e3,
+  medium: 6e3,
+  high: 12e3,
+  max: 16e3
+};
+var TIMEOUT_BY_EFFORT = {
+  low: 3e4,
+  medium: 45e3,
+  high: 9e4,
+  max: 12e4
+};
+async function providerComplete(params) {
+  const provider = providerName();
+  if (provider === "mock") return null;
+  const upstream = upstreamModel(params.model);
+  try {
+    const result = provider === "anthropic" ? await callAnthropic(upstream, params) : await callOpenAiCompatible(provider, upstream, params);
+    if (!result?.text.trim()) {
+      logger.warn(`[llm] ${provider} returned no content on ${upstream} \u2014 falling back to mock`);
+      return null;
+    }
+    return result;
+  } catch (err) {
+    if (err.name === "AbortError" && params.signal?.aborted) throw err;
+    logger.warn(`[llm] ${provider} failed (${err.message}) \u2014 falling back to mock`);
+    return null;
+  }
+}
+function anthropicBody(upstream, params) {
+  const caps = anthropicCaps(upstream);
+  const system = params.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  const turns = params.messages.filter((m) => m.role !== "system");
+  const effort = params.effort ?? "medium";
+  return {
+    model: upstream,
+    // On adaptive-thinking models the cap covers thinking + text; the caller's answer-sized
+    // ceiling would truncate mid-thought, so the effort-keyed total wins when larger.
+    max_tokens: caps.effort ? Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort]) : params.maxTokens,
+    ...caps.sampling ? { temperature: params.temperature ?? 0.2 } : {},
+    ...caps.effort ? { output_config: { effort } } : {},
+    ...system ? { system } : {},
+    messages: turns.map((m) => ({ role: m.role, content: m.content }))
+  };
+}
+async function callAnthropic(upstream, params) {
+  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(anthropicBody(upstream, params)),
+    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+  });
+  if (!res.ok) throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
+  const body = await res.json();
+  if (body.stop_reason === "refusal") throw new Error(`anthropic refusal on ${upstream}`);
+  return {
+    text: (body.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join(""),
+    inputTokens: body.usage?.input_tokens ?? 0,
+    outputTokens: body.usage?.output_tokens ?? 0,
+    servedBy: upstream
+  };
+}
+async function callOpenAiCompatible(provider, upstream, params) {
+  const base = provider === "openai" ? "https://api.openai.com/v1" : "https://api.x.ai/v1";
+  const key = provider === "openai" ? process.env.OPENAI_API_KEY : process.env.XAI_API_KEY;
+  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
+  const res = await fetch(`${base}/chat/completions`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
+    body: JSON.stringify({
+      model: upstream,
+      messages: params.messages,
+      max_completion_tokens: params.maxTokens
+    }),
+    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+  });
+  if (!res.ok) throw new Error(`${provider} ${res.status} ${(await res.text()).slice(0, 160)}`);
+  const body = await res.json();
+  return {
+    text: body.choices?.[0]?.message?.content ?? "",
+    inputTokens: body.usage?.prompt_tokens ?? 0,
+    outputTokens: body.usage?.completion_tokens ?? 0,
+    servedBy: upstream
+  };
+}
+async function providerCompleteStream(params, onDelta) {
+  const provider = providerName();
+  if (provider === "mock") return null;
+  const upstream = upstreamModel(params.model);
+  try {
+    if (provider === "anthropic") {
+      const result2 = await callAnthropicStream(upstream, params, onDelta);
+      if (!result2.text.trim()) {
+        logger.warn(`[llm] anthropic stream returned no content on ${upstream} \u2014 mock fallback`);
+        return null;
+      }
+      return result2;
+    }
+    const result = await callOpenAiCompatible(provider, upstream, params);
+    if (!result.text.trim()) return null;
+    onDelta(result.text);
+    return result;
+  } catch (err) {
+    if (err.name === "AbortError" && params.signal?.aborted) throw err;
+    logger.warn(`[llm] ${provider} stream failed (${err.message}) \u2014 mock fallback`);
+    return null;
+  }
+}
+function* sseFrames(buffer) {
+  for (const frame of buffer.split("\n\n")) {
+    let event = "";
+    let data = "";
+    for (const line of frame.split("\n")) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("data:")) data += line.slice(5).trim();
+    }
+    if (data) yield { event: event || "message", data };
+  }
+}
+async function callAnthropicStream(upstream, params, onDelta) {
+  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": process.env.ANTHROPIC_API_KEY,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ ...anthropicBody(upstream, params), stream: true }),
+    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let text = "";
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let stopReason;
+  const consume = (chunk) => {
+    buffer += chunk;
+    const frames = buffer.split("\n\n");
+    buffer = frames.pop() ?? "";
+    for (const { event, data } of sseFrames(frames.join("\n\n"))) {
+      if (event === "error") throw new Error(`anthropic stream error ${data.slice(0, 160)}`);
+      const parsed = JSON.parse(data);
+      if (parsed.type === "message_start") {
+        inputTokens = parsed.message?.usage?.input_tokens ?? 0;
+      } else if (parsed.type === "content_block_delta" && parsed.delta?.type === "text_delta") {
+        const piece = parsed.delta.text ?? "";
+        if (piece) {
+          text += piece;
+          onDelta(piece);
+        }
+      } else if (parsed.type === "message_delta") {
+        outputTokens = parsed.usage?.output_tokens ?? outputTokens;
+        stopReason = parsed.delta?.stop_reason ?? stopReason;
+      }
+    }
+  };
+  try {
+    for (; ; ) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      consume(decoder.decode(value, { stream: true }));
+    }
+    consume(decoder.decode());
+  } catch (err) {
+    await reader.cancel().catch(() => {
+    });
+    throw err;
+  }
+  if (stopReason === "refusal") throw new Error(`anthropic refusal on ${upstream}`);
+  return { text, inputTokens, outputTokens, servedBy: upstream };
+}
+
+// ../../packages/engine/src/llm.ts
+async function complete(params) {
+  const { tier, messages } = params;
+  const model = params.model ?? MODEL_TIERS[tier];
+  const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
+  const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
+  const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
+  const live = await providerComplete({
+    model,
+    messages,
+    maxTokens,
+    effort,
+    temperature: params.temperature,
+    signal: params.signal
+  });
+  if (live) {
+    const usedInput = live.inputTokens || inputTokens;
+    const usedOutput = live.outputTokens || estimateTokens(live.text);
+    return {
+      text: live.text,
+      model,
+      tier,
+      inputTokens: usedInput,
+      outputTokens: usedOutput,
+      estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+      mock: false,
+      servedBy: live.servedBy
+    };
+  }
+  return mockComplete(tier, model, messages, inputTokens, params.purpose);
+}
+var MOCK_CHUNK_WORDS = 4;
+var MOCK_CHUNK_DELAY_MS = 14;
+var MOCK_CHUNK_MAX = 60;
+async function completeStream(params, onDelta) {
+  const { tier, messages } = params;
+  const model = params.model ?? MODEL_TIERS[tier];
+  const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
+  const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
+  const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
+  const live = await providerCompleteStream(
+    { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal },
+    onDelta
+  );
+  if (live) {
+    const usedInput = live.inputTokens || inputTokens;
+    const usedOutput = live.outputTokens || estimateTokens(live.text);
+    return {
+      text: live.text,
+      model,
+      tier,
+      inputTokens: usedInput,
+      outputTokens: usedOutput,
+      estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+      mock: false,
+      servedBy: live.servedBy
+    };
+  }
+  const result = mockComplete(tier, model, messages, inputTokens, params.purpose);
+  const words = result.text.split(/(?<=\s)/);
+  const perChunk = Math.max(MOCK_CHUNK_WORDS, Math.ceil(words.length / MOCK_CHUNK_MAX));
+  for (let i = 0; i < words.length; i += perChunk) {
+    onDelta(words.slice(i, i + perChunk).join(""));
+    if (i + perChunk < words.length) {
+      await new Promise((resolve) => setTimeout(resolve, MOCK_CHUNK_DELAY_MS));
+    }
+  }
+  return result;
+}
+function mockComplexity(prompt) {
+  const question = /Question:\s*(.*)$/m.exec(prompt)?.[1] ?? prompt;
   const q = question.toLowerCase();
   if (/rank|compare|trade-?off|opportunity cost|given (my|everything)|top \d/.test(q)) return 3;
   const words = q.trim().split(/\s+/).length;
@@ -31023,6 +31429,34 @@ function classify(question) {
   if (words > 12) return 2;
   return 1;
 }
+var KIND_CUES = [
+  { kind: "comparison", cue: /\b(rank(s|ed|ing)?|compar(e|es|ed|ison)|vs|versus|which of|trade-?offs?)\b/ },
+  { kind: "code", cue: /\b(rewrite|refactor|debug|code|function|bug|implement)\b/ },
+  { kind: "creative", cue: /\b(write|draft|story|poem|creative)\b/ },
+  { kind: "synthesis", cue: /\b(why|explain|summar\w*)\b/ },
+  { kind: "lookup", cue: /\b(when|what|where|who|how many|deadline|list)\b/ }
+];
+var CLEAR_CUE_CONFIDENCE = 0.85;
+var STRUCTURAL_CUE_CONFIDENCE = 0.6;
+var UNCLEAR_CONFIDENCE = 0.4;
+var LOOKUP_MAX_WORDS = 12;
+var REASONING_MIN_WORDS = 16;
+var REASONING_MIN_CLAUSES = 3;
+function mockKind(question) {
+  const q = question.toLowerCase();
+  const words = q.trim().split(/\s+/).filter(Boolean).length;
+  const matched = KIND_CUES.filter(
+    ({ kind, cue }) => cue.test(q) && (kind !== "lookup" || words <= LOOKUP_MAX_WORDS)
+  );
+  if (matched.length === 1) return { kind: matched[0].kind, confidence: CLEAR_CUE_CONFIDENCE };
+  if (matched.length > 1) return { kind: matched[0].kind, confidence: UNCLEAR_CONFIDENCE };
+  const clauses = q.split(/,|;|\band\b/).filter((part) => part.trim().length > 0).length;
+  if (words >= REASONING_MIN_WORDS && clauses >= REASONING_MIN_CLAUSES) {
+    return { kind: "reasoning", confidence: STRUCTURAL_CUE_CONFIDENCE };
+  }
+  return { kind: "other", confidence: UNCLEAR_CONFIDENCE };
+}
+var MOCK_FACT_COUNT = 6;
 var STOPWORDS = new Set(
   "the a an and or but if of to in on for with about from into over after is are was were be been do does did what when where which who whom how why my your our their this that these those i you he she it we they me him her us them can could should would will shall may might must not have has had all any some more most other than then them there here also just only very much".split(" ")
 );
@@ -31034,18 +31468,416 @@ function relevance(candidate, terms) {
   const hay = candidate.toLowerCase();
   return terms.reduce((n, t) => hay.includes(t) ? n + 1 : n, 0);
 }
-var COVERED_MIN_SCORE = 2;
-function covered(question, facts) {
-  if (!facts.length) return true;
-  const terms = keywords(question);
-  return facts.some((fact) => relevance(fact, terms) >= COVERED_MIN_SCORE);
+function sentencesOf(transcript) {
+  return transcript.split("\n").map((line) => line.replace(/^(user|assistant|system):\s*/i, "").trim()).flatMap((line) => line.split(/(?<=[.!?])\s+(?=[A-Z])/)).map((s) => s.replace(/\s+/g, " ").trim()).filter((s) => s.length > 30 && s.length < 320);
 }
-var TIER_BY_COMPLEXITY = { 1: "quick", 2: "thoughtful", 3: "deep" };
-var TIER_DEFAULTS = {
-  quick: { model: "claude-haiku-4-5", effort: "low" },
-  thoughtful: { model: "claude-sonnet-5", effort: "medium" },
-  deep: { model: "claude-opus-5", effort: "high" }
+var TOPIC_MENTION_WEIGHT = 3;
+function rankByRelevance(candidates, terms, limit, topic, minScore = 1) {
+  const needle = topic?.trim().toLowerCase();
+  return candidates.map((text, i) => {
+    const mentions = needle && text.toLowerCase().includes(needle) ? TOPIC_MENTION_WEIGHT : 0;
+    return { text, score: relevance(text, terms) + mentions, i };
+  }).filter((c) => c.score >= minScore).sort((a, b) => b.score - a.score || a.i - b.i).slice(0, limit).map((c) => c.text);
+}
+var RECENCY_WEIGHT = 0.5;
+var ROLE_FACT_WEIGHT = 0.75;
+var CONSTRAINT_CUE = /\b(must|need|want|only|at most|at least|no more than|cap|capped|cannot|can't|won't|budget|prefer|require|hard)\b/i;
+function sentencesWithRole(transcript) {
+  let role = "unknown";
+  const out = [];
+  for (const line of transcript.split("\n")) {
+    const tag = /^(user|assistant|system):\s*/i.exec(line);
+    if (tag) role = tag[1].toLowerCase();
+    const body = line.replace(/^(user|assistant|system):\s*/i, "");
+    for (const raw of body.split(/(?<=[.!?])\s+(?=[A-Z])/)) {
+      const text = raw.replace(/\s+/g, " ").trim();
+      if (text.length > 30 && text.length < 320) out.push({ text, role });
+    }
+  }
+  return out;
+}
+function rarityWeights(sentences, terms) {
+  const lower = sentences.map((s) => s.toLowerCase());
+  const total = Math.max(1, lower.length);
+  const weights = /* @__PURE__ */ new Map();
+  for (const term of terms) {
+    const inSentences = lower.filter((s) => s.includes(term)).length;
+    weights.set(term, 1 + Math.log(total / Math.max(1, inSentences)));
+  }
+  return weights;
+}
+function roleWeight(sentence) {
+  if (sentence.text.endsWith("?")) return 0;
+  if (sentence.role === "assistant") return ROLE_FACT_WEIGHT;
+  if (sentence.role === "user" && CONSTRAINT_CUE.test(sentence.text)) return ROLE_FACT_WEIGHT;
+  return 0;
+}
+function rankBySalience(sentences, terms, limit, topic) {
+  const needle = topic?.trim().toLowerCase();
+  const rarity = rarityWeights(sentences.map((s) => s.text), terms);
+  const span = Math.max(1, sentences.length - 1);
+  return sentences.map((sentence, i) => {
+    const hay = sentence.text.toLowerCase();
+    const termScore = terms.reduce(
+      (sum, t) => hay.includes(t) ? sum + (rarity.get(t) ?? 0) : sum,
+      0
+    );
+    const topicScore = needle && hay.includes(needle) ? TOPIC_MENTION_WEIGHT : 0;
+    const relevant = termScore + topicScore;
+    const score = relevant + RECENCY_WEIGHT * (i / span) + roleWeight(sentence);
+    return { text: sentence.text, relevant, score, i };
+  }).filter((c) => c.relevant > 0).sort((a, b) => b.score - a.score || a.i - b.i).slice(0, limit).map((c) => c.text);
+}
+function mockCompilerJson(prompt) {
+  const selection = /Branch topic \(highlighted text\):\s*(.*)$/m.exec(prompt)?.[1] ?? "";
+  const question = /Branch question:\s*(.*)$/m.exec(prompt)?.[1] ?? "";
+  const transcript = prompt.split(/^Parent conversation:$/m)[1] ?? "";
+  const sentences = sentencesWithRole(transcript);
+  const terms = keywords(`${selection} ${question}`);
+  let facts = rankBySalience(sentences, terms, MOCK_FACT_COUNT, selection);
+  if (!facts.length) {
+    facts = sentences.filter((s) => !s.text.endsWith("?")).slice(0, MOCK_FACT_COUNT).map((s) => s.text);
+  }
+  return JSON.stringify({
+    facts: facts.length ? facts : [`Topic in focus: ${selection || question || "this branch"}.`],
+    excludedNote: `Excluded: the rest of the parent thread \u2014 everything not bearing on ${selection || "this branch"}.`
+  });
+}
+function mockComplete(tier, model, messages, inputTokens, purpose) {
+  const prompt = messages.map((m) => m.content).join("\n");
+  const text = mockText(tier, prompt, purpose);
+  const outputTokens = estimateTokens(text);
+  return {
+    text,
+    model,
+    tier,
+    inputTokens,
+    outputTokens,
+    estCostUsd: costForModel(model, inputTokens, outputTokens),
+    mock: true
+  };
+}
+var DEADLINE_QUESTION = /\b(when|what date|deadline|due)\b.*\b(close|closes|due|deadline|apply|application)\b/i;
+var RANKING_QUESTION = /\b(rank|top \d|opportunity cost|compare)\b/i;
+var DEMO_ANSWERS = {
+  deadline: "Free Ventures applications close **September 11**, with an info session on September 3. That is eight days between the session and the deadline \u2014 draft the application before September 3 rather than after.",
+  ranking: "Ranked, with the opportunity cost of each:\n\n1. **Free Ventures** \u2014 the only option whose hours go into your own company. Cost: ~3-4 hrs/week of overhead and a September application window that collides with technical-org recruiting.\n2. **ML@B** \u2014 strongest technical peer group and the highest ceiling. Cost: 12-14 hrs/week once the first-semester education track is counted, with a three-week spike landing on November midterms.\n3. **Blueprint** \u2014 fits the 8-10 hr cap and has the strongest community. Cost: almost no technical stretch.\n\nCodebase is dominated in both branches; cut it and reclaim the application slot."
 };
+var FACTS_PER_TIER = { quick: 1, thoughtful: 3, deep: 5 };
+var ANSWER_MIN_SCORE = 2;
+function factsFromBrief(prompt) {
+  const section = /## Relevant facts\n([\s\S]*?)(?:\n##|\n---|$)/.exec(prompt)?.[1] ?? "";
+  return section.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2).trim());
+}
+function mockAnswer(tier, prompt) {
+  const question = prompt.split(/\n---\n/).pop()?.trim() ?? "";
+  if (DEADLINE_QUESTION.test(question)) return DEMO_ANSWERS.deadline;
+  if (RANKING_QUESTION.test(question)) return DEMO_ANSWERS.ranking;
+  const facts = factsFromBrief(prompt);
+  const onBrief = facts.length > 0;
+  const body = prompt.split(/\n---\n/).slice(0, -1).join("\n---\n");
+  const widened = /## Pulled from the parent thread[^\n]*\n([\s\S]*)$/.exec(body)?.[1] ?? "";
+  const candidates = onBrief ? [...facts, ...sentencesOf(widened).filter((s) => !s.endsWith("?"))] : sentencesOf(body).filter((s) => !s.endsWith("?"));
+  const hits = rankByRelevance(
+    candidates,
+    keywords(question),
+    FACTS_PER_TIER[tier],
+    void 0,
+    ANSWER_MIN_SCORE
+  );
+  if (!hits.length) {
+    return onBrief ? "The compiled brief for this branch does not cover that. Ask to pull more of the parent thread in, or branch again from the part of the conversation that does." : "The context here does not cover that yet \u2014 add what matters to the conversation and ask again.";
+  }
+  if (tier === "quick") return hits[0];
+  return `${hits.map((h) => `- ${h}`).join("\n")}
+
+That is what this branch's brief supports; anything beyond it would need more of the parent thread pulled in.`;
+}
+var INSIGHT_MAX_WORDS = 20;
+function mockDistill(prompt) {
+  const topic = /Branch topic:\s*(.*)$/m.exec(prompt)?.[1] ?? "";
+  const body = prompt.split(/^Branch topic:.*$/m).pop() ?? prompt;
+  const statements = sentencesOf(body).filter((s) => !s.endsWith("?"));
+  const best = rankByRelevance(statements, keywords(topic), 1, topic)[0];
+  if (!best) return `No durable conclusion reached on ${topic || "this branch"}.`;
+  const words = best.replace(/\*\*/g, "").split(/\s+/);
+  return words.length <= INSIGHT_MAX_WORDS ? best.replace(/\*\*/g, "") : `${words.slice(0, INSIGHT_MAX_WORDS).join(" ")}\u2026`;
+}
+function classifierFacts(prompt) {
+  const section = /Brief facts:\n([\s\S]*?)(?:\nQuestion:|$)/.exec(prompt)?.[1] ?? "";
+  return section.split("\n").filter((l) => l.startsWith("- ")).map((l) => l.slice(2).trim());
+}
+function mockClassifierJson(prompt) {
+  const complexity = mockComplexity(prompt);
+  const question = /Question:\s*(.*)$/m.exec(prompt)?.[1] ?? "";
+  const { kind, confidence } = mockKind(question);
+  const facts = classifierFacts(prompt);
+  const covered = !facts.length || rankByRelevance(facts, keywords(question), 1, void 0, ANSWER_MIN_SCORE).length > 0;
+  return JSON.stringify({
+    complexity,
+    kind,
+    covered,
+    confidence,
+    reason: "heuristic mock classifier"
+  });
+}
+function mockText(tier, prompt, purpose) {
+  switch (purpose) {
+    case "classify":
+      return mockClassifierJson(prompt);
+    case "compile":
+      return mockCompilerJson(prompt);
+    case "merge":
+      return mockDistill(prompt);
+    case "chat":
+      return mockAnswer(tier, prompt);
+    default:
+      break;
+  }
+  if (/"complexity"/i.test(prompt) || /^Context size:/m.test(prompt)) {
+    return mockClassifierJson(prompt);
+  }
+  if (/"facts"/i.test(prompt) || /compile minimal context/i.test(prompt)) {
+    return mockCompilerJson(prompt);
+  }
+  if (/single durable conclusion/i.test(prompt)) return mockDistill(prompt);
+  return mockAnswer(tier, prompt);
+}
+
+// ../../packages/engine/src/learning.ts
+var QUESTION_KINDS = [
+  "lookup",
+  "synthesis",
+  "comparison",
+  "reasoning",
+  "code",
+  "creative",
+  "other"
+];
+var TIER_ORDER = ["quick", "thoughtful", "deep"];
+var MIN_MOVES = 3;
+var SHIFT_THRESHOLD = 0.6;
+var DOWNSHIFT_CONFIDENCE_FLOOR = 0.5;
+function numeric(n) {
+  return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+}
+function normalizeStat(raw) {
+  const s = raw ?? {};
+  return {
+    up: numeric(s.up),
+    down: numeric(s.down),
+    kept: numeric(s.kept),
+    dropped: numeric(s.dropped),
+    moves: numeric(s.moves)
+  };
+}
+function normalizeTierStats(raw) {
+  const t = raw ?? {};
+  return { quick: normalizeStat(t.quick), thoughtful: normalizeStat(t.thoughtful), deep: normalizeStat(t.deep) };
+}
+function normalizeProfile(raw) {
+  const p = raw ?? {};
+  const profile = {
+    version: 2,
+    tiers: normalizeTierStats(p.tiers),
+    kinds: {}
+  };
+  const kinds = p.kinds ?? {};
+  for (const kind of QUESTION_KINDS) {
+    const k = kinds[kind];
+    if (k) profile.kinds[kind] = normalizeTierStats(k);
+  }
+  return profile;
+}
+function step(tier, delta) {
+  const i = TIER_ORDER.indexOf(tier);
+  return TIER_ORDER[Math.max(0, Math.min(TIER_ORDER.length - 1, i + delta))];
+}
+function adjustForProfile(classifiedTier, profile, opts = {}) {
+  const confidence = clampConfidence(opts.confidence);
+  const pick2 = pickStat(profile, classifiedTier, opts.questionKind, opts.population);
+  if (!pick2) return { tier: classifiedTier, learned: false, source: "none", note: "" };
+  const { stat, source, community } = pick2;
+  const threshold = Math.min(0.95, SHIFT_THRESHOLD + (1 - confidence) * 0.2);
+  const upRate = stat.up / stat.moves;
+  const downRate = stat.down / stat.moves;
+  const who = community ? "The community has" : "You've";
+  const where = source === "kind" ? `${opts.questionKind} ` : "";
+  if (upRate >= threshold && classifiedTier !== "deep") {
+    const tier = step(classifiedTier, 1);
+    return {
+      tier,
+      learned: true,
+      source,
+      note: `${who} upgraded ${where}${classifiedTier} picks ${stat.up}/${stat.moves} times, so this one starts at ${tier}.`
+    };
+  }
+  if (downRate >= threshold && classifiedTier !== "quick" && confidence >= DOWNSHIFT_CONFIDENCE_FLOOR) {
+    const tier = step(classifiedTier, -1);
+    return {
+      tier,
+      learned: true,
+      source,
+      note: `${who} downgraded ${where}${classifiedTier} picks ${stat.down}/${stat.moves} times, so this one starts at ${tier}.`
+    };
+  }
+  return { tier: classifiedTier, learned: false, source: "none", note: "" };
+}
+function pickStat(profile, tier, kind, population) {
+  const sources = [
+    { profile, community: false },
+    { profile: population, community: true }
+  ];
+  for (const { profile: prof, community } of sources) {
+    if (!prof) continue;
+    const p = normalizeProfile(prof);
+    const kindStat = kind ? p.kinds[kind]?.[tier] : void 0;
+    if (kindStat && kindStat.moves >= MIN_MOVES) return { stat: kindStat, source: "kind", community };
+    const agg = p.tiers[tier];
+    if (agg.moves >= MIN_MOVES) return { stat: agg, source: "aggregate", community };
+  }
+  return null;
+}
+function clampConfidence(c) {
+  if (typeof c !== "number" || !Number.isFinite(c)) return 1;
+  return Math.max(0, Math.min(1, c));
+}
+
+// ../../packages/engine/src/router.ts
+var COMPLEXITY_BY_TIER = {
+  quick: 1,
+  thoughtful: 2,
+  deep: 3
+};
+var TIER_BY_COMPLEXITY = {
+  1: "quick",
+  2: "thoughtful",
+  3: "deep"
+};
+var DEFAULT_DEPS = { complete, completeStream };
+async function route(params, deps = DEFAULT_DEPS) {
+  const { question, contextTokens, pinnedTier } = params;
+  const manual = params.mode?.mode === "manual" && params.mode.model ? params.mode : params.pinnedMode?.mode === "manual" && params.pinnedMode.model ? params.pinnedMode : null;
+  if (manual?.model) {
+    const model = modelSpec(manual.model);
+    const effort = manual.effort ?? TIER_DEFAULTS[model.tier].effort;
+    return decision({
+      tier: model.tier,
+      model: model.id,
+      effort,
+      complexity: model.tier === "deep" ? 3 : model.tier === "thoughtful" ? 2 : 1,
+      contextTokens,
+      reason: `You picked ${model.label} at ${effortSpec(effort).label} effort; classification skipped.`,
+      overridden: true
+    });
+  }
+  if (pinnedTier) {
+    return decision({
+      tier: pinnedTier,
+      complexity: pinnedTier === "deep" ? 3 : pinnedTier === "thoughtful" ? 2 : 1,
+      contextTokens,
+      reason: `Branch pinned to ${TIER_LABEL[pinnedTier]} by you; classification skipped.`,
+      overridden: true
+    });
+  }
+  const { complexity, covered, kind, confidence, why } = await classify(params, deps);
+  const classifiedTier = TIER_BY_COMPLEXITY[complexity];
+  const adjusted = adjustForProfile(classifiedTier, params.profile, {
+    questionKind: kind,
+    confidence,
+    population: params.population
+  });
+  const tier = adjusted.tier;
+  const baseReason = `${why} A ${kind} question, complexity ${complexity}/3, against a ${contextTokens}-token brief.`;
+  return decision({
+    tier,
+    complexity: COMPLEXITY_BY_TIER[tier],
+    contextTokens,
+    reason: adjusted.learned ? `${baseReason} ${adjusted.note}` : baseReason,
+    overridden: false,
+    coveredByBrief: covered,
+    learned: adjusted.learned,
+    classifiedTier,
+    kind,
+    confidence
+  });
+}
+async function classify(params, deps) {
+  const factsBlock = params.brief?.facts.length ? `
+Brief facts:
+${params.brief.facts.map((f) => `- ${f}`).join("\n")}` : "";
+  const result = await deps.complete({
+    tier: INTERNAL_TIER,
+    purpose: "classify",
+    maxTokens: 120,
+    messages: [
+      {
+        role: "system",
+        content: 'You classify a question so a router can pick the right model and effort, and judge whether the provided brief covers it.\ncomplexity: 1 = a single fact lookup answerable straight from the context; 2 = synthesis or explanation over a few facts; 3 = multi-constraint reasoning, ranking, or weighing trade-offs.\nkind: one of lookup | synthesis | comparison | reasoning | code | creative | other \u2014 the shape of the task.\ncovered: whether the brief facts contain what the question needs (true when no facts are provided).\nconfidence: 0.0\u20131.0, how sure you are of this read.\nRespond with JSON only: {"complexity": 1|2|3, "kind": "...", "covered": true|false, "confidence": 0.0-1.0, "reason": "<8 words>"}.'
+      },
+      {
+        role: "user",
+        content: `Context size: ${params.contextTokens} tokens.${factsBlock}
+Question: ${params.question}`
+      }
+    ]
+  });
+  const parsed = parseClassifier(result.text);
+  if (parsed) return parsed;
+  logger.warn("[router] unparseable classifier output \u2014 defaulting to thoughtful");
+  return {
+    complexity: 2,
+    covered: true,
+    kind: "other",
+    confidence: 0.3,
+    why: "Classifier unclear; defaulted to the middle tier."
+  };
+}
+function parseClassifier(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return null;
+  try {
+    const json2 = JSON.parse(text.slice(start, end + 1));
+    const value = Number(json2.complexity);
+    if (value !== 1 && value !== 2 && value !== 3) return null;
+    return {
+      complexity: value,
+      covered: typeof json2.covered === "boolean" ? json2.covered : true,
+      kind: QUESTION_KINDS.includes(json2.kind) ? json2.kind : "other",
+      confidence: typeof json2.confidence === "number" && Number.isFinite(json2.confidence) ? Math.max(0, Math.min(1, json2.confidence)) : 1,
+      why: typeof json2.reason === "string" ? `${json2.reason}.` : "Classified by the router."
+    };
+  } catch {
+    return null;
+  }
+}
+function decision(params) {
+  const model = params.model ?? MODEL_TIERS[params.tier];
+  const effort = params.effort ?? TIER_DEFAULTS[params.tier].effort;
+  const outputTokens = Math.round(effortSpec(effort).maxTokens * 0.5);
+  return {
+    tier: params.tier,
+    model,
+    effort,
+    modelLabel: modelSpec(model).label,
+    label: routingLabel(model, effort),
+    effortNote: effortNote(model, effort),
+    contextTokens: params.contextTokens,
+    estCostUsd: costForModel(model, params.contextTokens, outputTokens),
+    reason: params.reason,
+    complexity: params.complexity,
+    escalated: params.escalated ?? false,
+    overridden: params.overridden,
+    ...params.coveredByBrief === void 0 ? {} : { coveredByBrief: params.coveredByBrief },
+    ...params.learned ? { learned: true } : {},
+    ...params.classifiedTier ? { classifiedTier: params.classifiedTier } : {},
+    ...params.kind ? { kind: params.kind } : {},
+    ...params.confidence === void 0 ? {} : { confidence: params.confidence }
+  };
+}
+
+// server.mjs
 var AGENT_TYPES = {
   quick: "bonsai-branch-quick",
   thoughtful: "bonsai-branch-thoughtful",
@@ -31057,14 +31889,31 @@ function tierForModel(modelId) {
   if (/opus|fable/i.test(modelId)) return "deep";
   return null;
 }
-function route(question, pinned) {
-  const autoTier = TIER_BY_COMPLEXITY[classify(question)];
-  const tier = pinned?.model && tierForModel(pinned.model) || autoTier;
+async function route2(question, pinned, briefFacts) {
+  const briefMarkdown = briefFacts.map((f) => `- ${f}`).join("\n");
+  const brief = {
+    id: "plugin_brief",
+    branchId: "plugin_branch",
+    selection: question.slice(0, 60),
+    markdown: briefMarkdown,
+    facts: briefFacts,
+    excludedNote: "",
+    availableTokens: Math.max(1, estimateTokens(briefMarkdown)),
+    briefTokens: estimateTokens(briefMarkdown),
+    prunedPct: 0
+  };
+  const decision2 = await route({
+    question,
+    brief: briefFacts.length ? brief : void 0,
+    contextTokens: estimateTokens(briefMarkdown)
+  });
+  const tier = pinned?.model && tierForModel(pinned.model) || decision2.tier;
   return {
     tier,
     model: pinned?.model ?? TIER_DEFAULTS[tier].model,
     effort: pinned?.effort ?? TIER_DEFAULTS[tier].effort,
-    agentType: AGENT_TYPES[tier]
+    agentType: AGENT_TYPES[tier],
+    covered: briefFacts.length ? decision2.coveredByBrief !== false : true
   };
 }
 function dataDir() {
@@ -31089,7 +31938,7 @@ function saveStore(store) {
 }
 var LOCK_STALE_MS = 1e4;
 var LOCK_TIMEOUT_MS = 5e3;
-function withStoreLock(fn) {
+async function withStoreLock(fn) {
   mkdirSync(dataDir(), { recursive: true });
   const lockPath = join(dataDir(), "trees.lock");
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
@@ -31112,7 +31961,7 @@ function withStoreLock(fn) {
     }
   }
   try {
-    return fn();
+    return await fn();
   } finally {
     try {
       rmSync(lockPath, { recursive: true, force: true });
@@ -31163,7 +32012,7 @@ var AVAILABLE_TOKENS_MULTIPLIER = 20;
 function handleFork(args) {
   return withStoreLock(() => handleForkLocked(args));
 }
-function handleForkLocked(args) {
+async function handleForkLocked(args) {
   const key = treeKey(args.cwd);
   const store = loadStore();
   const now = (/* @__PURE__ */ new Date()).toISOString();
@@ -31194,8 +32043,8 @@ function handleForkLocked(args) {
       nodes[sibling.id] = { ...sibling, status: "abandoned" };
     }
   }
-  const routing = route(args.question, args.pinned);
-  const isCovered = covered(args.question, args.briefFacts);
+  const routing = await route2(args.question, args.pinned, args.briefFacts);
+  const isCovered = routing.covered;
   const briefMarkdown = renderBrief(args);
   const briefTokens = estimateTokens(briefMarkdown);
   const factTokens = args.briefFacts.reduce((sum, fact) => sum + estimateTokens(fact), 0);
@@ -31240,7 +32089,7 @@ function handleForkLocked(args) {
 ${effortInstruction(routing.effort)}${SUBAGENT_INSTRUCTIONS}`
   };
 }
-var INSIGHT_MAX_WORDS = 20;
+var INSIGHT_MAX_WORDS2 = 20;
 function cleanInsight(raw) {
   return raw.trim().replace(/^["'‘’“”]+|["'‘’“”]+$/g, "").trim();
 }
@@ -31251,8 +32100,8 @@ function handleMergeLocked(args) {
   const insight = cleanInsight(args.insight);
   if (!insight) throw new Error("Insight is empty. Provide the one durable conclusion this branch reached.");
   const wordCount = insight.split(/\s+/).length;
-  if (wordCount > INSIGHT_MAX_WORDS) {
-    throw new Error(`Insight is ${wordCount} words; max ${INSIGHT_MAX_WORDS}. Distill to one sentence with referents resolved.`);
+  if (wordCount > INSIGHT_MAX_WORDS2) {
+    throw new Error(`Insight is ${wordCount} words; max ${INSIGHT_MAX_WORDS2}. Distill to one sentence with referents resolved.`);
   }
   const key = treeKey(args.cwd);
   const store = loadStore();
@@ -31381,7 +32230,7 @@ server.registerTool(
       cwd: cwdParam
     }
   },
-  async (args) => jsonResult(handleFork(args))
+  async (args) => jsonResult(await handleFork(args))
 );
 server.registerTool(
   "bonsai_merge",
@@ -31393,7 +32242,7 @@ server.registerTool(
       cwd: cwdParam
     }
   },
-  async (args) => jsonResult(handleMerge(args))
+  async (args) => jsonResult(await handleMerge(args))
 );
 server.registerTool(
   "bonsai_abandon",
@@ -31404,7 +32253,7 @@ server.registerTool(
       cwd: cwdParam
     }
   },
-  async (args) => jsonResult(handleAbandon(args))
+  async (args) => jsonResult(await handleAbandon(args))
 );
 server.registerTool(
   "bonsai_tree",
@@ -31412,7 +32261,7 @@ server.registerTool(
     description: "Render the branch tree as ASCII: per-branch routing [tier \xB7 model \xB7 effort], context economics (available\u2192brief tokens, pruned %), status glyphs (\u25CB open, \u2713 merged, \u2715 abandoned), merged insights, and a totals footer.",
     inputSchema: { cwd: cwdParam }
   },
-  async (args) => textResult(handleTree(args))
+  async (args) => textResult(await handleTree(args))
 );
 server.registerTool(
   "bonsai_reset",
@@ -31423,7 +32272,7 @@ server.registerTool(
       cwd: cwdParam
     }
   },
-  async (args) => jsonResult(handleReset(args))
+  async (args) => jsonResult(await handleReset(args))
 );
 var transport = new StdioServerTransport();
 await server.connect(transport);

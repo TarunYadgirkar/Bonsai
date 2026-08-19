@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const dataDir = mkdtempSync(join(tmpdir(), 'bonsai-mcp-smoke-'));
 
-const child = spawn(process.execPath, [join(here, 'server.mjs')], {
+const child = spawn(process.execPath, [join(here, 'dist', 'server.mjs')], {
   env: { ...process.env, CLAUDE_PLUGIN_DATA: dataDir },
   stdio: ['pipe', 'pipe', 'inherit'],
 });

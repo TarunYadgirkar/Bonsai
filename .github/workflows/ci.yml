@@ -30,9 +30,9 @@ jobs:
         # its own deps must be installed before the smoke can spawn server.mjs from source.
         run: |
           npm ci --prefix plugin/mcp
-          node plugin/mcp/smoke.mjs
           node plugin/mcp/build.mjs
           git diff --exit-code -- plugin/mcp/dist/server.mjs
+          node plugin/mcp/smoke.mjs
       - run: npm run test
       # No keys in CI: evals run against the mock, gating plumbing + routing thresholds.
       - run: npm run eval

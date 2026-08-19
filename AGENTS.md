@@ -83,11 +83,11 @@ the same.
 - `components/TreeSidebar.tsx` geometry: card heights are fixed per variant and `components/treeLayout.ts` must agree with them. Change one, change both.
 - A node's chip shows the **last** turn's decision, so adding a cheap follow-up turn to a fixture branch overwrites its chip.
 - `fixtures/seed-tree.json` is generated, never hand-edited. Regenerate with `DATABASE_URL= npx next dev -p 3111` then `npx tsx scripts/build-seed-tree.ts`.
-- `plugin/mcp/server.mjs` deliberately mirrors a small engine subset (tokens, classifier,
-  coverage) because Node can't import the TS engine directly — the engine is the source of
-  truth; change both when touching that logic. The plugin runs the *bundled*
-  `plugin/mcp/dist/server.mjs` (self-contained so a marketplace clone needs no npm install);
-  after editing `server.mjs`, rebuild it with `node plugin/mcp/build.mjs` and commit the bundle.
+- `plugin/mcp/server.mjs` imports the REAL engine ('bonsai-engine', aliased to the TS source in
+  build.mjs) — the old hand-mirrored subset is gone, and with it the dual-maintenance trap.
+  Consequence: server.mjs only runs BUNDLED; `node plugin/mcp/dist/server.mjs` is the artifact,
+  and the smoke exercises it. After editing server.mjs or the engine, rebuild with
+  `node plugin/mcp/build.mjs` and commit the bundle (CI diffs it).
 - Never send sampling params to 4.6+/5 Claude models, and route effort per BRANCH, not per
   message — resolved effort is rendered into the prompt, so per-turn changes invalidate the
   provider prompt cache.

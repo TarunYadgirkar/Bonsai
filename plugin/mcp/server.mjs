@@ -7,71 +7,14 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
-/* ---------- engine mirrors ----------
- * packages/engine/src (tokens.ts, llm.ts, models.ts) is the source of truth for
- * everything in this section. Copied inline because the plugin server must run
- * standalone with no build step or workspace dependency. Change the engine first,
- * then re-mirror here.
+/* ---------- the real engine ----------
+ * No more hand-mirrored subset: build.mjs aliases 'bonsai-engine' to packages/engine/src and
+ * bundles the TypeScript source into dist/server.mjs, so the plugin routes with the actual
+ * classifier (kind + confidence + coverage) and prices with the actual token math. The bundle
+ * is the only supported way to RUN this file — `node server.mjs` unbundled cannot resolve the
+ * TS engine, which is why the smoke exercises dist/server.mjs.
  */
-
-// tokens.ts estimateTokens
-function estimateTokens(text) {
-  return Math.ceil(text.length / 4);
-}
-
-// tokens.ts prunedPct: one decimal, floored at 0
-function prunedPct(available, kept) {
-  if (available <= 0) return 0;
-  return Math.max(0, Math.round(((available - kept) / available) * 1000) / 10);
-}
-
-// llm.ts mockComplexity
-function classify(question) {
-  const q = question.toLowerCase();
-  if (/rank|compare|trade-?off|opportunity cost|given (my|everything)|top \d/.test(q)) return 3;
-  const words = q.trim().split(/\s+/).length;
-  if (words > 24) return 3;
-  if (words > 12) return 2;
-  return 1;
-}
-
-// llm.ts STOPWORDS
-const STOPWORDS = new Set(
-  ('the a an and or but if of to in on for with about from into over after is are was were be been' +
-    ' do does did what when where which who whom how why my your our their this that these those i' +
-    ' you he she it we they me him her us them can could should would will shall may might must not' +
-    ' have has had all any some more most other than then them there here also just only very much')
-    .split(' '),
-);
-
-// llm.ts keywords: @ & + - stay inside tokens
-function keywords(text) {
-  const words = text.toLowerCase().match(/[a-z][a-z0-9'@&+-]{2,}/g) ?? [];
-  return [...new Set(words.filter((w) => !STOPWORDS.has(w)))];
-}
-
-// llm.ts relevance
-function relevance(candidate, terms) {
-  const hay = candidate.toLowerCase();
-  return terms.reduce((n, t) => (hay.includes(t) ? n + 1 : n), 0);
-}
-
-// llm.ts ANSWER_MIN_SCORE: one matching term is a coincidence, not coverage
-const COVERED_MIN_SCORE = 2;
-
-function covered(question, facts) {
-  if (!facts.length) return true;
-  const terms = keywords(question);
-  return facts.some((fact) => relevance(fact, terms) >= COVERED_MIN_SCORE);
-}
-
-// models.ts TIER_DEFAULTS
-const TIER_BY_COMPLEXITY = { 1: 'quick', 2: 'thoughtful', 3: 'deep' };
-const TIER_DEFAULTS = {
-  quick: { model: 'claude-haiku-4-5', effort: 'low' },
-  thoughtful: { model: 'claude-sonnet-5', effort: 'medium' },
-  deep: { model: 'claude-opus-5', effort: 'high' },
-};
+import { estimateTokens, prunedPct, route as engineRoute, TIER_DEFAULTS } from 'bonsai-engine';
 
 /* ---------- plugin routing ---------- */
 
@@ -88,14 +31,35 @@ function tierForModel(modelId) {
   return null;
 }
 
-function route(question, pinned) {
-  const autoTier = TIER_BY_COMPLEXITY[classify(question)];
-  const tier = (pinned?.model && tierForModel(pinned.model)) || autoTier;
+/**
+ * Route through the real engine router (classifier kind + confidence + brief coverage), then
+ * apply the plugin's pinned-model override the same way the web app honours manual picks.
+ */
+async function route(question, pinned, briefFacts) {
+  const briefMarkdown = briefFacts.map((f) => `- ${f}`).join('\n');
+  const brief = {
+    id: 'plugin_brief',
+    branchId: 'plugin_branch',
+    selection: question.slice(0, 60),
+    markdown: briefMarkdown,
+    facts: briefFacts,
+    excludedNote: '',
+    availableTokens: Math.max(1, estimateTokens(briefMarkdown)),
+    briefTokens: estimateTokens(briefMarkdown),
+    prunedPct: 0,
+  };
+  const decision = await engineRoute({
+    question,
+    brief: briefFacts.length ? brief : undefined,
+    contextTokens: estimateTokens(briefMarkdown),
+  });
+  const tier = (pinned?.model && tierForModel(pinned.model)) || decision.tier;
   return {
     tier,
     model: pinned?.model ?? TIER_DEFAULTS[tier].model,
     effort: pinned?.effort ?? TIER_DEFAULTS[tier].effort,
     agentType: AGENT_TYPES[tier],
+    covered: briefFacts.length ? decision.coveredByBrief !== false : true,
   };
 }
 
@@ -132,7 +96,7 @@ function saveStore(store) {
  */
 const LOCK_STALE_MS = 10_000;
 const LOCK_TIMEOUT_MS = 5_000;
-function withStoreLock(fn) {
+async function withStoreLock(fn) {
   mkdirSync(dataDir(), { recursive: true });
   const lockPath = join(dataDir(), 'trees.lock');
   const deadline = Date.now() + LOCK_TIMEOUT_MS;
@@ -155,7 +119,7 @@ function withStoreLock(fn) {
     }
   }
   try {
-    return fn();
+    return await fn();
   } finally {
     try {
       rmSync(lockPath, { recursive: true, force: true });
@@ -226,7 +190,7 @@ function handleFork(args) {
   return withStoreLock(() => handleForkLocked(args));
 }
 
-function handleForkLocked(args) {
+async function handleForkLocked(args) {
   const key = treeKey(args.cwd);
   const store = loadStore();
   const now = new Date().toISOString();
@@ -269,8 +233,8 @@ function handleForkLocked(args) {
     }
   }
 
-  const routing = route(args.question, args.pinned);
-  const isCovered = covered(args.question, args.briefFacts);
+  const routing = await route(args.question, args.pinned, args.briefFacts);
+  const isCovered = routing.covered;
   const briefMarkdown = renderBrief(args);
   const briefTokens = estimateTokens(briefMarkdown);
   const factTokens = args.briefFacts.reduce((sum, fact) => sum + estimateTokens(fact), 0);
@@ -488,7 +452,7 @@ server.registerTool(
       cwd: cwdParam,
     },
   },
-  async (args) => jsonResult(handleFork(args)),
+  async (args) => jsonResult(await handleFork(args)),
 );
 
 server.registerTool(
@@ -502,7 +466,7 @@ server.registerTool(
       cwd: cwdParam,
     },
   },
-  async (args) => jsonResult(handleMerge(args)),
+  async (args) => jsonResult(await handleMerge(args)),
 );
 
 server.registerTool(
@@ -514,7 +478,7 @@ server.registerTool(
       cwd: cwdParam,
     },
   },
-  async (args) => jsonResult(handleAbandon(args)),
+  async (args) => jsonResult(await handleAbandon(args)),
 );
 
 server.registerTool(
@@ -524,7 +488,7 @@ server.registerTool(
       'Render the branch tree as ASCII: per-branch routing [tier · model · effort], context economics (available→brief tokens, pruned %), status glyphs (○ open, ✓ merged, ✕ abandoned), merged insights, and a totals footer.',
     inputSchema: { cwd: cwdParam },
   },
-  async (args) => textResult(handleTree(args)),
+  async (args) => textResult(await handleTree(args)),
 );
 
 server.registerTool(
@@ -536,7 +500,7 @@ server.registerTool(
       cwd: cwdParam,
     },
   },
-  async (args) => jsonResult(handleReset(args)),
+  async (args) => jsonResult(await handleReset(args)),
 );
 
 const transport = new StdioServerTransport();
