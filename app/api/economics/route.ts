@@ -1,6 +1,6 @@
 import { savingsCurve, sessionStats } from '@bonsai/engine';
 import { apiRoute } from '@/lib/api';
-import { resolveSession, withSession } from '@/lib/session';
+import { resolveSession } from '@/lib/session';
 import { loadWorkingSet } from '@/lib/store';
 import type { EconomicsBaseline, EconomicsResponse, EconomicsTotals } from '@/lib/types';
 
@@ -44,5 +44,8 @@ export const GET = apiRoute(null, async (_body, request) => {
     stats: sessionStats(logs),
     savingsCurve: savingsCurve(logs),
   };
-  return withSession(Response.json(response), session);
+  // Deliberately no Set-Cookie: this fires in parallel with GET /api/state on first visit, and
+  // two racing cookie mints would let the economics session win — every later chat would then
+  // 404 against a root the state response never described. /api/state is the only GET minter.
+  return Response.json(response);
 });
