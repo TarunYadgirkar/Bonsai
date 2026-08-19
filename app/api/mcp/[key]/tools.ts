@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
 import { anchorCarriedThrough, route, type Effort } from '@bonsai/engine';
+import { RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
+import { TREE_APP_HTML, TREE_UI_URI } from './tree-app';
 import { loadPopulationPrior } from '@/lib/store';
 import {
   MAX_NODES_PER_KEY,
@@ -446,10 +448,13 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
       title: 'Show the Bonsai tree',
       description:
         'Render this garden key\'s Bonsai tree: every branch with routing, token economics, ' +
-        'status (open ○ / merged ✓ / abandoned ✕), merged insights, and totals.',
+        'status (open ○ / merged ✓ / abandoned ✕), merged insights, and totals. On hosts with ' +
+        'MCP Apps, renders an interactive garden view inline.',
       inputSchema: z.object({}),
       outputSchema: treeOutput,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+      // MCP Apps (SEP-1865): both meta spellings, matching ext-apps' registerAppTool normalization.
+      _meta: { ui: { resourceUri: TREE_UI_URI }, 'ui/resourceUri': TREE_UI_URI },
     },
     async () => {
       const nodes = await listNodes(userKey);
@@ -475,5 +480,16 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         structuredContent: structured,
       };
     },
+  );
+
+  // The MCP Apps garden view bonsai_tree's _meta points at. Static HTML — same document for
+  // every garden; the data arrives through the tool result, never baked into the resource.
+  server.registerResource(
+    'bonsai-tree-ui',
+    TREE_UI_URI,
+    { title: 'Bonsai garden view', mimeType: RESOURCE_MIME_TYPE },
+    async () => ({
+      contents: [{ uri: TREE_UI_URI, mimeType: RESOURCE_MIME_TYPE, text: TREE_APP_HTML }],
+    }),
   );
 }
