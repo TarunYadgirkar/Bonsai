@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'crypto';
 import { apiError, apiRoute, persistenceError } from '@/lib/api';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSession, withSession } from '@/lib/session';
 import { resetStore } from '@/lib/store';
 import type { StateResponse } from '@/lib/types';
@@ -24,6 +25,8 @@ export const POST = apiRoute(null, async (_body, request) => {
     return apiError('reset requires a valid x-reset-token header', 403);
   }
   const session = resolveSession(request);
+  const limit = checkRateLimit(session.id, 'mutation');
+  if (!limit.ok) return apiError(`rate limit exceeded — retry in ${limit.retryAfterSeconds}s`, 429);
   try {
     const state = await resetStore(session.id);
     return withSession(Response.json(state satisfies StateResponse), session);

@@ -1,6 +1,7 @@
 import { INTERNAL_TIER, complete, estimateTokens, messagesTokens } from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
 import { MergeRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSession, withSession } from '@/lib/session';
 import {
   appendInsight,
@@ -16,6 +17,8 @@ import type { Conversation, Insight, MergeResponse } from '@/lib/types';
 
 export const POST = apiRoute(MergeRequestSchema, async (body, request) => {
   const session = resolveSession(request);
+  const limit = checkRateLimit(session.id, 'inference');
+  if (!limit.ok) return apiError(`rate limit exceeded — retry in ${limit.retryAfterSeconds}s`, 429);
   const ws = await loadWorkingSet(session.id);
   const branch = getConversation(ws, body.branchId);
   if (!branch) return apiError(`unknown branch ${body.branchId}`, 404);

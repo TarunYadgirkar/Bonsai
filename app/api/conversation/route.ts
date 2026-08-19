@@ -1,4 +1,5 @@
 import { NewConversationRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSession, withSession } from '@/lib/session';
 import {
   buildTree,
@@ -20,6 +21,8 @@ export const dynamic = 'force-dynamic';
  */
 export const POST = apiRoute(NewConversationRequestSchema, async (body, request) => {
   const session = resolveSession(request);
+  const limit = checkRateLimit(session.id, 'mutation');
+  if (!limit.ok) return apiError(`rate limit exceeded — retry in ${limit.retryAfterSeconds}s`, 429);
   const ws = await loadWorkingSet(session.id);
   const id = newId('conv');
   const seedProfile = getConversation(ws, ws.rootId)?.profile;

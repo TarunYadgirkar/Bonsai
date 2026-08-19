@@ -10,6 +10,7 @@ import {
 } from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
 import { BranchRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSession, withSession } from '@/lib/session';
 import {
   availableTokensFor,
@@ -31,6 +32,8 @@ const ANSWER_SYSTEM_PROMPT =
 
 export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
   const session = resolveSession(request);
+  const limit = checkRateLimit(session.id, 'inference');
+  if (!limit.ok) return apiError(`rate limit exceeded — retry in ${limit.retryAfterSeconds}s`, 429);
   const ws = await loadWorkingSet(session.id);
   const parent = getConversation(ws, body.parentId);
   if (!parent) return apiError(`unknown parent ${body.parentId}`, 404);

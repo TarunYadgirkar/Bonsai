@@ -1,6 +1,7 @@
 import { truncateForRerun } from '@bonsai/engine';
 import { MessageActionRequestSchema, apiError, apiRoute } from '@/lib/api';
 import { runChatTurn } from '@/lib/chat-turn';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSession, withSession } from '@/lib/session';
 import { getConversation, loadWorkingSet, truncateMessages } from '@/lib/store';
 
@@ -15,6 +16,8 @@ export const dynamic = 'force-dynamic';
  */
 export const POST = apiRoute(MessageActionRequestSchema, async (body, request) => {
   const session = resolveSession(request);
+  const limit = checkRateLimit(session.id, 'inference');
+  if (!limit.ok) return apiError(`rate limit exceeded — retry in ${limit.retryAfterSeconds}s`, 429);
   const ws = await loadWorkingSet(session.id);
   const conversation = getConversation(ws, body.branchId);
   if (!conversation) return apiError(`unknown branch ${body.branchId}`, 404);

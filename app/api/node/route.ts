@@ -1,4 +1,5 @@
 import { NodeActionRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSession, withSession } from '@/lib/session';
 import { buildTree, commit, getConversation, loadWorkingSet, updateConversation } from '@/lib/store';
 import type { NodeActionResponse } from '@/lib/types';
@@ -8,6 +9,8 @@ export const dynamic = 'force-dynamic';
 /** Rename a node, or archive/unarchive a branch without going through merge. */
 export const POST = apiRoute(NodeActionRequestSchema, async (body, request) => {
   const session = resolveSession(request);
+  const limit = checkRateLimit(session.id, 'mutation');
+  if (!limit.ok) return apiError(`rate limit exceeded — retry in ${limit.retryAfterSeconds}s`, 429);
   const ws = await loadWorkingSet(session.id);
   const conversation = getConversation(ws, body.id);
   if (!conversation) return apiError(`unknown node ${body.id}`, 404);

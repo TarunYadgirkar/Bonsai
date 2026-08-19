@@ -1,4 +1,5 @@
-import { apiRoute, persistenceError } from '@/lib/api';
+import { apiError, apiRoute, persistenceError } from '@/lib/api';
+import { checkRateLimit } from '@/lib/rate-limit';
 import { resolveSession, withSession } from '@/lib/session';
 import { seedDemo } from '@/lib/store';
 import type { StateResponse } from '@/lib/types';
@@ -11,6 +12,8 @@ export const dynamic = 'force-dynamic';
  */
 export const POST = apiRoute(null, async (_body, request) => {
   const session = resolveSession(request);
+  const limit = checkRateLimit(session.id, 'mutation');
+  if (!limit.ok) return apiError(`rate limit exceeded — retry in ${limit.retryAfterSeconds}s`, 429);
   try {
     const state = await seedDemo(session.id);
     return withSession(Response.json(state satisfies StateResponse), session);
