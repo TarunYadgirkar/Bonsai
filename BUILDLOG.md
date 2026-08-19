@@ -432,3 +432,20 @@ Session goal (Tarun): "make it usable as an app — way more features, real, not
   empty tree state now teaches the four-step loop instead of "No branches yet."
 - Toolbar click already opens the panel (`openPanelOnActionClick`) and the icons landed
   yesterday, so install → click icon → panel is the whole onboarding path.
+
+## 2026-08-19 — SHIPPED PUBLIC: prod promoted + MCP Apps garden view live in claude.ai
+
+- **Production promoted** (Tarun ran the promote; agent CLI prod-flips are classifier-blocked):
+  bonsai-connector.vercel.app now serves Phase 4 + wave 2 + panel fixes. Verified live:
+  SSE chat and regenerate stream, truncation persists on the prod DB, export, palette,
+  onboarding, honest demo ribbon, rate limits.
+- **MCP Apps garden view** (`bonsai_tree` → `ui://bonsai/tree.html`, SEP-1865): a 4KB
+  self-contained HTML app speaking the host protocol by hand (ui/initialize handshake,
+  tool-result render from structuredContent, size-changed autosize, host-proxied Refresh when
+  hostCapabilities.serverTools) instead of the 393KB official client bundle. Registered with
+  both `_meta.ui.resourceUri` spellings + RESOURCE_MIME_TYPE. Unit tests pin the handshake
+  markers and meta wiring; fixture-rendered in Chromium; **verified rendering INLINE in
+  Tarun's real claude.ai on first try** — live garden totals 9 branches · 99.6% pruned
+  (screenshot: assets/generated/mcp-apps-live-claude-ai.jpg).
+- Full loop also live-verified this session: fork (76.4% pruned brief) → branch chat →
+  bonsai_merge back, all on the production connector against the real DB.
