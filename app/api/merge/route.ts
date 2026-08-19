@@ -39,6 +39,16 @@ export const POST = apiRoute(MergeRequestSchema, async (body, request) => {
   const archive = body.archive ?? true;
   if (archive) updateConversation(ws, branch.id, (c) => ({ ...c, archived: true }));
 
+  // Staleness: parent turns added after the fork anchor were never in this branch's scope. A
+  // merge is still legitimate — but silently landing an insight into a conversation that has
+  // moved on is how context gets poisoned, so the drift rides back for the UI to disclose.
+  const parent = getConversation(ws, branch.parentId);
+  let parentDriftTurns = 0;
+  if (parent && branch.brief?.anchorMessageId) {
+    const anchorIdx = parent.messages.findIndex((m) => m.id === branch.brief!.anchorMessageId);
+    if (anchorIdx !== -1) parentDriftTurns = parent.messages.length - 1 - anchorIdx;
+  }
+
   // The distiller reads the branch, not the parent — cheapest tier, per AGENTS.md rule 7.
   const inputTokens = messagesTokens(branch.messages);
   const log = logInference(

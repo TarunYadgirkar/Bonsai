@@ -107,6 +107,8 @@ export interface MergeResponse {
   parentId: string;
   archived: boolean;
   log: InferenceLog;
+  /** Parent turns added since the fork anchor — the insight predates them; disclose, don't hide. */
+  parentDriftTurns?: number;
 }
 
 /** POST /api/conversation */

@@ -112,6 +112,8 @@ export function Workspace() {
   const [economics, setEconomics] = useState<EconomicsResponse | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Informational banner (moss, not ember) — e.g. merge-staleness disclosure. Auto-dismisses. */
+  const [notice, setNotice] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [branching, setBranching] = useState(false);
   /*
@@ -164,6 +166,12 @@ export function Workspace() {
     const timer = setTimeout(() => setMerged(null), FLASH_MS);
     return () => clearTimeout(timer);
   }, [merged]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 9000);
+    return () => clearTimeout(timer);
+  }, [notice]);
 
   const applyState = useCallback((data: StateResponse) => {
     setState(data);
@@ -391,6 +399,11 @@ export function Workspace() {
       });
       if (!res.ok) throw await httpError(res, 'POST /api/merge');
       const data: MergeResponse = await res.json();
+      if (data.parentDriftTurns) {
+        setNotice(
+          `The trunk grew ${data.parentDriftTurns} turn${data.parentDriftTurns === 1 ? '' : 's'} since this fork — the merged insight predates them. Reground with a fresh branch if it depended on the new turns.`,
+        );
+      }
 
       // Measure the target before the refetch reflows anything.
       setFlight({
@@ -641,6 +654,20 @@ export function Workspace() {
         than a swap: the workspace stays interactive underneath, nothing blanks. A later
         successful refetch clears it via applyState; the button clears it by hand.
       */}
+      {notice && (
+        <div
+          role="status"
+          className="absolute left-1/2 top-4 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg border border-moss/40 bg-paper-raised px-4 py-2.5 shadow-sm"
+        >
+          <p className="text-xs leading-snug text-moss">{notice}</p>
+          <button
+            onClick={() => setNotice(null)}
+            className="shrink-0 rounded border border-rule-strong px-2 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {error && (
         <div
           role="alert"

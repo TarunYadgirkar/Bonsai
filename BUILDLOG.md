@@ -449,3 +449,24 @@ Session goal (Tarun): "make it usable as an app — way more features, real, not
   (screenshot: assets/generated/mcp-apps-live-claude-ai.jpg).
 - Full loop also live-verified this session: fork (76.4% pruned brief) → branch chat →
   bonsai_merge back, all on the production connector against the real DB.
+
+## 2026-08-19 (later) — Roadmap campaign, wave 1 (5 commits, 212 tests, CI green w/ plugin validate)
+
+Executed against the new ROADMAP.md (111 items from the 11-scout sweep). Landed:
+- **Fail-loud pricing**: `isPricedServedBy` + `PRICES_AS_OF`; unknown upstreams flag rows
+  `unpriced`, excluded from every $ total/savings % with the exclusion disclosed in the panel.
+- **Merge grounding gate**: `insightGroundedIn` (numbers must appear in the branch; ≤1 novel
+  name) — distiller gets one corrective retry, then the extractive first-sentence fallback.
+- **npm rename**: `@bonsai/engine` → `bonsai-engine` repo-wide (name verified free), publint
+  clean, pack verified 107KB. Release workflow `.github/workflows/release.yml` on v* tags:
+  eval-gated, publint + attw, `pnpm publish --provenance`, post-publish load smoke.
+- **README launch pass**: badges, 60-second try-it block (/connect front and center),
+  extension row replaced with the parked note, counts refreshed.
+- **CI**: `claude plugin validate` on every push (green).
+- **Savings receipts**: sent/avoided pairs in the chat header, connector fork output, and the
+  MCP Apps garden; **ceiling-cost column** (`ceilingCostUsd`, Fable + full history) in the ledger.
+- **Merge staleness**: `parentDriftTurns` on MergeResponse; the web app discloses trunk drift
+  with a reground nudge (moss notice, not an error).
+
+Awaiting Tarun: promote copy-a→main + repo public (plugin install), `npm login` + publish or
+push a v0.1.0 tag with NPM_TOKEN set, SESSION_SECRET env, prod promote of this wave.
