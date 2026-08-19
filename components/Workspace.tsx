@@ -699,6 +699,13 @@ export function Workspace() {
           onSelectBranch={select}
           onNewChat={newChat}
           onOpenEconomics={() => setEconomicsOpen(true)}
+          onExport={(format, scope) => {
+            const params = new URLSearchParams({ format });
+            if (scope === 'branch' && active) params.set('branch', active.id);
+            // A plain navigation: Content-Disposition makes it a download, the page stays put.
+            window.location.assign(`/api/export?${params}`);
+          }}
+          activeIsBranch={Boolean(active?.parentId)}
           onClose={() => setPaletteOpen(false)}
         />
       )}

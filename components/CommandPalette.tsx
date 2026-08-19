@@ -20,12 +20,17 @@ export function CommandPalette({
   onSelectBranch,
   onNewChat,
   onOpenEconomics,
+  onExport,
+  activeIsBranch,
   onClose,
 }: {
   conversations: Conversation[];
   onSelectBranch: (id: string) => void;
   onNewChat: () => void;
   onOpenEconomics: () => void;
+  /** Download the garden — or, when scope is 'branch', the active subtree. */
+  onExport: (format: 'md' | 'json', scope: 'garden' | 'branch') => void;
+  activeIsBranch: boolean;
   onClose: () => void;
 }) {
   const [query, setQuery] = useState('');
@@ -42,8 +47,30 @@ export function CommandPalette({
     return [
       { id: 'new-chat', label: 'New chat', hint: 'a second tree', run: onNewChat },
       { id: 'economics', label: 'Open economics', hint: 'the cost ledger', run: onOpenEconomics },
+      {
+        id: 'export-md',
+        label: 'Export garden as Markdown',
+        hint: 'every tree, one file',
+        run: () => onExport('md', 'garden'),
+      },
+      {
+        id: 'export-json',
+        label: 'Export garden as JSON',
+        hint: 'portable backup',
+        run: () => onExport('json', 'garden'),
+      },
+      ...(activeIsBranch
+        ? [
+            {
+              id: 'export-branch',
+              label: 'Export this branch as Markdown',
+              hint: 'the open subtree',
+              run: () => onExport('md', 'branch'),
+            },
+          ]
+        : []),
     ];
-  }, [query, onNewChat, onOpenEconomics]);
+  }, [query, onNewChat, onOpenEconomics, onExport, activeIsBranch]);
 
   /** Flat keyboard order: actions first, then hits. */
   const rowCount = actions.length + hits.length;
