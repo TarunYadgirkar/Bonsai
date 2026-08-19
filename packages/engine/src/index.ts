@@ -10,8 +10,10 @@ export {
   TIER_DEFAULTS,
   TIER_EFFORT,
   TIER_LABEL,
+  PRICES_AS_OF,
   costForModel,
   costForServedBy,
+  isPricedServedBy,
   effortNote,
   effortSpec,
   estimateCostUsd,
@@ -48,6 +50,7 @@ export {
   type CompileResult,
   type CompileUsage,
   type EngineDeps,
+  insightGroundedIn,
 } from './compiler';
 export {
   answerFailsSanityCheck,

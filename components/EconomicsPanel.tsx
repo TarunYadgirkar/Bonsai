@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { EconomicsResponse, InferenceLog } from '@/lib/types';
+import { PRICES_AS_OF } from '@/lib/types';
 import { EFFORT_LABEL } from './ModeBadge';
 import { formatUsd } from './tokens';
 
@@ -367,6 +368,17 @@ export function EconomicsPanel({
                 {basisWord === 'measured'
                   ? ' Actual counts are provider-reported usage.'
                   : ' Actual counts are modeled from character counts, not provider-reported usage.'}
+                {data?.unpricedCount ? (
+                  <>
+                    {' '}
+                    <span className="text-ember">
+                      {data.unpricedCount} call{data.unpricedCount === 1 ? '' : 's'} ran on an
+                      upstream the price catalog cannot truthfully price — excluded from every
+                      dollar figure above.
+                    </span>
+                  </>
+                ) : null}
+                {' '}Prices verified {PRICES_AS_OF}.
               </p>
             </>
           )}

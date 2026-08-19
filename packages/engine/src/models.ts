@@ -120,6 +120,11 @@ export function costForModel(modelId: string, inputTokens: number, outputTokens:
   return Math.round(usd * 1e6) / 1e6;
 }
 
+/** The whole price catalog (ModelSpec rates + UPSTREAM_RATES) was last verified against
+ *  provider pricing pages on this date. Surfaced in the economics UI — stale prices should
+ *  look stale, not eternal. */
+export const PRICES_AS_OF = '2026-08-10';
+
 /**
  * Rates for non-Anthropic upstreams (provider.ts DEFAULT_UPSTREAM), USD per MTok, verified
  * 2026-08-10. When `servedBy` names one of these, spend must be priced at ITS rate — pricing a
@@ -132,6 +137,19 @@ const UPSTREAM_RATES: Record<string, { input: number; output: number }> = {
   'grok-4.3': { input: 1.25, output: 2.5 },
   'grok-4.5': { input: 2, output: 6 },
 };
+
+/**
+ * Can the catalog price this upstream truthfully? True for: no servedBy (mock/modeled —
+ * estimated at catalog rate, which the measured flag already discloses), a known non-Anthropic
+ * upstream, or a versioned variant of a catalog Claude model. An env-overridden upstream the
+ * tables have never heard of returns false — its "cost" would be fiction, and fiction must be
+ * excluded from savings totals rather than silently summed (the LiteLLM lesson).
+ */
+export function isPricedServedBy(servedBy: string | undefined): boolean {
+  if (!servedBy) return true;
+  if (UPSTREAM_RATES[servedBy]) return true;
+  return MODELS.some((m) => servedBy.startsWith(m.id));
+}
 
 /** Cost at the rate of whichever model actually answered; Bonsai-catalog rate otherwise. */
 export function costForServedBy(

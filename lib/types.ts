@@ -19,6 +19,8 @@ import type {
   UserProfile,
 } from '@bonsai/engine';
 
+export { PRICES_AS_OF } from '@bonsai/engine';
+
 export type {
   BranchNode,
   Complexity,
@@ -151,6 +153,8 @@ export interface EconomicsResponse {
   stats: SessionStats;
   /** Cumulative actual-vs-baseline spend per inference, for a sparkline. */
   savingsCurve: SavingsPoint[];
+  /** Rows whose upstream the price catalog can't truthfully price — excluded from all $ figures. */
+  unpricedCount?: number;
 }
 
 /** Every route returns this shape on failure. The app never crashes on a 4xx. */

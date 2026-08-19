@@ -7,6 +7,7 @@ import {
   TIER_DEFAULTS,
   costForModel,
   estimateCostUsd,
+  isPricedServedBy,
   tokenizerFactor,
   type Effort,
   type InferenceLog,
@@ -36,6 +37,8 @@ export function buildLog(params: {
   estCostUsd?: number;
   /** True when token counts are live provider usage (CompleteResult.mock === false). Absent = estimated. */
   measured?: boolean;
+  /** Upstream model that actually answered, when known — prices fail loud on unknown ids. */
+  servedBy?: string;
 }): InferenceLog & { measured?: boolean } {
   const { branchId, purpose, tier, inputTokens, outputTokens } = params;
   const model = params.model ?? MODEL_TIERS[tier];
@@ -62,5 +65,6 @@ export function buildLog(params: {
     baselineInputTokens,
     baselineCostUsd: estimateCostUsd('deep', baselineInputTokens, outputTokens),
     measured: params.measured,
+    ...(isPricedServedBy(params.servedBy) ? {} : { unpriced: true }),
   };
 }

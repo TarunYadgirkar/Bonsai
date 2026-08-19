@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compileBrief, type CompileParams } from '../src/compiler';
+import { compileBrief, type CompileParams, insightGroundedIn } from '../src/compiler';
 import { estimateTokens, prunedPct } from '../src/tokens';
 import type { UserProfile } from '../src/types';
 import { fakeComplete, llmResult } from './helpers';
@@ -219,5 +219,32 @@ describe('compileBrief', () => {
     );
 
     expect(brief.facts).toEqual(facts);
+  });
+});
+
+describe('insightGroundedIn', () => {
+  const transcript =
+    'user: What share of the deficit is pensions?\n' +
+    'assistant: Pensions are roughly $694.8 million of the liability, about two-thirds. Berkeley adopted the FY27 budget in June.';
+
+  it('accepts an insight whose numbers and names all appear in the branch', () => {
+    expect(
+      insightGroundedIn('Pensions are $694.8 million of Berkeley liability.', transcript).grounded,
+    ).toBe(true);
+  });
+
+  it('rejects invented numbers', () => {
+    const check = insightGroundedIn('Pensions are $912 million of the liability.', transcript);
+    expect(check.grounded).toBe(false);
+    expect(check.missing).toContain('$912');
+  });
+
+  it('allows one novel category word but rejects two invented names', () => {
+    expect(insightGroundedIn('Structurally, pensions dominate the deficit.', transcript).grounded).toBe(
+      true,
+    );
+    expect(
+      insightGroundedIn('Sacramento and Oakland drive the pension deficit.', transcript).grounded,
+    ).toBe(false);
   });
 });

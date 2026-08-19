@@ -1,4 +1,4 @@
-import { INTERNAL_TIER, complete, estimateTokens, messagesTokens } from '@bonsai/engine';
+import { INTERNAL_TIER, complete, estimateTokens, insightGroundedIn, messagesTokens } from '@bonsai/engine';
 import { buildLog } from '@/lib/accounting';
 import { MergeRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -114,7 +114,33 @@ async function distill(branch: Conversation): Promise<string> {
   });
 
   const line = result.text.trim().split('\n')[0]?.replace(/^["']|["']$/g, '') ?? '';
-  return line || fallbackInsight(branch.brief?.selection ?? branch.title);
+  if (!line) return fallbackInsight(branch.brief?.selection ?? branch.title);
+
+  // Faithfulness gate: a distilled line asserting numbers or names the branch never said is a
+  // hallucination about to enter the parent's context permanently. One corrective retry, then
+  // the extractive fallback — grounded by construction — rather than merging fiction.
+  const transcript = turns.map((m) => m.content).join('\n');
+  if (insightGroundedIn(line, transcript).grounded) return line;
+
+  const retry = await complete({
+    tier: INTERNAL_TIER,
+    purpose: 'merge',
+    maxTokens: 120,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'Extract the single durable conclusion from this branch. One sentence, under 20 words, self-contained. Use ONLY numbers and names that literally appear in the branch text — no outside knowledge, no invented figures.',
+      },
+      { role: 'user', content: transcript },
+    ],
+  });
+  const retried = retry.text.trim().split('\n')[0]?.replace(/^["']|["']$/g, '') ?? '';
+  if (retried && insightGroundedIn(retried, transcript).grounded) return retried;
+
+  const lastAnswer = [...turns].reverse().find((m) => m.role === 'assistant')?.content ?? '';
+  const extractive = lastAnswer.split(/(?<=[.!?])\s+/)[0]?.trim();
+  return extractive || fallbackInsight(branch.brief?.selection ?? branch.title);
 }
 
 /** Last resort when the branch is empty or the distiller returns nothing. */

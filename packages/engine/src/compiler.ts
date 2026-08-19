@@ -209,3 +209,39 @@ function renderBrief(params: {
   lines.push('', `## Question`, params.question || params.selection);
   return lines.join('\n');
 }
+
+/* ---------- merge grounding ---------- */
+
+const GROUNDING_STOPWORDS = new Set(
+  'The This That These Those There Answer Branch Insight Yes No None'.split(' '),
+);
+
+/**
+ * Faithfulness gate for the one-insight merge contract: an insight that asserts numbers or
+ * named entities the branch never mentioned is a hallucination about to be written into the
+ * parent's context permanently. Every number in the insight must appear in the transcript
+ * (digits compared, $/,/% ignored); at most one capitalized term may be novel (distillers
+ * legitimately introduce a category word, but two unseen names is invention).
+ */
+export function insightGroundedIn(
+  insight: string,
+  transcript: string,
+): { grounded: boolean; missing: string[] } {
+  const hay = transcript.toLowerCase();
+  const hayDigits = transcript.replace(/[^0-9.]/g, ' ');
+  const missing: string[] = [];
+
+  for (const raw of insight.match(/\$?\d[\d,]*(?:\.\d+)?%?/g) ?? []) {
+    const digits = raw.replace(/[^0-9.]/g, '');
+    if (digits && !hayDigits.includes(digits)) missing.push(raw);
+  }
+
+  const capitals = [...new Set(insight.match(/\b[A-Z][a-zA-Z]{2,}\b/g) ?? [])].filter(
+    (w) => !GROUNDING_STOPWORDS.has(w),
+  );
+  const novelCapitals = capitals.filter((w) => !hay.includes(w.toLowerCase()));
+
+  const numberMissing = missing.length > 0;
+  missing.push(...novelCapitals);
+  return { grounded: !numberMissing && novelCapitals.length <= 1, missing };
+}

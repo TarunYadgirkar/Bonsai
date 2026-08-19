@@ -187,6 +187,9 @@ export interface InferenceLog {
   baselineInputTokens: number;
   /** Cost of the same request on the deep-tier model with full history. */
   baselineCostUsd: number;
+  /** True when the serving upstream is unknown to the price catalog — estCostUsd is fiction and
+   *  the row is excluded from spend/savings totals. */
+  unpriced?: boolean;
 }
 
 export interface EconomicsTotals {

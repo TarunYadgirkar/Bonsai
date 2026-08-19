@@ -146,6 +146,7 @@ export async function runChatTurn(opts: {
       overridden: result.routing.overridden,
       // Live provider set servedBy; the mock never does — so this is the measured/estimated flag.
       measured: Boolean(result.routing.servedBy),
+      servedBy: result.routing.servedBy,
     }),
   );
 
