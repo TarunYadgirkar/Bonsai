@@ -22,6 +22,9 @@ jobs:
       # dist matches a fresh build of src (maps are gitignored; diff only the tracked .js).
       - name: extension dist in sync with src
         run: git diff --exit-code -- extension/dist/*.js
+      - name: plugin manifest validates
+        # The marketplace refuses what this refuses; catching it on push beats catching it on install.
+        run: npx --yes @anthropic-ai/claude-code plugin validate plugin/
       - name: plugin MCP smoke + dist in sync
         # plugin/mcp is deliberately not a workspace (marketplace clones run the bundled dist);
         # its own deps must be installed before the smoke can spawn server.mjs from source.
