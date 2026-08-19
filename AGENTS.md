@@ -94,15 +94,16 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-19T02:45:00Z by claude session (lane A)
+Updated: 2026-08-19T03:20:00Z by claude session (lane A)
 
 ### ▶ NEXT SESSION — do these first
 1. **Promote prod** — `vercel --prod` from this worktree picks up Phase 4 (streaming, message
    actions, palette, export, connector auto-routing, the session-race fix). Needs Tarun's auth.
 2. **Side-panel buttons** — still the only unverified UI (Chrome side panel is browser chrome;
    needs a human or Cowork click of Compile / Open branch chat).
-3. Then: `pnpm publish @bonsai/engine`, MCP Apps tree UI, connector OAuth, signed session
-   cookies + rate limiting (population-prior Sybil residual).
+3. **Enable cookie signing in prod**: `vercel env add SESSION_SECRET` (long random string) —
+   the code ships signed-session + rate limiting now (wave 2); unset = unsigned demo mode.
+4. Then: `pnpm publish @bonsai/engine`, MCP Apps tree UI, connector OAuth.
 
 **Session 2026-08-18 — Phase 4: app usability (see BUILDLOG for detail; 10 commits, 192 tests,
 15/15 evals, CI GREEN — it had been red since 08-12, root cause plugin/mcp deps never installed

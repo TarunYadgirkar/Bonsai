@@ -399,3 +399,19 @@ Session goal (Tarun): "make it usable as an app — way more features, real, not
   scroll-on-regenerate, memo-defeating closures, stream reader leak, abort plumbing, retryable
   truncation deletes. One reviewer corrupted node_modules with a stray pnpm install (restored
   with npm, gates re-verified; reviewers now instructed never to run installs).
+
+## 2026-08-19 — Phase 4 wave 2: streaming parity + session hardening (2 commits, 204 tests, CI green)
+
+- **Regenerate/edit stream too**: SSE scaffolding extracted to `lib/sse-turn.ts` (chat and
+  message replay speak one protocol), `POST /api/message/stream`, client `streamTurn` helper
+  shared by send + messageAction, optimistic truncation so discarded turns leave the screen
+  while the replacement streams in (server reconciles, failure restores). Verified in Chromium
+  against real models: regenerate keeps thread shape, edit replaces the turn and reruns.
+- **Session hardening** (the documented Sybil-residual item, built by a subagent, reviewed):
+  `SESSION_SECRET` HMAC-signs the session cookie (`id.sig`, timingSafeEqual, fresh garden on any
+  tamper; unset = today's unsigned mock-first behavior, warned once). New `lib/rate-limit.ts`
+  sliding window per session — inference 20/min (chat/stream/message/branch/merge), mutation
+  60/min (node/conversation/reset/demo) — 429 with an honest retry-in body; per-instance caveat
+  documented. Live-verified: the 61st mutation in a minute got 429.
+- Export download switched to an anchor click (lint: no location.assign for internal URLs).
+- To enable signing in prod: `vercel env add SESSION_SECRET` (any long random string), redeploy.
