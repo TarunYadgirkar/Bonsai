@@ -50,3 +50,10 @@ export function anthropicBody(): Record<string, unknown> {
 export function providerSummary(): { provider: ProviderName; models: Record<string, string> } {
   return { provider: 'mock', models: {} };
 }
+
+export async function providerCompleteStream(
+  _params: ProviderParams,
+  _onDelta: (chunk: string) => void,
+): Promise<ProviderResult | null> {
+  return null;
+}

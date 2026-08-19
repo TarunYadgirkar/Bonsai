@@ -114,6 +114,9 @@
   async function providerComplete(_params) {
     return null;
   }
+  async function providerCompleteStream(_params, _onDelta) {
+    return null;
+  }
 
   // ../packages/engine/src/llm.ts
   async function complete(params) {
@@ -127,7 +130,8 @@
       messages,
       maxTokens,
       effort,
-      temperature: params.temperature
+      temperature: params.temperature,
+      signal: params.signal
     });
     if (live) {
       const usedInput = live.inputTokens || inputTokens;
@@ -144,6 +148,44 @@
       };
     }
     return mockComplete(tier, model, messages, inputTokens, params.purpose);
+  }
+  var MOCK_CHUNK_WORDS = 4;
+  var MOCK_CHUNK_DELAY_MS = 14;
+  var MOCK_CHUNK_MAX = 60;
+  async function completeStream(params, onDelta) {
+    const { tier, messages } = params;
+    const model = params.model ?? MODEL_TIERS[tier];
+    const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
+    const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
+    const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
+    const live = await providerCompleteStream(
+      { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal },
+      onDelta
+    );
+    if (live) {
+      const usedInput = live.inputTokens || inputTokens;
+      const usedOutput = live.outputTokens || estimateTokens(live.text);
+      return {
+        text: live.text,
+        model,
+        tier,
+        inputTokens: usedInput,
+        outputTokens: usedOutput,
+        estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+        mock: false,
+        servedBy: live.servedBy
+      };
+    }
+    const result = mockComplete(tier, model, messages, inputTokens, params.purpose);
+    const words = result.text.split(/(?<=\s)/);
+    const perChunk = Math.max(MOCK_CHUNK_WORDS, Math.ceil(words.length / MOCK_CHUNK_MAX));
+    for (let i = 0; i < words.length; i += perChunk) {
+      onDelta(words.slice(i, i + perChunk).join(""));
+      if (i + perChunk < words.length) {
+        await new Promise((resolve) => setTimeout(resolve, MOCK_CHUNK_DELAY_MS));
+      }
+    }
+    return result;
   }
   function mockComplexity(prompt) {
     const question = /Question:\s*(.*)$/m.exec(prompt)?.[1] ?? prompt;
@@ -642,7 +684,7 @@ That is what this branch's brief supports; anything beyond it would need more of
     2: "thoughtful",
     3: "deep"
   };
-  var DEFAULT_DEPS = { complete };
+  var DEFAULT_DEPS = { complete, completeStream };
   async function route(params, deps = DEFAULT_DEPS) {
     const { question, contextTokens, pinnedTier } = params;
     const manual = params.mode?.mode === "manual" && params.mode.model ? params.mode : params.pinnedMode?.mode === "manual" && params.pinnedMode.model ? params.pinnedMode : null;
