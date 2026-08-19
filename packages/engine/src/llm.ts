@@ -30,6 +30,8 @@ export interface CompleteParams {
   /** Explicit ceiling, overriding the one the effort level implies. */
   maxTokens?: number;
   temperature?: number;
+  /** Caller cancellation (e.g. the HTTP client disconnected) — stops paying for unread tokens. */
+  signal?: AbortSignal;
 }
 
 export interface CompleteResult {
@@ -71,6 +73,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
     maxTokens,
     effort,
     temperature: params.temperature,
+    signal: params.signal,
   });
   if (live) {
     const usedInput = live.inputTokens || inputTokens;
@@ -106,7 +109,7 @@ export async function completeStream(
   const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
 
   const live = await providerCompleteStream(
-    { model, messages, maxTokens, effort, temperature: params.temperature },
+    { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal },
     onDelta,
   );
   if (live) {

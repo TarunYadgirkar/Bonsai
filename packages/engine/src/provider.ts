@@ -310,7 +310,7 @@ function* sseFrames(buffer: string): Generator<{ event: string; data: string }> 
       if (line.startsWith('event:')) event = line.slice(6).trim();
       else if (line.startsWith('data:')) data += line.slice(5).trim();
     }
-    if (event && data) yield { event, data };
+    if (data) yield { event: event || 'message', data };
   }
 }
 
@@ -370,12 +370,19 @@ async function callAnthropicStream(
     }
   };
 
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    consume(decoder.decode(value, { stream: true }));
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      consume(decoder.decode(value, { stream: true }));
+    }
+    consume(decoder.decode());
+  } catch (err) {
+    // Release the HTTP stream on mid-parse throws (error frames, malformed JSON) — without
+    // this the reader stays locked and the socket lingers until GC.
+    await reader.cancel().catch(() => {});
+    throw err;
   }
-  consume(decoder.decode());
 
   // Same refusal rule as the buffered path — degrade rather than surface a half-answer.
   if (stopReason === 'refusal') throw new Error(`anthropic refusal on ${upstream}`);

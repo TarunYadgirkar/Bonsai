@@ -44,6 +44,8 @@ export async function POST(request: Request): Promise<Response> {
           mode: body.mode,
           onDelta: (text) => send('delta', { text }),
           onRestart: (reason) => send('restart', { reason }),
+          // Client gone → cancel the upstream call instead of paying for unread tokens.
+          signal: request.signal,
         });
         if (turn.ok) send('done', turn.response);
         else send('error', { error: turn.error });

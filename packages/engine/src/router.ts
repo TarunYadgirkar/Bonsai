@@ -293,6 +293,8 @@ export interface EscalationParams {
    */
   onDelta?: (chunk: string) => void;
   onRestart?: (reason: 'widened' | 'escalated') => void;
+  /** Caller cancellation, threaded down to the provider fetch. */
+  signal?: AbortSignal;
 }
 
 export interface EscalationResult {
@@ -345,6 +347,7 @@ export async function completeWithEscalation(
       tier,
       model,
       effort,
+      signal: params.signal,
       purpose: 'chat' as const,
       messages: [
         { role: 'system' as const, content: params.systemPrompt },

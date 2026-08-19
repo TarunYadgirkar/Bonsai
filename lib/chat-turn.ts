@@ -58,6 +58,7 @@ export async function runChatTurn(opts: {
   /** Streaming taps, passed through to the escalation ladder (see engine EscalationParams). */
   onDelta?: (chunk: string) => void;
   onRestart?: (reason: 'widened' | 'escalated') => void;
+  signal?: AbortSignal;
 }): Promise<TurnResult> {
   const { ws, sessionId, branchId, content } = opts;
   let conversation = getConversation(ws, branchId);
@@ -107,6 +108,7 @@ export async function runChatTurn(opts: {
     routing: initial,
     onDelta: opts.onDelta,
     onRestart: opts.onRestart,
+    signal: opts.signal,
     systemPrompt: ANSWER_SYSTEM_PROMPT,
     userPrompt: `${context}\n\n---\n${content}`,
     widen: () => {
