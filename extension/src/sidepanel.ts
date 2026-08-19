@@ -12,6 +12,7 @@ import {
   type Tier,
 } from '@bonsai/engine';
 import { branchPrompt, compileBranch, mergePrompt } from './compile';
+import { SELECTION_KEY, type StashedSelection } from './messages';
 import type { ActiveInfo, ContentToPanel, PrefillResult, TreeResult } from './messages';
 import { econLine, escapeHtml, renderTreeInto } from './render';
 import { listNodes, loadProfile, putNode, saveProfile, updateNode, type TreeNode } from './store';
@@ -242,14 +243,27 @@ function mergeControls(node: TreeNode): HTMLElement {
 
 /* ---------- wiring ---------- */
 
+function adoptSelection(text: string, conversationId: string | null): void {
+  $<HTMLTextAreaElement>('selection').value = text;
+  // Remember which chat the text was selected in, so compile() can refuse a mismatched tab.
+  selectionConversationId = conversationId;
+  $<HTMLTextAreaElement>('question').focus();
+  // Live or stashed, the hand-off is consumed either way so it can never replay stale.
+  chrome.storage.session.remove(SELECTION_KEY).catch(() => {});
+}
+
 chrome.runtime.onMessage.addListener((msg: ContentToPanel) => {
-  if (msg.type === 'SELECTION') {
-    $<HTMLTextAreaElement>('selection').value = msg.text;
-    // Remember which chat the text was selected in, so compile() can refuse a mismatched tab.
-    selectionConversationId = msg.conversationId ?? null;
-    $<HTMLTextAreaElement>('question').focus();
-  }
+  if (msg.type === 'SELECTION') adoptSelection(msg.text, msg.conversationId ?? null);
 });
+
+// A chip click made while the panel was closed: the SW stashed the selection and opened us.
+chrome.storage.session
+  .get(SELECTION_KEY)
+  .then((items) => {
+    const stashed = items[SELECTION_KEY] as StashedSelection | undefined;
+    if (stashed?.text) adoptSelection(stashed.text, stashed.conversationId);
+  })
+  .catch(() => {});
 
 chrome.storage.onChanged.addListener((_changes, area) => {
   if (area === 'local') void renderTree();

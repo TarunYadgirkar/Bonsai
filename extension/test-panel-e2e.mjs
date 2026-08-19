@@ -105,6 +105,14 @@ try {
     chrome.storage.session.setAccessLevel({ accessLevel: 'TRUSTED_AND_UNTRUSTED_CONTEXTS' }),
   );
 
+  // A chip click while the panel is closed: the SW stashes the selection; the panel must adopt
+  // and consume it on load.
+  await sw.evaluate(() =>
+    chrome.storage.session.set({
+      'bonsai:selection': { text: 'stashed pension obligations', conversationId: null },
+    }),
+  );
+
   const panel = await context.newPage();
   await panel.setViewportSize({ width: 360, height: 720 });
   panel.on('console', (m) => console.log('panel-console:', m.type(), m.text().slice(0, 200)));
@@ -116,6 +124,19 @@ try {
   const chat = await context.newPage();
   await chat.goto(`https://claude.ai/chat/${CHAT}`);
   await chat.bringToFront();
+
+  // 0. The stashed selection arrived and was consumed.
+  await panel.waitForFunction(
+    () => document.getElementById('selection')?.value.includes('stashed'),
+    null,
+    { timeout: 5000 },
+  ).catch(() => {});
+  check(
+    'closed-panel chip click: stashed selection adopted on load',
+    (await panel.inputValue('#selection')).includes('stashed pension obligations'),
+  );
+  const stashLeft = await sw.evaluate(() => chrome.storage.session.get('bonsai:selection'));
+  check('stash consumed after adoption', !stashLeft['bonsai:selection']);
 
   // 1. Compile.
   await panel.fill('#selection', 'pension obligations');

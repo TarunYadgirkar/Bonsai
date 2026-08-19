@@ -23,3 +23,11 @@ export interface PendingBranch {
   text: string;
 }
 export const PENDING_KEY = 'bonsai:pending';
+
+/** The last Branch-chip selection, in storage.session — the SW stashes it so a click made while
+ *  the panel is CLOSED still arrives: the SW opens the panel and the panel consumes this on load. */
+export interface StashedSelection {
+  text: string;
+  conversationId: string | null;
+}
+export const SELECTION_KEY = 'bonsai:selection';

@@ -1,5 +1,6 @@
 // src/messages.ts
 var PENDING_KEY = "bonsai:pending";
+var SELECTION_KEY = "bonsai:selection";
 
 // src/store.ts
 var NODES_KEY = "bonsai:nodes";
@@ -33,6 +34,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       chrome.tabs.create({ url: msg.url || "https://claude.ai/new" });
       sendResponse({ ok: true });
     });
+    return true;
+  }
+  if (msg.type === "SELECTION") {
+    const stash = {
+      text: msg.text,
+      conversationId: msg.conversationId ?? null
+    };
+    chrome.storage.session.set({ [SELECTION_KEY]: stash }).catch(() => {
+    });
+    const tabId = _sender.tab?.id;
+    if (tabId !== void 0) chrome.sidePanel.open({ tabId }).catch(() => {
+    });
+    sendResponse({ ok: true });
     return true;
   }
   if (msg.type === "LINK_NODE") {

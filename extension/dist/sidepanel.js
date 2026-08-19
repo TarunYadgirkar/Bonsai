@@ -852,6 +852,9 @@ Question: ${params.question}`
     return `Insight from a side branch: ${insight}`;
   }
 
+  // src/messages.ts
+  var SELECTION_KEY = "bonsai:selection";
+
   // src/render.ts
   var GLYPH = {
     draft: "\u25CC",
@@ -1118,12 +1121,20 @@ Question: ${params.question}`
     wrap.appendChild(row);
     return wrap;
   }
+  function adoptSelection(text, conversationId) {
+    $("selection").value = text;
+    selectionConversationId = conversationId;
+    $("question").focus();
+    chrome.storage.session.remove(SELECTION_KEY).catch(() => {
+    });
+  }
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === "SELECTION") {
-      $("selection").value = msg.text;
-      selectionConversationId = msg.conversationId ?? null;
-      $("question").focus();
-    }
+    if (msg.type === "SELECTION") adoptSelection(msg.text, msg.conversationId ?? null);
+  });
+  chrome.storage.session.get(SELECTION_KEY).then((items) => {
+    const stashed = items[SELECTION_KEY];
+    if (stashed?.text) adoptSelection(stashed.text, stashed.conversationId);
+  }).catch(() => {
   });
   chrome.storage.onChanged.addListener((_changes, area) => {
     if (area === "local") void renderTree();
