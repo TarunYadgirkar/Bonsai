@@ -75,7 +75,7 @@ Install the plugin:
 /plugin install bonsai@bonsai
 ```
 
-(The plugin currently lives on branch `copy-a`, not `main` — reference this branch until promotion, and the repo must be public.)
+(The repo must be public for marketplace installs — the manifest lives on `main`.)
 
 The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
 consume, and publishable on its own (`cd packages/engine && pnpm publish` builds a typed `dist` via
