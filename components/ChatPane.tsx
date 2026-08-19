@@ -8,6 +8,10 @@ import { conversationTokens, formatTokens } from './tokens';
 
 type Selection = { text: string; x: number; y: number };
 
+/** Assistant-markdown styling, shared by settled bubbles and the streaming one. */
+const MARKDOWN_CLASSES =
+  '[&>*+*]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:text-moss [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-rule [&_blockquote]:pl-3 [&_blockquote]:text-ink-soft [&_:is(h1,h2,h3,h4)]:font-display [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-ink [&_code]:rounded [&_code]:bg-paper-sunk [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-ink [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-rule [&_pre]:bg-paper-sunk [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0';
+
 /**
  * Memoized so composer keystrokes and selection updates don't re-parse every assistant
  * message's markdown — the thread re-renders per keystroke, the bubbles shouldn't.
@@ -52,7 +56,7 @@ const MessageBubble = memo(function MessageBubble({
         ) : (
           // Assistant turns are markdown. react-markdown escapes raw HTML by default —
           // no rehype-raw, on purpose. User turns stay plain text above.
-          <div className="[&>*+*]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:text-moss [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-rule [&_blockquote]:pl-3 [&_blockquote]:text-ink-soft [&_:is(h1,h2,h3,h4)]:font-display [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-ink [&_code]:rounded [&_code]:bg-paper-sunk [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-ink [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-rule [&_pre]:bg-paper-sunk [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0">
+          <div className={MARKDOWN_CLASSES}>
             <ReactMarkdown>{message.content}</ReactMarkdown>
           </div>
         )}
@@ -101,6 +105,7 @@ export function ChatPane({
   onArchive,
   mode,
   sending,
+  streamingText,
   branching,
   merging,
   highlightInsightId,
@@ -124,6 +129,8 @@ export function ChatPane({
   onArchive?: (archived: boolean) => Promise<void>;
   mode: ModeSelection | null;
   sending: boolean;
+  /** The in-flight answer so far. Empty string = waiting for the first token. */
+  streamingText: string | null;
   branching: boolean;
   merging: boolean;
   highlightInsightId: string | null;
@@ -155,6 +162,13 @@ export function ChatPane({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [lastMessageId, conversation.id]);
+
+  // Follow the stream: every delta grows the page, and the reader should ride the bottom edge.
+  useEffect(() => {
+    if (streamingText !== null) {
+      scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+    }
+  }, [streamingText]);
 
   const brief = conversation.brief;
   // A branch's context is its compiled brief plus whatever has been said since — not just
@@ -489,7 +503,17 @@ export function ChatPane({
           {branching && (
             <div className="text-xs text-moss">Compiling branch context…</div>
           )}
-          {sending && <div className="text-xs text-bark">Thinking…</div>}
+          {streamingText !== null && streamingText.length > 0 && (
+            <div className="flex justify-start">
+              <div className="max-w-[80%] rounded-lg border border-rule bg-paper-raised px-4 py-2.5 text-sm leading-relaxed text-ink">
+                <div className={MARKDOWN_CLASSES}>
+                  <ReactMarkdown>{streamingText}</ReactMarkdown>
+                </div>
+                <span className="mt-1 inline-block h-3 w-1.5 animate-pulse rounded-sm bg-moss align-text-bottom" />
+              </div>
+            </div>
+          )}
+          {sending && !streamingText && <div className="text-xs text-bark">Thinking…</div>}
         </div>
       </div>
 

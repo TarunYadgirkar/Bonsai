@@ -6,7 +6,7 @@
  *   2. The mock, with realistic token math, so the app is walkable with zero keys.
  */
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, costForServedBy, effortSpec } from './models';
-import { providerComplete } from './provider';
+import { providerComplete, providerCompleteStream } from './provider';
 import { estimateTokens } from './tokens';
 import type { Effort, InferencePurpose, QuestionKind, Tier } from './types';
 
@@ -51,6 +51,12 @@ export interface CompleteResult {
  */
 export type CompleteFn = (params: CompleteParams) => Promise<CompleteResult>;
 
+/** Streaming sibling of CompleteFn: chunks hit onDelta as they arrive, result totals match. */
+export type CompleteStreamFn = (
+  params: CompleteParams,
+  onDelta: (chunk: string) => void,
+) => Promise<CompleteResult>;
+
 export async function complete(params: CompleteParams): Promise<CompleteResult> {
   const { tier, messages } = params;
   const model = params.model ?? MODEL_TIERS[tier];
@@ -82,6 +88,54 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
   }
 
   return mockComplete(tier, model, messages, inputTokens, params.purpose);
+}
+
+/** How the mock paces its fake stream: small word-groups, a beat apart, bounded total delay. */
+const MOCK_CHUNK_WORDS = 4;
+const MOCK_CHUNK_DELAY_MS = 14;
+const MOCK_CHUNK_MAX = 60;
+
+export async function completeStream(
+  params: CompleteParams,
+  onDelta: (chunk: string) => void,
+): Promise<CompleteResult> {
+  const { tier, messages } = params;
+  const model = params.model ?? MODEL_TIERS[tier];
+  const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
+  const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
+  const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
+
+  const live = await providerCompleteStream(
+    { model, messages, maxTokens, effort, temperature: params.temperature },
+    onDelta,
+  );
+  if (live) {
+    const usedInput = live.inputTokens || inputTokens;
+    const usedOutput = live.outputTokens || estimateTokens(live.text);
+    return {
+      text: live.text,
+      model,
+      tier,
+      inputTokens: usedInput,
+      outputTokens: usedOutput,
+      estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+      mock: false,
+      servedBy: live.servedBy,
+    };
+  }
+
+  // Mock: answer instantly, then replay it as a paced stream so the zero-key demo shows the
+  // same UI the live path does. The pacing is capped so long answers don't crawl.
+  const result = mockComplete(tier, model, messages, inputTokens, params.purpose);
+  const words = result.text.split(/(?<=\s)/);
+  const perChunk = Math.max(MOCK_CHUNK_WORDS, Math.ceil(words.length / MOCK_CHUNK_MAX));
+  for (let i = 0; i < words.length; i += perChunk) {
+    onDelta(words.slice(i, i + perChunk).join(''));
+    if (i + perChunk < words.length) {
+      await new Promise((resolve) => setTimeout(resolve, MOCK_CHUNK_DELAY_MS));
+    }
+  }
+  return result;
 }
 
 /* ---------- mock ---------- */

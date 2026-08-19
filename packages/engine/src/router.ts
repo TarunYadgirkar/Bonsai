@@ -7,7 +7,12 @@
  * before it pulls the model lever. A manual pick is never silently upgraded: the user's choice
  * is their own labelled example, and overriding it would destroy the signal.
  */
-import { complete as defaultComplete, type CompleteFn } from './llm';
+import {
+  complete as defaultComplete,
+  completeStream as defaultCompleteStream,
+  type CompleteFn,
+  type CompleteStreamFn,
+} from './llm';
 import { adjustForProfile, QUESTION_KINDS, type RoutingProfile } from './learning';
 import { logger } from './logger';
 import {
@@ -67,9 +72,11 @@ export interface RouteParams {
 
 export interface RouterDeps {
   complete: CompleteFn;
+  /** Streaming completion; when present and the caller taps onDelta, answer calls stream. */
+  completeStream?: CompleteStreamFn;
 }
 
-const DEFAULT_DEPS: RouterDeps = { complete: defaultComplete };
+const DEFAULT_DEPS: RouterDeps = { complete: defaultComplete, completeStream: defaultCompleteStream };
 
 export async function route(
   params: RouteParams,
@@ -279,6 +286,13 @@ export interface EscalationParams {
    * the brief, or null when there is nothing to widen with. Called at most once.
    */
   widen?: () => { userPrompt: string; addedTokens: number } | null;
+  /**
+   * Streaming tap: raw text chunks of the CURRENT answer attempt, in order. A retry or
+   * escalation discards what already streamed — onRestart fires first so the consumer can
+   * clear its partial render.
+   */
+  onDelta?: (chunk: string) => void;
+  onRestart?: (reason: 'widened' | 'escalated') => void;
 }
 
 export interface EscalationResult {
@@ -327,16 +341,20 @@ export async function completeWithEscalation(
   if (routing.coveredByBrief === false) tryWiden();
 
   const call = async (model: string, tier: Tier, effort: Effort | undefined) => {
-    const result = await deps.complete({
+    const request = {
       tier,
       model,
       effort,
-      purpose: 'chat',
+      purpose: 'chat' as const,
       messages: [
         { role: 'system' as const, content: params.systemPrompt },
         { role: 'user' as const, content: userPrompt },
       ],
-    });
+    };
+    const result =
+      params.onDelta && deps.completeStream
+        ? await deps.completeStream(request, params.onDelta)
+        : await deps.complete(request);
     totalInput += result.inputTokens;
     totalOutput += result.outputTokens;
     totalCost += result.estCostUsd;
@@ -357,6 +375,7 @@ export async function completeWithEscalation(
 
   // Context lever: same model, wider prompt.
   if (tryWiden()) {
+    params.onRestart?.('widened');
     result = await call(routing.model, routing.tier, routing.effort);
     if (!answerFailsSanityCheck(result.text, routing.complexity)) {
       return finish(result.text, result.servedBy);
@@ -387,6 +406,7 @@ export async function completeWithEscalation(
       before.label ?? before.modelLabel
     } answer failed the sanity check.`,
   };
+  params.onRestart?.('escalated');
   const second = await call(upgradedModel, upgradedTier, upgradedEffort);
   return finish(second.text, second.servedBy);
 }

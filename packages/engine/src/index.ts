@@ -23,7 +23,9 @@ export {
 } from './models';
 export {
   complete,
+  completeStream,
   type CompleteFn,
+  type CompleteStreamFn,
   type CompleteParams,
   type CompleteResult,
   type LlmMessage,

@@ -262,3 +262,122 @@ export function providerSummary(): { provider: ProviderName; models: Record<stri
     models: Object.fromEntries(MODELS.map((m) => [m.label, upstreamModel(m.id)])),
   };
 }
+
+/* ---------- streaming ---------- */
+
+/**
+ * Streaming sibling of providerComplete. Text chunks reach `onDelta` as they arrive; the
+ * resolved result carries the same totals the non-streaming path would have returned.
+ *
+ * Anthropic streams natively (SSE). OpenAI/xAI fall back to the buffered call and emit the
+ * whole answer as one delta — honest, just not incremental. Mock returns null here too; the
+ * llm layer chunks the mock itself so zero-key demos still show the stream.
+ */
+export async function providerCompleteStream(
+  params: ProviderParams,
+  onDelta: (chunk: string) => void,
+): Promise<ProviderResult | null> {
+  const provider = providerName();
+  if (provider === 'mock') return null;
+
+  const upstream = upstreamModel(params.model);
+  try {
+    if (provider === 'anthropic') {
+      const result = await callAnthropicStream(upstream, params, onDelta);
+      if (!result.text.trim()) {
+        logger.warn(`[llm] anthropic stream returned no content on ${upstream} — mock fallback`);
+        return null;
+      }
+      return result;
+    }
+    const result = await callOpenAiCompatible(provider, upstream, params);
+    if (!result.text.trim()) return null;
+    onDelta(result.text);
+    return result;
+  } catch (err) {
+    if ((err as Error).name === 'AbortError' && params.signal?.aborted) throw err;
+    logger.warn(`[llm] ${provider} stream failed (${(err as Error).message}) — mock fallback`);
+    return null;
+  }
+}
+
+/** One SSE frame's parsed event name + JSON data line. */
+function* sseFrames(buffer: string): Generator<{ event: string; data: string }> {
+  for (const frame of buffer.split('\n\n')) {
+    let event = '';
+    let data = '';
+    for (const line of frame.split('\n')) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      else if (line.startsWith('data:')) data += line.slice(5).trim();
+    }
+    if (event && data) yield { event, data };
+  }
+}
+
+async function callAnthropicStream(
+  upstream: string,
+  params: ProviderParams,
+  onDelta: (chunk: string) => void,
+): Promise<ProviderResult> {
+  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? 'medium']);
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': process.env.ANTHROPIC_API_KEY!,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({ ...anthropicBody(upstream, params), stream: true }),
+    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout,
+  });
+
+  if (!res.ok || !res.body) {
+    throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let text = '';
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let stopReason: string | undefined;
+
+  const consume = (chunk: string) => {
+    buffer += chunk;
+    const frames = buffer.split('\n\n');
+    buffer = frames.pop() ?? '';
+    for (const { event, data } of sseFrames(frames.join('\n\n'))) {
+      if (event === 'error') throw new Error(`anthropic stream error ${data.slice(0, 160)}`);
+      const parsed = JSON.parse(data) as {
+        type?: string;
+        message?: { usage?: { input_tokens?: number } };
+        delta?: { type?: string; text?: string; stop_reason?: string };
+        usage?: { output_tokens?: number };
+      };
+      if (parsed.type === 'message_start') {
+        inputTokens = parsed.message?.usage?.input_tokens ?? 0;
+      } else if (parsed.type === 'content_block_delta' && parsed.delta?.type === 'text_delta') {
+        const piece = parsed.delta.text ?? '';
+        if (piece) {
+          text += piece;
+          onDelta(piece);
+        }
+      } else if (parsed.type === 'message_delta') {
+        outputTokens = parsed.usage?.output_tokens ?? outputTokens;
+        stopReason = parsed.delta?.stop_reason ?? stopReason;
+      }
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    consume(decoder.decode(value, { stream: true }));
+  }
+  consume(decoder.decode());
+
+  // Same refusal rule as the buffered path — degrade rather than surface a half-answer.
+  if (stopReason === 'refusal') throw new Error(`anthropic refusal on ${upstream}`);
+  return { text, inputTokens, outputTokens, servedBy: upstream };
+}

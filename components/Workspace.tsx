@@ -15,6 +15,7 @@ import { EconomicsPanel } from './EconomicsPanel';
 import { MergeFlight, type Flight } from './MergeFlight';
 import { TreeSidebar, type NodeStats } from './TreeSidebar';
 import { conversationTokens } from './tokens';
+import { createSseParser } from '@/lib/sse';
 
 /**
  * The API writes human-readable error bodies ("state not persisted — database write failed",
@@ -119,6 +120,8 @@ export function Workspace() {
    */
   const [pendingModes, setPendingModes] = useState<Record<string, ModeSelection | null>>({});
   const [merging, setMerging] = useState(false);
+  /** The in-flight answer, streamed token by token. Null when nothing is streaming. */
+  const [stream, setStream] = useState<{ branchId: string; text: string } | null>(null);
   /** A draft from a send that failed while its branch was unmounted — handed back on remount. */
   const [failedDraft, setFailedDraft] = useState<{ branchId: string; content: string } | null>(null);
   const [flight, setFlight] = useState<Flight | null>(null);
@@ -224,17 +227,59 @@ export function Workspace() {
       // on the persisted pin.
       const hadPending = branchId in pendingModes;
       const pending = pendingModes[branchId];
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          branchId,
-          content,
-          mode: hadPending ? (pending ?? { mode: 'auto' as const }) : undefined,
-        }),
+      const payload = JSON.stringify({
+        branchId,
+        content,
+        mode: hadPending ? (pending ?? { mode: 'auto' as const }) : undefined,
       });
-      if (!res.ok) throw await httpError(res, 'POST /api/chat');
-      const data: ChatResponse = await res.json();
+      const post = (path: string) =>
+        fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+        });
+
+      // Streaming first; the buffered route stays as the fallback when the stream body is
+      // unavailable (some proxies buffer or strip SSE).
+      const data = await (async (): Promise<ChatResponse> => {
+        const res = await post('/api/chat/stream');
+        if (!res.ok) throw await httpError(res, 'POST /api/chat/stream');
+        const isSse = (res.headers.get('content-type') ?? '').includes('text/event-stream');
+        if (!res.body || !isSse) {
+          const buffered = await post('/api/chat');
+          if (!buffered.ok) throw await httpError(buffered, 'POST /api/chat');
+          return buffered.json();
+        }
+        setStream({ branchId, text: '' });
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        const parse = createSseParser();
+        let final: ChatResponse | null = null;
+        for (;;) {
+          const { done, value } = await reader.read();
+          const chunk = value ? decoder.decode(value, { stream: !done }) : '';
+          for (const ev of parse(chunk)) {
+            if (ev.event === 'delta') {
+              const { text } = JSON.parse(ev.data) as { text: string };
+              setStream((prev) =>
+                prev && prev.branchId === branchId
+                  ? { branchId, text: prev.text + text }
+                  : { branchId, text },
+              );
+            } else if (ev.event === 'restart') {
+              // The ladder discarded the partial answer (widened or escalated) — start over.
+              setStream({ branchId, text: '' });
+            } else if (ev.event === 'done') {
+              final = JSON.parse(ev.data) as ChatResponse;
+            } else if (ev.event === 'error') {
+              throw new Error((JSON.parse(ev.data) as { error: string }).error);
+            }
+          }
+          if (done) break;
+        }
+        if (!final) throw new Error('stream ended without a result');
+        return final;
+      })();
 
       // The server persisted the pick — pinnedMode is the truth from here on. Drop the entry
       // only if it is still the one this request sent: a pick made while the request was in
@@ -278,6 +323,7 @@ export function Workspace() {
       setFailedDraft({ branchId, content });
       return false;
     } finally {
+      setStream(null);
       setSending(false);
     }
   };
@@ -598,6 +644,7 @@ export function Workspace() {
           }
           mode={modeFor(active)}
           sending={sending}
+          streamingText={stream?.branchId === active.id ? stream.text : null}
           branching={branching}
           merging={merging}
           highlightInsightId={
