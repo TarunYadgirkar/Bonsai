@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach } from 'vitest';
-import { escapeHtml, nodeCardHtml, renderTreeInto } from '../src/render';
+import { escapeHtml, nodeCardHtml, renderTreeInto, econLine } from '../src/render';
 import type { TreeNode } from '../src/store';
 
 function node(over: Partial<TreeNode>): TreeNode {
@@ -41,7 +41,7 @@ describe('nodeCardHtml', () => {
   it('renders model, economics, and the status glyph', () => {
     const html = nodeCardHtml(node({}));
     expect(html).toContain('Haiku 4.5 · low');
-    expect(html).toContain('~14000→60 tok · 99.6% pruned');
+    expect(html).toContain('~14000 tok available → 60 in the brief · 99.6% pruned');
     expect(html).toContain('○'); // open glyph
     expect(html).not.toContain('↳'); // no insight line when not merged
   });
@@ -79,5 +79,14 @@ describe('renderTreeInto', () => {
     expect(out.map((o) => o.node.id)).toEqual(['a', 'b']); // sorted by createdAt
     expect(container.querySelectorAll('.node')).toHaveLength(2);
     expect(out[0].el.textContent).toContain('first');
+  });
+});
+
+describe('econLine', () => {
+  it('phrases growth honestly instead of "0% pruned"', () => {
+    expect(econLine(54, 67, 0)).toBe('~54 tok thread → 67 tok brief · nothing to prune yet');
+  });
+  it('keeps the pruning phrasing when pruning actually happened', () => {
+    expect(econLine(14000, 60, 99.6)).toBe('~14000 tok available → 60 in the brief · 99.6% pruned');
   });
 });

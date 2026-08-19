@@ -13,7 +13,7 @@ import {
 } from '@bonsai/engine';
 import { branchPrompt, compileBranch, mergePrompt } from './compile';
 import type { ActiveInfo, ContentToPanel, PrefillResult, TreeResult } from './messages';
-import { escapeHtml, renderTreeInto } from './render';
+import { econLine, escapeHtml, renderTreeInto } from './render';
 import { listNodes, loadProfile, putNode, saveProfile, updateNode, type TreeNode } from './store';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -97,7 +97,7 @@ function renderPreview(
     <strong>Compiled brief</strong>
     <ul>${brief.facts.map((f) => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
     <div class="excluded">${escapeHtml(brief.excludedNote)}</div>
-    <div class="econ">~${brief.availableTokens} tokens available → ${brief.briefTokens} in the brief · ${brief.prunedPct}% pruned</div>
+    <div class="econ">${econLine(brief.availableTokens, brief.briefTokens, brief.prunedPct)}</div>
   `;
 
   const label = document.createElement('label');

@@ -859,6 +859,12 @@ Question: ${params.question}`
     merged: "\u2713",
     abandoned: "\u2715"
   };
+  function econLine(availableTokens, briefTokens, prunedPct2) {
+    if (prunedPct2 <= 0 || briefTokens >= availableTokens) {
+      return `~${availableTokens} tok thread \u2192 ${briefTokens} tok brief \xB7 nothing to prune yet`;
+    }
+    return `~${availableTokens} tok available \u2192 ${briefTokens} in the brief \xB7 ${prunedPct2}% pruned`;
+  }
   function escapeHtml(s) {
     return s.replace(
       /[&<>"']/g,
@@ -869,14 +875,23 @@ Question: ${params.question}`
     return `
     <div class="title"><span class="glyph-${node.status}">${GLYPH[node.status]}</span> ${escapeHtml(node.title)}</div>
     <div class="meta"><span class="chip">${escapeHtml(node.modelLabel)} \xB7 ${escapeHtml(node.effort)}</span>
-      ~${node.availableTokens}\u2192${node.briefTokens} tok \xB7 ${node.prunedPct}% pruned \xB7 ${escapeHtml(node.status)}</div>
+      ${econLine(node.availableTokens, node.briefTokens, node.prunedPct)} \xB7 ${escapeHtml(node.status)}</div>
     ${node.insight ? `<div class="insight">\u21B3 ${escapeHtml(node.insight)}</div>` : ""}
   `;
   }
   function renderTreeInto(container, nodes) {
     const sorted = [...nodes].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
     if (!sorted.length) {
-      container.innerHTML = '<p class="empty">No branches yet.</p>';
+      container.innerHTML = `
+      <div class="empty">
+        <p style="margin:0 0 6px">No branches yet. The loop:</p>
+        <ol style="margin:0;padding-left:16px">
+          <li>Highlight text in any Claude chat \u2192 click the \u{1F331} Branch chip (or paste it above).</li>
+          <li><b>Compile brief</b> \u2014 a minimal, self-contained context instead of the whole thread.</li>
+          <li><b>Open branch chat</b> \u2014 Bonsai prefills it; you press send.</li>
+          <li>Distill one line and <b>merge it back</b> to the parent.</li>
+        </ol>
+      </div>`;
       return [];
     }
     container.innerHTML = "";
@@ -982,7 +997,7 @@ Question: ${params.question}`
     <strong>Compiled brief</strong>
     <ul>${brief.facts.map((f) => `<li>${escapeHtml(f)}</li>`).join("")}</ul>
     <div class="excluded">${escapeHtml(brief.excludedNote)}</div>
-    <div class="econ">~${brief.availableTokens} tokens available \u2192 ${brief.briefTokens} in the brief \xB7 ${brief.prunedPct}% pruned</div>
+    <div class="econ">${econLine(brief.availableTokens, brief.briefTokens, brief.prunedPct)}</div>
   `;
     const label = document.createElement("label");
     label.textContent = "Model & effort (Bonsai picked this \u2014 change it to teach the router)";

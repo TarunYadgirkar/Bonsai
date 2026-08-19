@@ -59,6 +59,12 @@ loaded the extension, reload that tab — content scripts attach on page load.
 
 ## Verified
 
+The side panel's own buttons are covered by `npm run test:e2e:panel` (real Chromium, the panel
+as an extension page, claude.ai DNS-pinned to localhost and fulfilled from fixtures): compile →
+brief preview, Open branch chat → prefilled composer, Merge to parent → prefilled parent chat,
+never-send held across the whole run.
+
+
 Against live claude.ai (Aug 2026): the read endpoints return the conversation list + message
 tree; `reconstructPath` rebuilds the on-screen path (unit-tested in `test/`); the multi-line
 brief pre-fills the ProseMirror composer and clears cleanly, with no send. The engine

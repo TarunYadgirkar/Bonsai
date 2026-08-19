@@ -415,3 +415,20 @@ Session goal (Tarun): "make it usable as an app — way more features, real, not
   documented. Live-verified: the 61st mutation in a minute got 429.
 - Export download switched to an anchor click (lint: no location.assign for internal URLs).
 - To enable signing in prod: `vercel env add SESSION_SECRET` (any long random string), redeploy.
+
+## 2026-08-19 — Extension: last-mile verified + panel polish (206 tests, both e2e suites green)
+
+- **Panel e2e** (`extension/test-panel-e2e.mjs`, `npm run test:e2e:panel`) — the buttons every
+  handoff said only a human could click are now machine-verified: sidepanel.html runs as an
+  extension tab beside a fixture chat tab, claude.ai's read API fulfilled locally and the domain
+  DNS-pinned to 127.0.0.1 (an SW-opened tab navigates before route interception attaches — the
+  pin guarantees nothing real is ever reached; the harness caught exactly that escape). Proves
+  compile → brief preview, Open branch chat → prefilled composer via the SW pending path,
+  Merge to parent → prefilled parent chat, node lifecycle draft→merged, and never-send across
+  every panel-driven flow. 8/8.
+- **Panel UI polish**: real bonsai icon in the header (was emoji); `econLine()` phrases tiny-
+  thread compiles honestly ("~54 tok thread → 67 tok brief · nothing to prune yet" instead of a
+  bug-looking "0% pruned" next to growth) in both the preview and tree cards, unit-tested; the
+  empty tree state now teaches the four-step loop instead of "No branches yet."
+- Toolbar click already opens the panel (`openPanelOnActionClick`) and the icons landed
+  yesterday, so install → click icon → panel is the whole onboarding path.
