@@ -230,6 +230,62 @@ export function Workspace() {
       ? (pendingModes[conversation.id] ?? null)
       : (conversation.pinnedMode ?? null);
 
+  /**
+   * POST to a streaming twin endpoint and consume its SSE into the shared stream state;
+   * falls back to the buffered endpoint when the response isn't a stream. Both chat and
+   * message-replay speak the same protocol (lib/sse-turn).
+   */
+  const streamTurn = async (
+    streamPath: string,
+    bufferedPath: string,
+    branchId: string,
+    payload: string,
+  ): Promise<ChatResponse> => {
+    const post = (path: string) =>
+      fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+      });
+    const res = await post(streamPath);
+    if (!res.ok) throw await httpError(res, `POST ${streamPath}`);
+    const isSse = (res.headers.get('content-type') ?? '').includes('text/event-stream');
+    if (!res.body || !isSse) {
+      const buffered = await post(bufferedPath);
+      if (!buffered.ok) throw await httpError(buffered, `POST ${bufferedPath}`);
+      return buffered.json();
+    }
+    setStream({ branchId, text: '' });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    const parse = createSseParser();
+    let final: ChatResponse | null = null;
+    for (;;) {
+      const { done, value } = await reader.read();
+      const chunk = value ? decoder.decode(value, { stream: !done }) : '';
+      for (const ev of parse(chunk)) {
+        if (ev.event === 'delta') {
+          const { text } = JSON.parse(ev.data) as { text: string };
+          setStream((prev) =>
+            prev && prev.branchId === branchId
+              ? { branchId, text: prev.text + text }
+              : { branchId, text },
+          );
+        } else if (ev.event === 'restart') {
+          // The ladder discarded the partial answer (widened or escalated) — start over.
+          setStream({ branchId, text: '' });
+        } else if (ev.event === 'done') {
+          final = JSON.parse(ev.data) as ChatResponse;
+        } else if (ev.event === 'error') {
+          throw new Error((JSON.parse(ev.data) as { error: string }).error);
+        }
+      }
+      if (done) break;
+    }
+    if (!final) throw new Error('stream ended without a result');
+    return final;
+  };
+
   /** Resolves false on failure so the composer can put the user's text back. */
   const send = async (content: string): Promise<boolean> => {
     if (!activeId) return false;
@@ -246,54 +302,7 @@ export function Workspace() {
         content,
         mode: hadPending ? (pending ?? { mode: 'auto' as const }) : undefined,
       });
-      const post = (path: string) =>
-        fetch(path, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: payload,
-        });
-
-      // Streaming first; the buffered route stays as the fallback when the stream body is
-      // unavailable (some proxies buffer or strip SSE).
-      const data = await (async (): Promise<ChatResponse> => {
-        const res = await post('/api/chat/stream');
-        if (!res.ok) throw await httpError(res, 'POST /api/chat/stream');
-        const isSse = (res.headers.get('content-type') ?? '').includes('text/event-stream');
-        if (!res.body || !isSse) {
-          const buffered = await post('/api/chat');
-          if (!buffered.ok) throw await httpError(buffered, 'POST /api/chat');
-          return buffered.json();
-        }
-        setStream({ branchId, text: '' });
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        const parse = createSseParser();
-        let final: ChatResponse | null = null;
-        for (;;) {
-          const { done, value } = await reader.read();
-          const chunk = value ? decoder.decode(value, { stream: !done }) : '';
-          for (const ev of parse(chunk)) {
-            if (ev.event === 'delta') {
-              const { text } = JSON.parse(ev.data) as { text: string };
-              setStream((prev) =>
-                prev && prev.branchId === branchId
-                  ? { branchId, text: prev.text + text }
-                  : { branchId, text },
-              );
-            } else if (ev.event === 'restart') {
-              // The ladder discarded the partial answer (widened or escalated) — start over.
-              setStream({ branchId, text: '' });
-            } else if (ev.event === 'done') {
-              final = JSON.parse(ev.data) as ChatResponse;
-            } else if (ev.event === 'error') {
-              throw new Error((JSON.parse(ev.data) as { error: string }).error);
-            }
-          }
-          if (done) break;
-        }
-        if (!final) throw new Error('stream ended without a result');
-        return final;
-      })();
+      const data = await streamTurn('/api/chat/stream', '/api/chat', branchId, payload);
 
       // The server persisted the pick — pinnedMode is the truth from here on. Drop the entry
       // only if it is still the one this request sent: a pick made while the request was in
@@ -399,28 +408,56 @@ export function Workspace() {
     }
   };
 
-  /** Shared by regenerate and edit — both replay a turn through POST /api/message. */
+  /** Shared by regenerate and edit — both replay a turn through the /api/message pair. */
   const messageAction = async (payload: {
     messageId: string;
     op: 'regenerate' | 'edit';
     content?: string;
   }): Promise<boolean> => {
     if (!activeId || sending) return false;
+    const branchId = activeId;
     setSending(true);
+    // Optimistic truncation so the discarded turns leave the screen while the replacement
+    // streams into their place; loadState() reconciles with what the server actually stored
+    // (including on failure, where it restores the untouched thread).
+    setState((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        conversations: prev.conversations.map((c) => {
+          if (c.id !== branchId) return c;
+          const idx = c.messages.findIndex((m) => m.id === payload.messageId);
+          if (idx === -1) return c;
+          // Regenerate targets the assistant message: keep everything before it (the question
+          // stays on screen). Edit targets the user message: swap in the new text. Either way
+          // everything after the rerun point leaves so the stream renders in its place.
+          const kept = c.messages.slice(0, idx);
+          const messages =
+            payload.op === 'edit'
+              ? [
+                  ...kept,
+                  { id: 'optimistic-edit', role: 'user' as const, content: payload.content ?? '' },
+                ]
+              : kept;
+          return { ...c, messages };
+        }),
+      };
+    });
     try {
-      const res = await fetch('/api/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branchId: activeId, ...payload }),
-      });
-      if (!res.ok) throw await httpError(res, 'POST /api/message');
-      // History changed shape server-side (truncation + replay) — refetch rather than splice.
+      await streamTurn(
+        '/api/message/stream',
+        '/api/message',
+        branchId,
+        JSON.stringify({ branchId, ...payload }),
+      );
       await loadState();
       return true;
     } catch (err) {
       setError(describe(err));
+      await loadState(); // put the truncated-away turns back on screen
       return false;
     } finally {
+      setStream(null);
       setSending(false);
     }
   };
@@ -702,8 +739,14 @@ export function Workspace() {
           onExport={(format, scope) => {
             const params = new URLSearchParams({ format });
             if (scope === 'branch' && active) params.set('branch', active.id);
-            // A plain navigation: Content-Disposition makes it a download, the page stays put.
-            window.location.assign(`/api/export?${params}`);
+            // An anchor click, not a navigation: Content-Disposition makes it a download and
+            // the page stays put (router.push would be wrong — this is a file, not a page).
+            const a = document.createElement('a');
+            a.href = `/api/export?${params}`;
+            a.download = '';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
           }}
           activeIsBranch={Boolean(active?.parentId)}
           onClose={() => setPaletteOpen(false)}
