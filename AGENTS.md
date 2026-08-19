@@ -94,191 +94,30 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-12T01:25:00Z by claude session (lane A)
+Updated: 2026-08-19T02:45:00Z by claude session (lane A)
 
 ### ▶ NEXT SESSION — do these first
-1. **Promote to production** — now UNBLOCKED: migrations 004 + 005 are applied to `br-old-fog`
-   (done 2026-08-12 via the Neon MCP, Tarun-approved; additive DDL only, the optional legacy
-   DELETE was NOT run). Just `vercel --prod` from `~/TarunsCode/bonsai-copy-a` (worktree linked
-   to bonsai-connector). Needs Tarun's Vercel auth.
-2. **(Optional) real models on the deploy.** `vercel env add ANTHROPIC_API_KEY preview` (and/or
-   `production`), then redeploy. Local dev already runs real models (key in `.env.local`,
-   verified live: Haiku 4.5 Low answered, cost ledger measured).
-3. **Live-model eval run** (Tarun: `ANTHROPIC_API_KEY=… npm run eval` — the hook blocks agents
-   from anything env-shaped; tsx does not read `.env.local`). Mock run is 15/15.
-4. **Side-panel buttons** — the ONLY remaining unverified UI: a human or Cowork clicks
-   Compile / Open branch chat once. Everything else the panel drives is now covered by
-   `extension/test-e2e.mjs` (npm run test:e2e in extension/ — 13 checks, real Chromium,
-   never-send proven at the network layer with a canary self-test).
-5. Then: `pnpm publish @bonsai/engine`, MCP Apps tree UI, connector OAuth, streaming chat,
-   and REAL fix for the population-prior Sybil residual (signed session cookies + rate limiting)
-   if the demo ever grows real traffic.
+1. **Promote prod** — `vercel --prod` from this worktree picks up Phase 4 (streaming, message
+   actions, palette, export, connector auto-routing, the session-race fix). Needs Tarun's auth.
+2. **Side-panel buttons** — still the only unverified UI (Chrome side panel is browser chrome;
+   needs a human or Cowork click of Compile / Open branch chat).
+3. Then: `pnpm publish @bonsai/engine`, MCP Apps tree UI, connector OAuth, signed session
+   cookies + rate limiting (population-prior Sybil residual).
 
-**Session 2026-08-12 (later) — five-surface product audit + fixes (prod deployed by Tarun and
-verified: new code live, chat loop works, mock honest). 5-auditor sweep over web/plugin/connector/
-extension/engine, ranked gaps fixed:**
-- **Web**: first-visit onboarding empty-state (loop explained + demo CTA + repo link — CTA
-  verified loading the tree), mobile stacks below `md` (was a 58px chat pane), touch selection
-  (`touchend`), per-message "demo answer" chip (`!servedBy`) + session demo-mode ribbon
-  (`/api/modes.provider`), error overlays surface the API's human bodies, OG/twitter cards
-  (`public/og.jpg`).
-- **Connector**: fork now enforces the engine's anchor invariant server-side (pins the parent
-  brief's top fact when the caller drops it — live-verified over real MCP JSON-RPC against the
-  copy-a DB) and returns `structuredContent` on fork+merge; `anchorCarriedThrough` exported from
-  the engine. Docs: dev-key contradiction fixed, self-host walkthrough, claude.ai prereqs.
-- **Extension/plugin/engine docs**: honest install paths everywhere (no-store-listing note, repo-
-  root `npm install`, reload-open-tabs trap, copy-a branch caveat for the plugin, engine README
-  quickstart now compiles as written incl. anchorFact, Node floor 20.3, LICENSE in the tarball,
-  pnpm-publish guard). CI now gates extension + plugin dist freshness and runs the plugin smoke.
-- **Access policy (Tarun's call): the key never goes public.** Production stays keyless mock
-  (honest ribbon). Real-model access = preview deployments behind Vercel Authentication +
-  shareable links; Tarun flips it in dashboard (Deployment Protection → previews), then
-  `vercel env add ANTHROPIC_API_KEY preview` + `vercel`. The MCP token here couldn't change
-  project settings (403).
-- **Prod needs one more `vercel --prod`** to pick up today's UX/connector fixes.
-- Known-open: plugin install DOA until plugin/ reaches `main` (lane boundary — Tarun promotes);
-  extension icons missing (puzzle-menu note shipped instead); connector learning/population
-  routing hint still absent (documented, next session).
+**Session 2026-08-18 — Phase 4: app usability (see BUILDLOG for detail; 10 commits, 192 tests,
+15/15 evals, CI GREEN — it had been red since 08-12, root cause plugin/mcp deps never installed
+in CI; fixed):**
+- Regenerate + edit-and-rerun (`/api/message`, engine `truncateForRerun`, real row deletes on
+  truncation), rename/archive from the UI (`/api/node`).
+- Streaming chat end-to-end: `POST /api/chat/stream` SSE, native Anthropic streaming + mock
+  paced stream, escalation `restart` events, client-abort → provider-fetch cancellation,
+  buffered fallback. Verified in Chromium against a real model.
+- ⌘K palette (search all branches/messages/insights + quick actions), `GET /api/export`
+  (garden/subtree, md/json).
+- Connector fork: model/effort optional — engine classifier + community prior route it;
+  divergence hints returned. Extension icons shipped (`extension/make-icons.mjs`).
+- Fixed a real first-visit bug: state/economics session-cookie race (economics no longer mints).
+- Run the FULL CI sequence locally before pushing (Tarun asked — no more failure emails):
+  typecheck, extension tsc+build+dist-diff, `npm ci --prefix plugin/mcp` + smoke + build +
+  dist-diff, tests, evals, build, engine tsup smoke.
 
-**Session 2026-08-12 — extension e2e, population prior, benchmark expansion (6 commits, gates:
-175 tests, 15/15 evals, both builds green):**
-- **Extension e2e harness** (`extension/test-e2e.mjs`, `npm run test:e2e`): real Chromium via
-  Playwright `--load-extension`, claude.ai fully intercepted with a local fixture (no login, no
-  account risk). Proves: pending brief prefills the composer, pending key consumed, LINK_NODE
-  binds draft→conversation, Branch chip lifecycle, and **zero non-GET requests all run** — with a
-  deliberate canary POST proving the detection isn't vacuous. Also fixed a real cold-start race:
-  content script now retries `storage.session` reads while the SW's `setAccessLevel` lands.
-- **Population prior shipped** (the moat plumbing PLAN item 4): `loadPopulationPrior()` folds all
-  sessions' profiles via `mergeProfiles` into the community cold-start, injected into `route()` in
-  chat + branch; public `GET /api/priors`. Security review (fix-first verdict) hardened it same
-  session: per-contributor weight clamp (PRIOR_STAT_CAP 20, proportional so rates survive), k
-  raised 3→10, sub-k contributor count suppressed (no Sybil countdown oracle), single-flight
-  cache, `normalizeProfile` instead of a cast, migration 005 index on `routing_profiles
-  (updated_at)`. Residual accepted + documented: unsigned free sessions mean a determined Sybil
-  can still cross k — the clamp bounds recovery to a capped shadow; real fix is signed sessions.
-- **Benchmark 10→15 cases** (BENCHMARK.md table updated): ambiguous antecedent (two deadlines,
-  selection anchors), long-trunk salience (buried fact + ≥60% pruned), depth-3 chain, population
-  prior end-to-end, closed merge loop. **Depth-3 FAILED on first run — real bug**: the compiler
-  pruned the inherited entity when the fork's question never named it ("It closes September 11",
-  dangling referent). Fix: `assemblePath` exposes `anchorFact` (inherited brief's top fact),
-  `compileBrief` pins it through every composition. Unit-tested (pin + dedupe), evals 15/15.
-- **DB**: migrations 004 + 005 applied to `br-old-fog-avfznwqu` (Neon MCP, Tarun-approved,
-  additive only). Local dev verified end-to-end with REAL models: fresh session → empty root →
-  chat → Haiku 4.5 Low answer → survives reload; `/api/priors` returns `{contributors:null,
-  prior:null}` below threshold as designed.
-- Housekeeping: 12 stray session screenshots moved into `assets/generated/`; playwright added as
-  root devDep (CI does NOT run test:e2e — deliberate, needs a browser download).
-
-**Session 2026-08-11 PM — audit + fixes (7 commits on copy-a, all gates green: 172 tests, 10/10
-evals, build clean). A 56-agent adversarial review surfaced 36 verified bugs; the load-bearing
-ones are fixed:**
-- **Web app is now per-session** (`lib/session.ts` cookie + `session_id` column, `migrations/004`).
-  A fresh visitor lands on an EMPTY root that answers from its own transcript; the Berkeley fixture
-  is an opt-in demo (`/api/demo`, "Load Berkeley demo" button), no longer preloaded for everyone.
-  `/api/reset` empties the caller's own garden. Store rewritten around this; a memory-fallback
-  working set now refuses to write back over a DB that only failed to READ (was clobbering rows).
-- **Connector auth fails closed**: `validateKey` rejects the repo-literal `bonsai-dev-key` whenever
-  DATABASE_URL is set and rejects (not memory-falls-back) on a DB error; the sticky `degraded` flag
-  is now a 30s cooldown. Per-key node cap + parentId ownership check on fork; path key is canonical
-  (a bearer can't mask/rewrite it). Dev-key seed removed from `migrations/003`.
-- **Learning router**: feedback attributed to the classifier's PRE-adjustment tier
-  (`RoutingDecision.classifiedTier`) so a bad learned shift self-corrects; an inherited pin no
-  longer re-logs an override every turn (was fabricating a "consistent pattern").
-- **Accounting**: `buildLog` persists the engine's real per-attempt cost (`routing.estCostUsd`,
-  which includes escalation passes + `costForServedBy`) instead of a catalog reprice.
-- **Plugin** MCP server is bundled self-contained (`plugin/mcp/dist/server.mjs`); install needs no
-  npm step. Rebuild with `node plugin/mcp/build.mjs` after editing `server.mjs`. Also: cross-process
-  store lock, coverage retry supersedes phantom siblings, routed effort rendered into the subagent
-  prompt, insight cap 20 everywhere.
-- **Engine** (2nd pass): fork anchors honoured + fail closed on unknown anchor; mock compiler
-  carries the inherited brief forward instead of injecting the Berkeley fixture (depth-2 proof is
-  genuine now); non-string facts filtered before the empty-brief gate; provider propagates a caller
-  abort; baseline scaled onto the strong model's 1.3x tokenizer.
-- **Extension**: session storage opened to the content script (prefill worked-around no-op), fresh-
-  chat link guard, selection-tab guard, orgId UUID validation, per-kind feedback, **structural
-  never-send** (esbuild stub — zero model-POST code in the bundle), dropped `tabs` permission.
-- **Web UI**: failed-send draft survives a branch switch; routing chip no longer flickers to Auto.
-- **Garden artifact** reworked into a real left-to-right tree diagram (same URL b1b44d60).
-
-All 36 adversarially-verified findings from the audit are now fixed on copy-a (173 tests, 10/10
-evals, plugin smoke 12/12, both builds green). Two were left deliberately, documented in place: the
-MCP connector's open CORS/origin (claude.ai's initialize breaks with strict validation) and the
-per-session routing-profile read-modify-write (last-write-wins; negligible contention per session).
-
-**BLOCKED — deploy the above to the live connector (needs Tarun; the auto-mode classifier blocked
-me from running DDL on the live Neon branch):**
-1. Apply `migrations/004_sessions.sql` schema to the copy-a Neon branch `br-old-fog-avfznwqu`
-   (the two `ALTER TABLE … ADD COLUMN session_id` + two `CREATE INDEX`; the DELETE of `legacy`
-   rows is optional — session-scoped reads already hide them). Do it in the Neon console or a
-   psql the classifier isn't gating.
-2. `vercel --prod` from `~/TarunsCode/bonsai-copy-a` (worktree is linked to `bonsai-connector`).
-3. Re-verify: fresh web session is empty; `bonsai-dev-key` → 401; real key still inits + fork/merge.
-Migration MUST land before the deploy or new-code writes 503 (no session_id column yet).
-
-**Live-deployed + tested (2026-08-12).** New code on a **preview** deploy with a migrated Neon
-branch: https://bonsai-connector-kqdihj0ni-taruns-projects-248def65.vercel.app
-(`-e DATABASE_URL=` → `br-small-mode-avqh6i55`; production bonsai-connector.vercel.app UNTOUCHED +
-verified healthy). Full loop driven via Playwright: per-session empty root, routing (open-ended
-escalates, brief-covered lookup → Haiku Low), select→branch→brief (85%+ pruned)→merge→persists on
-reload; economics ledger shows the cost fixes. Web deploy is MOCK (no ANTHROPIC_API_KEY) — real
-models need a key (`vercel env add ANTHROPIC_API_KEY preview`, then redeploy). To promote to prod:
-migrate the LIVE branch `br-old-fog` (classifier blocked my DDL there — do it in the Neon console)
-then `vercel --prod`.
-
-**Extension** loaded unpacked + verified live: content script injects, Branch chip appears on
-selection and dismisses cleanly (chip-clear fix). **NOT verified:** the side panel's own buttons
-(Compile / Open branch chat) — Chrome's side panel is browser chrome, not page DOM, so page-scoped
-browser automation (Playwright, claude-in-chrome) can't click it. Cowork's local screen-level
-computer use CAN (Claude Code can't invoke Cowork), or a human. Rebuild after edits:
-`node extension/build.mjs`, then ↻ on the chrome://extensions card.
-
-**Bonsai is a four-surface product with a defensible engine, a designed UI, and OSS-grade docs.**
-
-Engine `@bonsai/engine` (dependency-free, 168 unit tests + 10/10 evals, npm-publishable via
-`pnpm publish` → tsup `dist`; injectable logger; live-provider tests):
-- Path-based compile (briefs compose; depth-2 referents proven), closed merge loop,
-  context-first escalation, honest per-model pricing.
-- **Salience compiler**: rarity + recency + role + topic scoring (a raw keyword count would drop
-  the answer — see the stipend eval), and a strengthened live compile prompt.
-- **Learning router v2**: PER-QUESTION-KIND priors + classifier `kind`+`confidence` (confidence
-  gates shifts, blocks risky down-shifts) + `mergeProfiles()` **community cold-start** (the
-  network-effect moat). Routes feed `questionKind`; RoutingChip shows kind/confidence/learned.
-- **Rigorous stats** (`stats.ts`): tokenizer-generation 1.3x correction, measured-vs-modeled
-  provenance, per-purpose/per-model spend, savings curve.
-
-Surfaces (all ride subscriptions, zero API keys):
-- Claude Code **plugin** — full loop; marketplace install verified.
-- Chrome **extension** — MV3, strictly HITL (reads + prefills, never sends); light-theme panel.
-- **MCP connector** — deployed bonsai-connector.vercel.app, connected + proven in-chat in Tarun's
-  claude.ai (Max). Neon `mcp_*`.
-- **Web app** — REDESIGNED (sumi-e ink on rice paper, the garden signature, season cost scale;
-  see DESIGN.md), deployed live. Shareable interactive garden artifact published.
-
-Docs / OSS: recruiter README (live screenshot), `MOAT.md` (per-user + cross-user routing flywheel
-+ owning the brief-fidelity benchmark), `BENCHMARK.md`, CONTRIBUTING, engine README+CHANGELOG,
-PRODUCT.md reconciled. CI gates typecheck (root+extension), tests, evals, both builds, engine dist
-smoke.
-
-**In flight:** nothing.
-
-**Blocked:** deploy of this session's fixes to the live connector — see the PM-session block above
-(needs Tarun to run the Neon migration + `vercel --prod`; classifier gated live DDL).
-
-**Next (Tarun picks):**
-0. Land the blocked deploy (migration + `vercel --prod`) so per-session + the auth fix go live.
-1. Promote copy-a → `main`/the live demo when ready (bonsai-lac still runs the old build).
-2. Ship the population-prior aggregation pipeline server-side (the `mergeProfiles` mechanism is
-   built + tested; the anonymized cross-user data plumbing is the moat's remaining work).
-3. Publish the brief-fidelity benchmark publicly; expand scenarios.
-4. `pnpm publish` `@bonsai/engine`; MCP Apps interactive tree inline in claude.ai (connector
-   already returns structuredContent); connector OAuth; streaming chat.
-
-<!-- BEGIN:nextjs-agent-rules -->
-
-# This is NOT the Next.js you know
-
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->

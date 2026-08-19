@@ -110,11 +110,11 @@ a real chat tool. Phase 4 closes that, then the two documented integration holes
 
 | # | Segment | State |
 |---|---------|-------|
-| 12 | Message actions (regenerate, edit-and-rerun) + branch rename/archive from the UI | todo |
-| 13 | Streaming chat — SSE route, provider streaming (mock chunks too), incremental render | todo |
-| 14 | Command palette (⌘K) — fuzzy search across all nodes/messages, jump, new chat, merge | todo |
-| 15 | Export — tree or branch as Markdown/JSON (`GET /api/export`), UI affordance | todo |
-| 16 | Connector routing hints consult the population prior; extension icons | todo |
+| 12 | Message actions (regenerate, edit-and-rerun) + branch rename/archive from the UI | done |
+| 13 | Streaming chat — SSE route, provider streaming (mock chunks too), incremental render | done |
+| 14 | Command palette (⌘K) — search across all nodes/messages/insights, jump, new chat | done |
+| 15 | Export — garden or subtree as Markdown/JSON (`GET /api/export`), palette actions | done |
+| 16 | Connector fork routes via classifier + population prior; extension icons shipped | done |
 
 Rules as ever: build clean → typecheck → tests → commit → push per segment; reviews batched per
 segment (react/ts reviewers on UI, api+security on new routes).

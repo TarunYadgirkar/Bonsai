@@ -357,3 +357,45 @@ key never rides a public deployment — previews behind Vercel Auth + shareable 
 production stays keyless mock with the demo ribbon. Remaining for promotion day: plugin lives
 only on copy-a (marketplace install fails from main), extension has no icons, connector routing
 hints don't yet consult the priors.
+
+## 2026-08-18 — Phase 4: app usability (9 commits, gates green: 192 tests, 15/15 evals, CI GREEN)
+
+Session goal (Tarun): "make it usable as an app — way more features, real, not slop."
+
+- **Message actions** (`/api/message`, engine `truncateForRerun`): regenerate the last answer,
+  edit-and-rerun the last user turn. Truncation queues REAL row deletes (`pendingMessageDeletes`,
+  cleared only after the whole commit lands — deletes are idempotent, so a mid-commit failure
+  stays retryable); the replayed turn goes through the shared `lib/chat-turn.ts` path extracted
+  from the chat route (verified byte-identical behavior). Rename (double-click the title) and
+  archive/unarchive without merging (`/api/node`; roots can't archive).
+- **Streaming chat**: `POST /api/chat/stream` (SSE: delta / restart / done / error), native
+  Anthropic streaming in the engine (`callAnthropicStream` — usage totals, refusal rule, reader
+  cancelled on mid-parse throws), mock replays its answer as a paced stream so keyless demos show
+  the same UI, escalation/widen fire a `restart` that clears the partial render, client abort
+  propagates all the way to the provider fetch (abandoned tabs stop paying for tokens). Buffered
+  route kept for the extension/evals + as the client's fallback. Verified live in Chromium with a
+  real model (Haiku, served-by chip measured).
+- **⌘K command palette** (`lib/search.ts` + `CommandPalette`): ranked search over every branch
+  title, message, and insight (AND terms, snippets, archived sinks), quick actions (new chat,
+  economics, exports), full keyboard nav.
+- **Export**: `GET /api/export?format=md|json[&branch=…]` — whole garden or subtree, Markdown
+  (headings by depth, briefs, insights, routing per turn) or versioned JSON. Palette actions.
+- **Connector**: fork's model/effort are now optional — omitted, Bonsai routes the question with
+  the engine classifier + community population prior (the documented open gap); explicit picks
+  get a divergence hint + `suggestedRouting` in structuredContent.
+- **Extension icons**: bonsai glyph rendered from SVG via Playwright (`extension/make-icons.mjs`),
+  16/32/48/128 wired into the manifest; README pin note updated.
+- **CI was red since 08-12** (every push emailed a failure): root `npm ci` never installed
+  `plugin/mcp`'s own deps (not a workspace), so the smoke's spawned `server.mjs` died on
+  `@modelcontextprotocol/sdk`. CI now `npm ci --prefix plugin/mcp` first. Also caught: the
+  extension bundle needed a `providerCompleteStream` stub (never-send stays structural). Both
+  fixed — copy-a CI is green for the first time since 08-12. Full CI sequence now runs locally
+  before every push.
+- **First-visit session race found by the browser click-through**: `/api/state` and
+  `/api/economics` raced to mint the first session cookie; when economics won, every later chat
+  404'd against a root the state response never described. Economics no longer sets cookies —
+  `/api/state` is the only GET minter.
+- Reviews each segment (react/ts + api/security agents): all findings fixed same-session —
+  scroll-on-regenerate, memo-defeating closures, stream reader leak, abort plumbing, retryable
+  truncation deletes. One reviewer corrupted node_modules with a stray pnpm install (restored
+  with npm, gates re-verified; reviewers now instructed never to run installs).
