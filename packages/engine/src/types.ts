@@ -75,6 +75,8 @@ export interface ContextBrief {
    * compilation and later widening both respect this boundary. Absent on pre-anchor briefs.
    */
   anchorMessageId?: string;
+  /** True when a human curated the fact list in the preview sheet before the fork shipped. */
+  curated?: boolean;
 }
 
 export interface RoutingDecision {

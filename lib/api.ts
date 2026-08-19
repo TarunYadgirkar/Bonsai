@@ -24,6 +24,15 @@ export const BranchRequestSchema = z.object({
   title: z.string().max(200).optional(),
   mode: ModeSelectionSchema.optional(),
   anchorMessageId: z.string().max(120).optional(),
+  /** Hand-curated fact list from the preview sheet; the anchor invariant is re-enforced server-side. */
+  facts: z.array(z.string().min(1).max(500)).max(12).optional(),
+});
+
+export const BranchPreviewRequestSchema = z.object({
+  parentId: z.string().min(1).max(120),
+  selection: z.string().min(1).max(2000),
+  question: z.string().max(8000).optional(),
+  anchorMessageId: z.string().max(120).optional(),
 });
 
 export const MergeRequestSchema = z.object({

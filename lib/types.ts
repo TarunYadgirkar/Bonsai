@@ -84,6 +84,8 @@ export interface BranchRequest {
   mode?: ModeSelection;
   /** Parent message the selection was made in; scopes compilation to the fork point. */
   anchorMessageId?: string;
+  /** Hand-curated facts from the preview sheet. */
+  facts?: string[];
 }
 
 export interface BranchResponse {
@@ -93,6 +95,20 @@ export interface BranchResponse {
   /** Present only when `question` was supplied. */
   message?: Message;
   routing?: RoutingDecision;
+}
+
+/** POST /api/branch/preview — compile without creating; the fact-chip sheet edits this. */
+export interface BranchPreviewRequest {
+  parentId: string;
+  selection: string;
+  question?: string;
+  anchorMessageId?: string;
+}
+
+export interface BranchPreviewResponse {
+  brief: ContextBrief;
+  /** The chain's anchor fact — rendered pinned and undeletable in the sheet. */
+  anchorFact: string | null;
 }
 
 /** POST /api/merge */

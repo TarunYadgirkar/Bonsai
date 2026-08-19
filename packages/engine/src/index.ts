@@ -51,6 +51,7 @@ export {
   type CompileResult,
   type CompileUsage,
   type EngineDeps,
+  curateBrief,
   insightGroundedIn,
 } from './compiler';
 export {

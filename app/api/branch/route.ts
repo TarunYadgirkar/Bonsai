@@ -2,6 +2,7 @@ import {
   INTERNAL_TIER,
   assemblePath,
   compileBrief,
+  curateBrief,
   completeWithEscalation,
   estimateTokens,
   profileFor,
@@ -62,7 +63,15 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
     anchorMessageId: body.anchorMessageId,
     anchorFact: path.anchorFact,
   });
-  const brief = compiled.brief;
+  // A curated fact list from the preview sheet replaces the compiler's — with the anchor
+  // invariant re-enforced and the receipt recomputed. curated:true rides on the brief.
+  const brief = body.facts
+    ? curateBrief(compiled.brief, body.facts, {
+        question,
+        profile: profileFor(parent, byId),
+        anchorFact: path.anchorFact,
+      })
+    : compiled.brief;
 
   logInference(
     ws,

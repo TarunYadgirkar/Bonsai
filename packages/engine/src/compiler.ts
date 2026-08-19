@@ -210,6 +210,39 @@ function renderBrief(params: {
   return lines.join('\n');
 }
 
+/**
+ * Rebuild a compiled brief around a hand-curated fact list (the brief-preview sheet). The
+ * anchor invariant survives curation: if the caller dropped the anchor fact, it is re-pinned as
+ * fact 1 — a human can prune noise, not the referent the chain depends on. Token figures and
+ * prunedPct are recomputed from the re-rendered markdown so the receipt stays honest.
+ */
+export function curateBrief(
+  brief: ContextBrief,
+  keptFacts: string[],
+  opts?: { question?: string; profile?: UserProfile; anchorFact?: string },
+): ContextBrief {
+  let facts = keptFacts.map((f) => f.trim()).filter(Boolean);
+  if (opts?.anchorFact && !anchorCarriedThrough(opts.anchorFact, facts)) {
+    facts = [opts.anchorFact, ...facts];
+  }
+  if (facts.length === 0) facts = brief.facts.slice(0, 1);
+  const markdown = renderBrief({
+    selection: brief.selection,
+    question: opts?.question ?? '',
+    facts,
+    profile: opts?.profile,
+  });
+  const briefTokens = estimateTokens(markdown);
+  return {
+    ...brief,
+    facts,
+    markdown,
+    briefTokens,
+    prunedPct: prunedPct(brief.availableTokens, briefTokens),
+    curated: true,
+  };
+}
+
 /* ---------- merge grounding ---------- */
 
 const GROUNDING_STOPWORDS = new Set(

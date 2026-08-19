@@ -10,6 +10,7 @@ import type {
   ModeSelection,
   StateResponse,
 } from '@/lib/types';
+import { BriefSheet } from './BriefSheet';
 import { ChatPane } from './ChatPane';
 import { CommandPalette } from './CommandPalette';
 import { EconomicsPanel } from './EconomicsPanel';
@@ -132,6 +133,8 @@ export function Workspace() {
   const [merged, setMerged] = useState<{ parentId: string; insightId: string } | null>(null);
   const [economicsOpen, setEconomicsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /** Selection awaiting the brief-preview sheet; the fork ships from there. */
+  const [briefSheet, setBriefSheet] = useState<{ parentId: string; selection: string } | null>(null);
   const [demoMode, setDemoMode] = useState(false);
 
   // Honesty ribbon: without a provider key the answers come from the extractive mock. Say so —
@@ -359,18 +362,26 @@ export function Workspace() {
     }
   };
 
-  const branch = async (selection: string) => {
+  /** Selection → the brief-preview sheet. The fork itself ships from growBranch below. */
+  const branch = (selection: string) => {
     if (!activeId) return;
+    setBriefSheet({ parentId: activeId, selection });
+  };
+
+  const growBranch = async (facts: string[], question: string) => {
+    if (!briefSheet) return;
     setBranching(true);
     try {
-      const parent = state?.conversations.find((c) => c.id === activeId);
+      const parent = state?.conversations.find((c) => c.id === briefSheet.parentId);
       const res = await fetch('/api/branch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          parentId: activeId,
-          selection,
-          title: titleFromSelection(selection),
+          parentId: briefSheet.parentId,
+          selection: briefSheet.selection,
+          title: titleFromSelection(briefSheet.selection),
+          facts,
+          ...(question ? { question } : {}),
           // A pinned parent hands its pick down: branching off a deliberate choice should
           // not silently fall back to Auto for the branch's first answer.
           mode: (parent && modeFor(parent)) ?? undefined,
@@ -378,6 +389,7 @@ export function Workspace() {
       });
       if (!res.ok) throw await httpError(res, 'POST /api/branch');
       const data: BranchResponse = await res.json();
+      setBriefSheet(null);
       applyState(await fetchState());
       select(data.node.id); // drop the user straight into the new branch
     } catch (err) {
@@ -754,6 +766,16 @@ export function Workspace() {
             select(flight.parentId);
             setMerged({ parentId: flight.parentId, insightId: flight.id });
           }}
+        />
+      )}
+
+      {briefSheet && (
+        <BriefSheet
+          parentId={briefSheet.parentId}
+          selection={briefSheet.selection}
+          onGrow={growBranch}
+          onClose={() => setBriefSheet(null)}
+          growing={branching}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compileBrief, type CompileParams, insightGroundedIn } from '../src/compiler';
+import { compileBrief, type CompileParams, insightGroundedIn, curateBrief } from '../src/compiler';
 import { estimateTokens, prunedPct } from '../src/tokens';
 import type { UserProfile } from '../src/types';
 import { fakeComplete, llmResult } from './helpers';
@@ -246,5 +246,35 @@ describe('insightGroundedIn', () => {
     expect(
       insightGroundedIn('Sacramento and Oakland drive the pension deficit.', transcript).grounded,
     ).toBe(false);
+  });
+});
+
+describe('curateBrief', () => {
+  const base = {
+    id: 'b1',
+    branchId: 'br1',
+    selection: 'pension obligations',
+    markdown: 'old',
+    facts: ['Anchor: the deficit is $29M.', 'Noise fact one.', 'Noise fact two.'],
+    excludedNote: 'Excluded: the rest.',
+    availableTokens: 4000,
+    briefTokens: 200,
+    prunedPct: 95,
+  };
+
+  it('re-pins a dropped anchor and recomputes the receipt', () => {
+    const curated = curateBrief(base, ['Noise fact one.'], {
+      anchorFact: 'Anchor: the deficit is $29M.',
+    });
+    expect(curated.facts[0]).toBe('Anchor: the deficit is $29M.');
+    expect(curated.curated).toBe(true);
+    expect(curated.briefTokens).toBeGreaterThan(0);
+    expect(curated.prunedPct).toBeGreaterThan(90);
+    expect(curated.markdown).toContain('Noise fact one.');
+  });
+
+  it('falls back to the first compiled fact when everything was pruned', () => {
+    const curated = curateBrief(base, []);
+    expect(curated.facts).toEqual(['Anchor: the deficit is $29M.']);
   });
 });
