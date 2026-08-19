@@ -2,7 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { Conversation, Message, ModeSelection } from '@/lib/types';
+import type { Conversation, Insight, Message, ModeSelection } from '@/lib/types';
 import { RoutingChip } from './RoutingChip';
 import { conversationTokens, formatTokens } from './tokens';
 
@@ -93,6 +93,57 @@ const MessageBubble = memo(function MessageBubble({
   );
 });
 
+/**
+ * A merged insight rendered inline in the parent transcript at the point it landed — the
+ * one-insight merge contract made visible and auditable. Click expands; the link opens the
+ * branch that paid it. These lines genuinely enter the model's context every turn.
+ */
+function InsightChip({
+  insight,
+  branchTitle,
+  highlighted,
+  onOpenBranch,
+}: {
+  insight: Insight;
+  branchTitle: string;
+  highlighted: boolean;
+  onOpenBranch: (id: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const long = insight.text.length > 110;
+  return (
+    <div className="flex justify-center">
+      <div
+        className={`max-w-[85%] rounded-full border px-4 py-1.5 text-xs leading-relaxed transition-all duration-700 ${
+          highlighted
+            ? 'border-moss/60 bg-moss-wash ring-2 ring-moss/40'
+            : 'border-moss/25 bg-moss-wash/50'
+        } ${expanded ? 'rounded-2xl' : ''}`}
+      >
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="text-left text-ink"
+          title={long && !expanded ? 'Expand the full insight' : undefined}
+        >
+          <span className="mr-1.5 text-moss">⤴</span>
+          <span className="text-[10px] uppercase tracking-wide text-moss">
+            merged · {branchTitle}
+          </span>{' '}
+          <span className="text-ink">
+            {expanded || !long ? insight.text : `${insight.text.slice(0, 110).trimEnd()}…`}
+          </span>
+        </button>
+        <button
+          onClick={() => onOpenBranch(insight.branchId)}
+          className="ml-2 whitespace-nowrap text-[10px] text-moss underline hover:text-moss-bright"
+        >
+          open branch →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function ChatPane({
   conversation,
   onSend,
@@ -103,6 +154,8 @@ export function ChatPane({
   onEditMessage,
   onRename,
   onArchive,
+  onOpenBranch,
+  branchTitles,
   mode,
   sending,
   streamingText,
@@ -128,6 +181,10 @@ export function ChatPane({
   onRename: (title: string) => Promise<void>;
   /** Toggle archived on this branch. Absent on roots. */
   onArchive?: (archived: boolean) => Promise<void>;
+  /** Jump to the branch a merged insight came from. */
+  onOpenBranch: (id: string) => void;
+  /** Node titles, for labeling inline insight chips. */
+  branchTitles: Record<string, string>;
   mode: ModeSelection | null;
   sending: boolean;
   /** The in-flight answer so far. Empty string = waiting for the first token. */
@@ -164,7 +221,7 @@ export function ChatPane({
   const lastMessageId = conversation.messages[conversation.messages.length - 1]?.id ?? null;
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [lastMessageId, conversation.id]);
+  }, [lastMessageId, conversation.insights.length, conversation.id]);
 
   // Follow the stream: every delta grows the page, and the reader should ride the bottom edge.
   useEffect(() => {
@@ -204,6 +261,20 @@ export function ChatPane({
   };
 
   const messages = conversation.messages;
+
+  /**
+   * The transcript timeline: messages and merged insights interleaved by timestamp, so each
+   * insight renders where it actually landed in the conversation's history. Items without a
+   * timestamp (old fixtures) sort to the front, preserving their relative order.
+   */
+  const timeline = useMemo(() => {
+    const items: ({ kind: 'message'; t: string; m: Message } | { kind: 'insight'; t: string; i: Insight })[] = [
+      ...messages.map((m) => ({ kind: 'message' as const, t: m.createdAt ?? '', m })),
+      ...conversation.insights.map((i) => ({ kind: 'insight' as const, t: i.createdAt ?? '', i })),
+    ];
+    return items.sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
+  }, [messages, conversation.insights]);
+
   const { lastAssistantId, lastUserId } = useMemo(() => {
     const assistantId =
       messages.length > 0 && messages[messages.length - 1].role === 'assistant'
@@ -343,39 +414,6 @@ export function ChatPane({
         </div>
       </header>
 
-      {/*
-        Merged insights live outside the scroll area on purpose: the thread can be dozens of
-        messages deep, and a landing insight must be visible without scrolling. These lines
-        genuinely enter the model's context on every turn here, so showing them is truth.
-        Collapsible like the brief disclosure below; open by default so a fresh merge glows —
-        the per-branch remount reopens it on every branch switch. A pressed botanical note.
-      */}
-      {conversation.insights.length > 0 && (
-        <details
-          open
-          className="max-h-40 shrink-0 overflow-y-auto border-b border-rule bg-paper-sunk px-6 py-2.5"
-        >
-          <summary className="mx-auto max-w-3xl cursor-pointer eyebrow">
-            learned from branches · {conversation.insights.length}
-          </summary>
-          <div className="mx-auto max-w-3xl">
-            {conversation.insights.map((insight) => (
-              <p
-                key={insight.id}
-                // The freshly landed insight glows for a beat so the merge reads on a projector.
-                className={`-mx-1 mt-1 rounded px-1.5 py-1 text-xs leading-relaxed text-ink ring-1 transition-all duration-700 ${
-                  insight.id === highlightInsightId
-                    ? 'bg-moss-wash ring-moss/50'
-                    : 'ring-transparent'
-                }`}
-              >
-                {insight.text}
-              </p>
-            ))}
-          </div>
-        </details>
-      )}
-
       <div
         ref={scrollRef}
         onMouseUp={captureSelection}
@@ -474,13 +512,21 @@ export function ChatPane({
             </div>
           )}
 
-          {conversation.messages.map((message) =>
-            editing?.id === message.id ? (
-              <div key={message.id} className="flex flex-col items-end gap-1.5">
+          {timeline.map((item) =>
+            item.kind === 'insight' ? (
+              <InsightChip
+                key={item.i.id}
+                insight={item.i}
+                branchTitle={branchTitles[item.i.branchId] ?? 'a pruned branch'}
+                highlighted={item.i.id === highlightInsightId}
+                onOpenBranch={onOpenBranch}
+              />
+            ) : editing?.id === item.m.id ? (
+              <div key={item.m.id} className="flex flex-col items-end gap-1.5">
                 <textarea
                   autoFocus
                   value={editing.text}
-                  onChange={(e) => setEditing({ id: message.id, text: e.target.value })}
+                  onChange={(e) => setEditing({ id: item.m.id, text: e.target.value })}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
@@ -509,18 +555,18 @@ export function ChatPane({
               </div>
             ) : (
               <MessageBubble
-                key={message.id}
-                message={message}
+                key={item.m.id}
+                message={item.m}
                 mode={mode}
                 onSelectMode={onSelectMode}
                 busy={sending}
                 onRegenerate={
-                  message.id === lastAssistantId && !conversation.archived
+                  item.m.id === lastAssistantId && !conversation.archived
                     ? regenerateLast
                     : undefined
                 }
                 onStartEdit={
-                  message.id === lastUserId && !conversation.archived
+                  item.m.id === lastUserId && !conversation.archived
                     ? startEditLast
                     : undefined
                 }

@@ -771,6 +771,8 @@ export function Workspace() {
           onRegenerate={regenerate}
           onEditMessage={editMessage}
           onRename={(title) => nodeAction({ id: active.id, op: 'rename', title })}
+          onOpenBranch={select}
+          branchTitles={branchTitles}
           onArchive={
             active.parentId
               ? (archived) =>
