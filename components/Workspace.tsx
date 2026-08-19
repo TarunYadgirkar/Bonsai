@@ -15,6 +15,7 @@ import { ChatPane } from './ChatPane';
 import { CommandPalette } from './CommandPalette';
 import { EconomicsPanel } from './EconomicsPanel';
 import { MergeFlight, type Flight } from './MergeFlight';
+import { TourBanner, type TourStep } from './Tour';
 import { TreeSidebar, type NodeStats } from './TreeSidebar';
 import { conversationTokens } from './tokens';
 import { createSseParser } from '@/lib/sse';
@@ -133,6 +134,8 @@ export function Workspace() {
   const [merged, setMerged] = useState<{ parentId: string; insightId: string } | null>(null);
   const [economicsOpen, setEconomicsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  /** The guided first-session loop. Null = not touring. Persisted off in localStorage on finish. */
+  const [tourStep, setTourStep] = useState<TourStep | null>(null);
   /** Selection awaiting the brief-preview sheet; the fork ships from there. */
   const [briefSheet, setBriefSheet] = useState<{ parentId: string; selection: string } | null>(null);
   const [demoMode, setDemoMode] = useState(false);
@@ -392,6 +395,7 @@ export function Workspace() {
       setBriefSheet(null);
       applyState(await fetchState());
       select(data.node.id); // drop the user straight into the new branch
+      if (tourStep === 'branch') setTourStep('merge');
     } catch (err) {
       setError(describe(err));
     } finally {
@@ -512,6 +516,47 @@ export function Workspace() {
       setError(describe(err));
     } finally {
       nodeActionInFlight.current = false;
+    }
+  };
+
+  /** A sentence from the demo trunk worth branching on — picked live so the tour never stales. */
+  const tourSelection = (): { parentId: string; selection: string } | null => {
+    if (!state) return null;
+    const root = state.conversations.find((c) => c.id === state.rootId);
+    const lastAnswer = root ? [...root.messages].reverse().find((m) => m.role === 'assistant') : null;
+    if (!root || !lastAnswer) return null;
+    const sentence =
+      lastAnswer.content
+        .replace(/[*_`#>]/g, '')
+        .split(/(?<=[.!?])\s+/)
+        .find((s) => s.trim().length > 60) ?? lastAnswer.content.slice(0, 120);
+    return { parentId: root.id, selection: sentence.trim().slice(0, 300) };
+  };
+
+  const startTour = async () => {
+    await loadDemo();
+    setTourStep('branch');
+  };
+
+  const endTour = () => {
+    setTourStep(null);
+    try {
+      localStorage.setItem('bonsai:toured', '1');
+    } catch {}
+  };
+
+  const tourAction = async () => {
+    if (tourStep === 'branch') {
+      const pick = tourSelection();
+      if (!pick) return endTour();
+      select(pick.parentId);
+      setBriefSheet(pick); // growing from the sheet advances the tour below
+    } else if (tourStep === 'merge') {
+      await merge({ x: window.innerWidth / 2, y: 80 });
+      setTourStep('receipt');
+    } else if (tourStep === 'receipt') {
+      setEconomicsOpen(true);
+      endTour();
     }
   };
 
@@ -743,6 +788,7 @@ export function Workspace() {
           initialDraft={failedDraft?.branchId === active.id ? failedDraft.content : undefined}
           onDraftRestored={() => setFailedDraft(null)}
           onLoadDemo={loadDemo}
+          onStartTour={startTour}
         />
       ) : (
         <section className="flex flex-1 items-center justify-center bg-paper">
@@ -773,9 +819,26 @@ export function Workspace() {
         <BriefSheet
           parentId={briefSheet.parentId}
           selection={briefSheet.selection}
+          defaultQuestion={
+            tourStep === 'branch'
+              ? 'What is the single most important thing to know about this?'
+              : undefined
+          }
           onGrow={growBranch}
-          onClose={() => setBriefSheet(null)}
+          onClose={() => {
+            setBriefSheet(null);
+            if (tourStep === 'branch') endTour();
+          }}
           growing={branching}
+        />
+      )}
+
+      {tourStep && !briefSheet && (
+        <TourBanner
+          step={tourStep}
+          busy={branching || merging || sending}
+          onAction={() => void tourAction()}
+          onSkip={endTour}
         />
       )}
 

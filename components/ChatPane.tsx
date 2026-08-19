@@ -112,6 +112,7 @@ export function ChatPane({
   initialDraft,
   onDraftRestored,
   onLoadDemo,
+  onStartTour,
 }: {
   conversation: Conversation;
   /** Resolves false when the send failed, so the composer can restore the draft. */
@@ -140,6 +141,8 @@ export function ChatPane({
   onDraftRestored?: () => void;
   /** Fresh-root empty state's CTA — loads the example tree into this session. */
   onLoadDemo?: () => Promise<void>;
+  /** The guided 60-second loop: load the demo, then walk branch → merge → ledger. */
+  onStartTour?: () => Promise<void>;
 }) {
   // Seed from a recovered failed-send draft: ChatPane remounts per branch, so a plain local
   // restore is lost if the user switched branches mid-send. The parent hands it back here.
@@ -420,22 +423,40 @@ export function ChatPane({
                   to the trunk — the rest of the branch stays pruned.
                 </li>
               </ol>
-              {onLoadDemo && (
-                <button
-                  onClick={async () => {
-                    setDemoLoading(true);
-                    try {
-                      await onLoadDemo();
-                    } finally {
-                      setDemoLoading(false);
-                    }
-                  }}
-                  disabled={demoLoading}
-                  className="mt-5 rounded-md border border-moss px-4 py-1.5 text-xs font-medium text-moss transition-colors hover:bg-moss-wash disabled:opacity-40"
-                >
-                  {demoLoading ? 'Growing…' : 'Load an example conversation tree'}
-                </button>
-              )}
+              <div className="mt-5 flex flex-col items-center gap-2">
+                {onStartTour && (
+                  <button
+                    onClick={async () => {
+                      setDemoLoading(true);
+                      try {
+                        await onStartTour();
+                      } finally {
+                        setDemoLoading(false);
+                      }
+                    }}
+                    disabled={demoLoading}
+                    className="rounded-md bg-moss px-4 py-2 text-xs font-semibold text-paper transition-colors hover:bg-moss-bright disabled:opacity-40"
+                  >
+                    {demoLoading ? 'Growing…' : 'See the whole loop in 60 seconds'}
+                  </button>
+                )}
+                {onLoadDemo && (
+                  <button
+                    onClick={async () => {
+                      setDemoLoading(true);
+                      try {
+                        await onLoadDemo();
+                      } finally {
+                        setDemoLoading(false);
+                      }
+                    }}
+                    disabled={demoLoading}
+                    className="rounded-md border border-moss px-4 py-1.5 text-xs font-medium text-moss transition-colors hover:bg-moss-wash disabled:opacity-40"
+                  >
+                    {demoLoading ? 'Growing…' : 'Just load the example tree'}
+                  </button>
+                )}
+              </div>
               <p className="mt-4 text-[10px] text-bark">
                 <a
                   href="https://github.com/TarunYadgirkar/Bonsai"

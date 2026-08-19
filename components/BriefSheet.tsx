@@ -13,9 +13,12 @@ export function BriefSheet({
   onGrow,
   onClose,
   growing,
+  defaultQuestion,
 }: {
   parentId: string;
   selection: string;
+  /** Prefill for the first-question box (the guided tour seeds one so the merge has material). */
+  defaultQuestion?: string;
   /** Ship the fork with the kept facts (in order) and the optional first question. */
   onGrow: (facts: string[], question: string) => void;
   onClose: () => void;
@@ -24,7 +27,7 @@ export function BriefSheet({
   const [preview, setPreview] = useState<BranchPreviewResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removed, setRemoved] = useState<Set<number>>(new Set());
-  const [question, setQuestion] = useState('');
+  const [question, setQuestion] = useState(defaultQuestion ?? '');
 
   useEffect(() => {
     let cancelled = false;

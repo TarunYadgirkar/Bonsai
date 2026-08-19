@@ -503,3 +503,11 @@ push a v0.1.0 tag with NPM_TOKEN set, SESSION_SECRET env, prod promote of this w
   code → PKCE exchange → authenticated MCP initialize. Unit tests: redirect validation, DCR,
   single-use codes, wrong-verifier rejection, token→key, forged-token rejection.
 - /connect now leads with the OAuth URL; the key link stays as the fallback carrier.
+
+## 2026-08-19 (loop iter 3) — 60-second first-session tour
+
+Guided loop on the demo tree, no fake states: step 1 opens the brief sheet on a live-picked
+trunk sentence with a seeded question, step 2 is a real merge, step 3 opens the real ledger.
+Completion in localStorage; skippable at every step; the sheet's Cancel exits the tour cleanly.
+Onboarding now leads with "See the whole loop in 60 seconds" (demo-load stays as secondary).
+Chromium click-through green. 218 tests, 15/15 evals.
