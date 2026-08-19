@@ -23,7 +23,10 @@ jobs:
       - name: extension dist in sync with src
         run: git diff --exit-code -- extension/dist/*.js
       - name: plugin MCP smoke + dist in sync
+        # plugin/mcp is deliberately not a workspace (marketplace clones run the bundled dist);
+        # its own deps must be installed before the smoke can spawn server.mjs from source.
         run: |
+          npm ci --prefix plugin/mcp
           node plugin/mcp/smoke.mjs
           node plugin/mcp/build.mjs
           git diff --exit-code -- plugin/mcp/dist/server.mjs
