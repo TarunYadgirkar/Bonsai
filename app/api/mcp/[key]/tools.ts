@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { anchorCarriedThrough } from '@bonsai/engine';
+import { anchorCarriedThrough, route, type Effort } from '@bonsai/engine';
+import { loadPopulationPrior } from '@/lib/store';
 import {
   MAX_NODES_PER_KEY,
   abandonNode,
@@ -25,6 +26,51 @@ const TIER_BY_MODEL: Record<string, string> = {
   fable: 'deep',
 };
 
+/** Engine model id → the connector's friendly name. */
+const FRIENDLY_BY_ENGINE_MODEL: Record<string, ForkModel> = {
+  'claude-haiku-4-5': 'haiku',
+  'claude-sonnet-5': 'sonnet',
+  'claude-opus-5': 'opus',
+  'claude-fable-5': 'fable',
+};
+
+type ForkModel = 'haiku' | 'sonnet' | 'opus' | 'fable';
+
+interface RoutingSuggestion {
+  model: ForkModel;
+  effort: Effort;
+  tier: string;
+  /** True when the community population prior actually informed the pick. */
+  populationInformed: boolean;
+}
+
+/**
+ * What Bonsai's own router would pick for this fork — classifier plus the community population
+ * prior, the same path the web app routes with. Null when routing itself fails: a routing hint
+ * must never be the reason a fork fails.
+ */
+async function suggestRouting(
+  question: string,
+  contextTokens: number,
+): Promise<RoutingSuggestion | null> {
+  try {
+    const population = await loadPopulationPrior();
+    const decision = await route({
+      question,
+      contextTokens,
+      population: population.prior ?? undefined,
+    });
+    return {
+      model: FRIENDLY_BY_ENGINE_MODEL[decision.model] ?? 'sonnet',
+      effort: decision.effort ?? 'medium',
+      tier: decision.tier,
+      populationInformed: Boolean(population.prior),
+    };
+  } catch {
+    return null;
+  }
+}
+
 const STATUS_GLYPH: Record<McpNode['status'], string> = {
   open: '○',
   merged: '✓',
@@ -37,8 +83,8 @@ const forkInput = z.object({
   brief: z.string().min(1).max(24000),
   facts: z.array(z.string().max(500)).max(12).optional(),
   excludedNote: z.string().max(1000).optional(),
-  model: z.enum(['haiku', 'sonnet', 'opus', 'fable']).default('sonnet'),
-  effort: z.enum(['low', 'medium', 'high', 'max']).default('medium'),
+  model: z.enum(['haiku', 'sonnet', 'opus', 'fable']).optional(),
+  effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
   availableTokensEstimate: z.number().int().positive().optional(),
 });
 
@@ -62,6 +108,15 @@ const forkOutput = z.object({
   }),
   /** True when the server pinned the parent brief's anchor fact the caller dropped. */
   anchorPinned: z.boolean(),
+  /** Bonsai's own router pick (population-prior-informed). Present when routing succeeded. */
+  suggestedRouting: z
+    .object({
+      model: z.string(),
+      effort: z.string(),
+      tier: z.string(),
+      populationInformed: z.boolean(),
+    })
+    .optional(),
   pasteBlock: z.string(),
 });
 
@@ -214,8 +269,10 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         "every referent resolved (no bare 'it', 'the deadline', 'that approach'; name the actual thing), " +
         'plus one line stating what was deliberately excluded. Send the compiled brief, never raw transcript. ' +
         'Returns a paste-ready brief for a NEW claude.ai chat, the branchId, the routing (model · effort), ' +
-        'and the pruning economics. When forking off an existing branch (parentId set), carry the parent ' +
-        "brief's FIRST fact as this brief's first fact — the server pins it for you if you drop it.",
+        'and the pruning economics. Omit model/effort to let Bonsai route the question itself — its ' +
+        'classifier plus the community population prior pick the cheapest adequate rung. When forking off ' +
+        "an existing branch (parentId set), carry the parent brief's FIRST fact as this brief's first " +
+        'fact — the server pins it for you if you drop it.',
       inputSchema: forkInput,
       outputSchema: forkOutput,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
@@ -260,6 +317,18 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
       const prunedPct = availableTokensEstimate
         ? Math.max(0, Math.round((1 - briefTokens / availableTokensEstimate) * 1000) / 10)
         : null;
+
+      // Bonsai's own pick for this question. Fills omitted model/effort; when the caller chose
+      // explicitly, it rides along as a hint instead of overriding them.
+      const suggested = await suggestRouting(question, briefTokens);
+      const routedModel = model ?? suggested?.model ?? 'sonnet';
+      const routedEffort = effort ?? suggested?.effort ?? 'medium';
+      const callerPicked = model != null || effort != null;
+      const diverges =
+        callerPicked &&
+        suggested != null &&
+        (suggested.model !== routedModel || suggested.effort !== routedEffort);
+
       const node = await createNode({
         userKey,
         parentId: parentId ?? null,
@@ -268,9 +337,9 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         brief: briefText,
         facts: briefFacts,
         excludedNote: excludedNote ?? null,
-        model,
-        effort,
-        tier: TIER_BY_MODEL[model],
+        model: routedModel,
+        effort: routedEffort,
+        tier: TIER_BY_MODEL[routedModel],
         availableTokens: availableTokensEstimate ?? null,
         briefTokens,
         prunedPct,
@@ -279,7 +348,18 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
       const text = [
         `Branch created.`,
         `branchId: ${node.id}`,
-        `Routing: ${model} · ${effort} (${node.tier})`,
+        `Routing: ${routedModel} · ${routedEffort} (${node.tier})${
+          !callerPicked && suggested
+            ? ` — routed by Bonsai${suggested.populationInformed ? ' (community-prior informed)' : ''}`
+            : ''
+        }`,
+        ...(diverges
+          ? [
+              `Router hint: Bonsai would pick ${suggested.model} · ${suggested.effort}${
+                suggested.populationInformed ? ' (community-prior informed)' : ''
+              } for this question.`,
+            ]
+          : []),
         `Economics: ${economicsLine(node)}${storageNote()}`,
         ...(anchorPinned
           ? [`Note: the parent brief's anchor fact was missing and has been pinned as fact 1.`]
@@ -294,7 +374,12 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         content: [{ type: 'text' as const, text }],
         structuredContent: {
           branchId: node.id,
-          routing: { model, effort, tier: node.tier ?? TIER_BY_MODEL[model] },
+          routing: {
+            model: routedModel,
+            effort: routedEffort,
+            tier: node.tier ?? TIER_BY_MODEL[routedModel],
+          },
+          ...(suggested ? { suggestedRouting: suggested } : {}),
           economics: {
             briefTokens,
             availableTokens: availableTokensEstimate ?? null,
