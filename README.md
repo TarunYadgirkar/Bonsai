@@ -80,7 +80,7 @@ Install the plugin:
 The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
 consume, and publishable on its own (`cd packages/engine && pnpm publish` builds a typed `dist` via
 `prepublishOnly`). Tree model, path assembly, salience compiler, learning router, honest pricing.
-212 unit tests; the referent-resolution benchmark runs in CI.
+218 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
 
 ## Run it
 
@@ -102,7 +102,7 @@ to a working local path when its key is absent.
 | `packages/engine/` | `bonsai-engine` — the core. Zero runtime deps. |
 | `app/` · `components/` | Next.js demo + API routes over the engine. |
 | `plugin/` · `extension/` | The Claude Code plugin and the Chrome extension. |
-| `evals/` | The referent-resolution + routing benchmark. |
+| `evals/` | BriefBench — the brief-fidelity benchmark, with the Save-As baseline arm. |
 | `PRODUCT.md` · `MOAT.md` · `DESIGN.md` | The idea, the defensibility, the design system. |
 | `AGENTS.md` · `CONTRIBUTING.md` | Rules for agents; how to contribute. |
 

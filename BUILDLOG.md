@@ -511,3 +511,12 @@ trunk sentence with a seeded question, step 2 is a real merge, step 3 opens the 
 Completion in localStorage; skippable at every step; the sheet's Cancel exits the tour cleanly.
 Onboarding now leads with "See the whole loop in 60 seconds" (demo-load stays as secondary).
 Chromium click-through green. 218 tests, 15/15 evals.
+
+## 2026-08-19 (loop iter 4) — BriefBench goes public-grade
+
+Named the eval harness BriefBench and gave it the credibility furniture the research demanded:
+a full-history Save-As baseline arm on all 8 compiler cases (headline: 15/15 fidelity at 43.8%
+token reduction on the deliberately tiny mock fixtures — a stated conservative floor; the demo
+tree measures 97%+ per fork), `--json` machine-readable output, and evals/README.md with the
+method, run instructions (mock = CI gate, live = real grading), and the honest-caveats section
+(exact-substring scoring favors the baseline, not us). BENCHMARK.md + README updated.

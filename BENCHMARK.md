@@ -1,3 +1,10 @@
+# BriefBench
+
+> The brief-fidelity benchmark: does a compiled fork keep exactly the facts the
+> side-question depends on, at a fraction of the tokens? Method, run instructions, and honest
+> caveats: [evals/README.md](evals/README.md). Mock-mode headline: 15/15 fidelity at a 43.8%
+> token reduction vs the full-history Save-As baseline (tiny fixtures — a conservative floor).
+
 # The Bonsai brief-fidelity benchmark
 
 Compiled context is only useful if it stays *answerable*. A brief that drops a referent produces a

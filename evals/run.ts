@@ -26,6 +26,9 @@ interface Verdict {
   name: string;
   pass: boolean;
   detail: string;
+  /** Compiler cases only: the BriefBench efficiency pair — brief vs full assembled history. */
+  briefTokens?: number;
+  baselineTokens?: number;
 }
 
 function contains(haystack: string, needles: string[]): string[] {
@@ -38,7 +41,7 @@ async function compileFor(
   ancestors: Conversation[],
   selection: string,
   question: string,
-): Promise<ContextBrief> {
+): Promise<ContextBrief & { baselineTokens: number }> {
   const byIdMap = new Map([...ancestors, parent].map((c) => [c.id, c]));
   const byId = (id: string) => byIdMap.get(id);
   const path = assemblePath({ parent, byId });
@@ -52,7 +55,9 @@ async function compileFor(
     availableTokens: estimateTokens(path.markdown),
     anchorFact: path.anchorFact,
   });
-  return brief;
+  // The full-history baseline arm: what a Save-As fork would have sent — the whole assembled
+  // path plus the question. Same fidelity checks trivially pass on it; the comparison is tokens.
+  return { ...brief, baselineTokens: estimateTokens(path.markdown) + estimateTokens(question) };
 }
 
 async function runCase(c: EvalCase): Promise<Verdict> {
@@ -63,6 +68,8 @@ async function runCase(c: EvalCase): Promise<Verdict> {
     return {
       name: c.name,
       pass: missing.length === 0 && pruneOk,
+      briefTokens: brief.briefTokens,
+      baselineTokens: brief.baselineTokens,
       detail: missing.length
         ? `brief missing: ${missing.join(', ')} — facts: ${brief.facts.join(' | ').slice(0, 200)}`
         : `${brief.facts.length} facts, ${brief.briefTokens} tokens, ${brief.prunedPct}% pruned${
@@ -151,6 +158,8 @@ async function depthTwoCase(): Promise<Verdict> {
   const missing = contains(depth2.markdown, ['Free Ventures']);
   return {
     name: 'depth-2 referent: grandparent entity survives via inherited brief',
+    briefTokens: depth2.briefTokens,
+    baselineTokens: depth2.baselineTokens,
     pass: missing.length === 0,
     detail: missing.length
       ? `depth-2 brief lost the referent — facts: ${depth2.facts.join(' | ').slice(0, 200)}`
@@ -175,6 +184,8 @@ async function salienceCase(): Promise<Verdict> {
   const pass = /hertz/i.test(top) && top.includes('55,000');
   return {
     name: 'salience: the rare-term stipend sentence is the top-ranked fact',
+    briefTokens: brief.briefTokens,
+    baselineTokens: brief.baselineTokens,
     pass,
     detail: pass
       ? `top fact: "${top.slice(0, 90)}"`
@@ -258,6 +269,8 @@ async function depthThreeCase(): Promise<Verdict> {
   const missing = contains(depth3.markdown, ['Free Ventures']);
   return {
     name: 'depth-3 referent: entity survives three brief compositions',
+    briefTokens: depth3.briefTokens,
+    baselineTokens: depth3.baselineTokens,
     pass: missing.length === 0,
     detail: missing.length
       ? `depth-3 brief lost the referent — facts: ${depth3.facts.join(' | ').slice(0, 200)}`
@@ -347,7 +360,8 @@ async function mergeLoopCase(): Promise<Verdict> {
 }
 
 async function main() {
-  console.log(`bonsai evals — provider: ${providerName()}\n`);
+  const jsonOut = process.argv.includes('--json');
+  console.log(`BriefBench — the brief-fidelity benchmark · provider: ${providerName()}\n`);
   const verdicts: Verdict[] = [];
   for (const c of CASES) verdicts.push(await runCase(c));
   verdicts.push(await depthTwoCase());
@@ -362,7 +376,38 @@ async function main() {
     console.log(`${v.pass ? 'PASS' : 'FAIL'}  ${v.name}\n      ${v.detail}`);
     if (!v.pass) failed += 1;
   }
+
+  // The BriefBench headline: fidelity held (the PASS column) at this token reduction vs the
+  // full-history Save-As baseline every shipping competitor uses. Compiler-arm cases only.
+  const measured = verdicts.filter((v) => v.briefTokens !== undefined && v.baselineTokens);
+  if (measured.length) {
+    const briefSum = measured.reduce((a, v) => a + (v.briefTokens ?? 0), 0);
+    const baseSum = measured.reduce((a, v) => a + (v.baselineTokens ?? 0), 0);
+    const reduction = baseSum ? Math.round((1 - briefSum / baseSum) * 1000) / 10 : 0;
+    console.log(
+      `\nBriefBench efficiency (vs full-history Save-As baseline, ${measured.length} compiler cases):` +
+        `\n  ${briefSum.toLocaleString()} brief tokens vs ${baseSum.toLocaleString()} baseline — ${reduction}% reduction at the fidelity above`,
+    );
+  }
   console.log(`\n${verdicts.length - failed}/${verdicts.length} passed`);
+
+  if (jsonOut) {
+    const payload = {
+      benchmark: 'BriefBench',
+      version: 1,
+      provider: providerName(),
+      passed: verdicts.length - failed,
+      total: verdicts.length,
+      cases: verdicts.map((v) => ({
+        name: v.name,
+        pass: v.pass,
+        ...(v.briefTokens !== undefined
+          ? { briefTokens: v.briefTokens, baselineTokens: v.baselineTokens }
+          : {}),
+      })),
+    };
+    console.log(`\n${JSON.stringify(payload, null, 2)}`);
+  }
   if (failed) process.exit(1);
 }
 
