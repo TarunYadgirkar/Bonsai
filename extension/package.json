@@ -11,7 +11,7 @@
     "test:e2e:panel": "node build.mjs && node test-panel-e2e.mjs"
   },
   "dependencies": {
-    "@bonsai/engine": "*"
+    "bonsai-engine": "*"
   },
   "devDependencies": {
     "@types/chrome": "^0.0.270",

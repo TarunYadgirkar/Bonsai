@@ -3,7 +3,7 @@
  * between a parent conversation and the branch chats it spawned lives here, in chrome.storage.local.
  * Also holds the user's learned routing profile.
  */
-import { emptyProfile, type RoutingProfile } from '@bonsai/engine';
+import { emptyProfile, type RoutingProfile } from 'bonsai-engine';
 
 export interface TreeNode {
   id: string;

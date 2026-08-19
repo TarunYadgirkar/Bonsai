@@ -12,7 +12,7 @@ import {
   type ContextBrief,
   type RoutingDecision,
   type RoutingProfile,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 import type { Turn } from './claude-api';
 
 export interface CompiledBranch {

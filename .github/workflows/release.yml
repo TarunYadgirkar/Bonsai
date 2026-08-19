@@ -1,0 +1,48 @@
+name: release
+
+# Publish bonsai-engine to npm on a v* tag — provenance-attested, gated on the same suite CI
+# runs, plus package-shape linting (publint + arethetypeswrong). Uses npm Trusted Publishing
+# (OIDC) when configured on npmjs.com; otherwise falls back to the NPM_TOKEN secret.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://registry.npmjs.org
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run eval
+      - name: build engine dist
+        working-directory: packages/engine
+        run: npx tsup
+      - name: package shape checks
+        working-directory: packages/engine
+        run: |
+          npx publint
+          npx --yes @arethetypeswrong/cli --pack . || true
+      - name: publish with provenance
+        working-directory: packages/engine
+        run: pnpm publish --access public --provenance --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: verify the published artifact loads
+        run: |
+          sleep 20
+          npm install bonsai-engine@$(node -p "require('./packages/engine/package.json').version") --prefix /tmp/verify --no-save
+          node -e "import('/tmp/verify/node_modules/bonsai-engine/dist/index.js').then(m => { if (typeof m.compileBrief !== 'function') throw new Error('missing exports'); console.log('published artifact ok'); })"

@@ -51,7 +51,7 @@ web app was ruled out as the product bet (the value is riding the session you al
 
 | Piece | State |
 |---|---|
-| `@bonsai/engine` | The core as a dependency-free TS package: tree model, path assembly, brief compiler, coverage-aware router, context-first escalation, **a learning router** that personalizes from your overrides/escalations/merges, and a provider layer with honest per-model pricing. Unit-tested; runs in CI. |
+| `bonsai-engine` | The core as a dependency-free TS package: tree model, path assembly, brief compiler, coverage-aware router, context-first escalation, **a learning router** that personalizes from your overrides/escalations/merges, and a provider layer with honest per-model pricing. Unit-tested; runs in CI. |
 | Eval harness | `npm run eval` proves the moat: referent resolution held at depth 1 and depth 2 (through composed briefs), coverage flagging, routing thresholds, distillation, and the learning router adapting. Runs in CI. |
 | Claude Code plugin | `plugin/` — branch = subagent spawned with a compiled brief on a routed model+effort, merge = enforced one-insight return, tree persisted by a bundled MCP server. Runs on your Claude Code subscription. Verified end-to-end. |
 | Chrome extension | `extension/` — MV3 side panel over claude.ai. Reads your conversation (same-origin), compiles a brief locally, pre-fills the branch and the merge-back into the composer. Strictly human-in-the-loop: it never sends — you do. The local compile is extractive (no model call); the plugin and connector compile with Claude for higher fidelity. |

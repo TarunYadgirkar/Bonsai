@@ -75,7 +75,7 @@ Four subagents in file-partitioned waves; I owned the router/learning/moat core 
   `measured: !mock`), per-purpose/per-model spend, savings curve. Economics panel surfaces it.
 - **Moat**: `MOAT.md` — honest read (engine/tree are NOT moats; the per-user→cross-user routing
   flywheel + owning the brief-fidelity benchmark ARE). `BENCHMARK.md` formalizes the eval.
-- **OSS A-**: `@bonsai/engine` publishable via `pnpm publish` (tsup `dist` + `publishConfig`
+- **OSS A-**: `bonsai-engine` publishable via `pnpm publish` (tsup `dist` + `publishConfig`
   swap; workspace source resolution untouched so build stays green); injectable logger
   (`logger.ts`, `setEngineLogger`/`silenceEngine`); live-provider mocked-fetch tests; CHANGELOG;
   CI dist-build smoke. Recruiter README with live screenshot (assets/generated/).
@@ -272,7 +272,7 @@ The three headline gaps closed:
 - Segment-1 extraction review (typescript-reviewer): approve, no HIGH/CRITICAL; one intentional
   MEDIUM (engine package ships TS source via `exports` — revisit when publishing standalone).
 
-## 2026-08-11 — Segment 1: engine extracted to `@bonsai/engine`
+## 2026-08-11 — Segment 1: engine extracted to `bonsai-engine`
 
 - npm workspaces; `packages/engine` holds types, tokens, models, llm (provider→mock chain,
   `CompleteFn` seam), provider, compiler, router, tree (pure functions over `Conversation[]`).

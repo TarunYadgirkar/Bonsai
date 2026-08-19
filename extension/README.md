@@ -68,7 +68,7 @@ never-send held across the whole run.
 Against live claude.ai (Aug 2026): the read endpoints return the conversation list + message
 tree; `reconstructPath` rebuilds the on-screen path (unit-tested in `test/`); the multi-line
 brief pre-fills the ProseMirror composer and clears cleanly, with no send. The engine
-(compiler + router + learning) is bundled from `@bonsai/engine` and runs entirely in the browser.
+(compiler + router + learning) is bundled from `bonsai-engine` and runs entirely in the browser.
 
 ## Layout
 
@@ -76,7 +76,7 @@ brief pre-fills the ProseMirror composer and clears cleanly, with no send. The e
 |---|---|
 | `manifest.json` | MV3: side panel + thin content script, scoped to claude.ai |
 | `src/claude-api.ts` | GET-only same-origin reads; `reconstructPath` |
-| `src/compile.ts` | local brief compile + routing via `@bonsai/engine` |
+| `src/compile.ts` | local brief compile + routing via `bonsai-engine` |
 | `src/content.ts` | Branch chip, composer pre-fill (never send), new-chat linking |
 | `src/sidepanel.ts` | tree UI + branch/merge flow |
 | `src/sw.ts` | side-panel scoping, open-and-prefill routing |

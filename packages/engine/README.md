@@ -1,4 +1,4 @@
-# @bonsai/engine
+# bonsai-engine
 
 The core of [Bonsai](https://github.com/TarunYadgirkar/Bonsai): a dependency-free, TypeScript
 tree-chat engine. It models a conversation as a tree, compiles the smallest self-contained
@@ -14,7 +14,7 @@ an extractive mock with real token math and zero keys.
 Not on npm yet. Once it is:
 
 ```sh
-npm install @bonsai/engine
+npm install bonsai-engine
 ```
 
 Today, clone the monorepo and consume the workspace package:
@@ -50,7 +50,7 @@ import {
   complete, // the built-in inference seam: live provider (if a key is set) → extractive mock
   type CompleteFn,
   type Conversation,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 
 const deps = { complete }; // swap `complete` for any CompleteFn to control inference
 
@@ -135,7 +135,7 @@ their own history wins once it clears the evidence bar. Aggregate anonymized pro
 — the merge itself is a pure fold.
 
 ```ts
-import { emptyProfile, mergeProfiles, recordFeedback } from '@bonsai/engine';
+import { emptyProfile, mergeProfiles, recordFeedback } from 'bonsai-engine';
 
 let profile = emptyProfile();
 // The user bumped a quick pick up to deep on a reasoning question.

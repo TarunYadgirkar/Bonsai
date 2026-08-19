@@ -1,4 +1,4 @@
-import { savingsCurve, sessionStats } from '@bonsai/engine';
+import { savingsCurve, sessionStats } from 'bonsai-engine';
 import { apiRoute } from '@/lib/api';
 import { resolveSession } from '@/lib/session';
 import { loadWorkingSet } from '@/lib/store';

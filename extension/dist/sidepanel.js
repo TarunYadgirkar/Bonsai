@@ -525,6 +525,9 @@ That is what this branch's brief supports; anything beyond it would need more of
     lines.push("", `## Question`, params.question || params.selection);
     return lines.join("\n");
   }
+  var GROUNDING_STOPWORDS = new Set(
+    "The This That These Those There Answer Branch Insight Yes No None".split(" ")
+  );
 
   // ../packages/engine/src/learning.ts
   var QUESTION_KINDS = [

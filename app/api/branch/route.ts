@@ -7,7 +7,7 @@ import {
   profileFor,
   route,
   widenedChatContext,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 import { buildLog } from '@/lib/accounting';
 import { BranchRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
 import { checkRateLimit } from '@/lib/rate-limit';

@@ -1,6 +1,6 @@
 import { defineConfig } from 'tsup';
 
-// Publish-time build only. The workspace still resolves `@bonsai/engine` from `./src/index.ts`
+// Publish-time build only. The workspace still resolves `bonsai-engine` from `./src/index.ts`
 // (top-level `exports`), so this never runs for the app/extension — `prepublishOnly` invokes it,
 // and `publishConfig.exports` points the tarball at the emitted `dist/`.
 export default defineConfig({

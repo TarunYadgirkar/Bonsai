@@ -2,7 +2,7 @@
  * Injectable log seam. A library shouldn't write to the host console uninvited, but the default
  * stays `console` so current behavior is unchanged — consumers opt into silence or their own sink.
  *
- *   import { setEngineLogger, silenceEngine } from '@bonsai/engine';
+ *   import { setEngineLogger, silenceEngine } from 'bonsai-engine';
  *   silenceEngine();                       // drop the fallback warnings
  *   setEngineLogger({ warn, error });      // or route them into your own logger
  *

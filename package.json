@@ -16,7 +16,7 @@
     "eval": "tsx evals/run.ts"
   },
   "dependencies": {
-    "@bonsai/engine": "*",
+    "bonsai-engine": "*",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/server": "^2.0.0",
     "@neondatabase/serverless": "^1.1.0",

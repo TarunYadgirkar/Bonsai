@@ -23,7 +23,7 @@ import {
   recordFeedback,
   type RoutingFeedback,
   type RoutingProfile,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 import seed from '@/fixtures/seed-conversation.json';
 import tree from '@/fixtures/seed-tree.json';
 import { dbEnabled, sql } from './db';

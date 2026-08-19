@@ -13,7 +13,7 @@ import {
   type InferenceLog,
   type InferencePurpose,
   type Tier,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 import { newId } from './store';
 
 export function buildLog(params: {

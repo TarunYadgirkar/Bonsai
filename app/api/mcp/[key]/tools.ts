@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { anchorCarriedThrough, route, type Effort } from '@bonsai/engine';
+import { anchorCarriedThrough, route, type Effort } from 'bonsai-engine';
 import { RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { TREE_APP_HTML, TREE_UI_URI } from './tree-app';
 import { loadPopulationPrior } from '@/lib/store';

@@ -12,7 +12,7 @@ import {
   messagesTokens,
   providerName,
   route,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 import seed from '../fixtures/seed-conversation.json';
 import type { SeedConversation } from '../lib/types';
 

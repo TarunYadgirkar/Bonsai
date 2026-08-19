@@ -1,4 +1,4 @@
-import { truncateForRerun } from '@bonsai/engine';
+import { truncateForRerun } from 'bonsai-engine';
 import { MessageActionRequestSchema } from '@/lib/api';
 import { runChatTurn } from '@/lib/chat-turn';
 import { checkRateLimit } from '@/lib/rate-limit';

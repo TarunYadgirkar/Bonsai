@@ -13,7 +13,7 @@ core over changes that only decorate one surface.**
 
 | Path | What it is |
 |---|---|
-| `packages/engine/` | `@bonsai/engine` — the core: tree model, path assembly, brief compiler, router, learning router, providers. Zero runtime deps. See its [README](packages/engine/README.md). |
+| `packages/engine/` | `bonsai-engine` — the core: tree model, path assembly, brief compiler, router, learning router, providers. Zero runtime deps. See its [README](packages/engine/README.md). |
 | `app/` · `components/` · `lib/` | Next.js (App Router) demo + engine testbed: API routes over the engine, tree sidebar, chat pane. Includes the remote MCP connector at `app/api/mcp/` ([README](app/api/mcp/README.md)). |
 | `plugin/` | Claude Code plugin — the full loop on your Claude subscription (skills, tier agents, bundled stdio MCP tree server). |
 | `extension/` | MV3 Chrome extension over claude.ai — reads + pre-fills, strictly human-in-the-loop. |

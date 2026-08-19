@@ -1,5 +1,5 @@
 /**
- * Build-time replacement for @bonsai/engine's provider.ts in the extension bundle. It makes the
+ * Build-time replacement for bonsai-engine's provider.ts in the extension bundle. It makes the
  * human-in-the-loop guarantee STRUCTURAL: the real provider's fetch-to-model POST code (to
  * api.anthropic.com / OpenAI-compatible endpoints) is never bundled at all. Everything resolves to
  * the extractive mock — providerName 'mock', providerComplete null — so no send path can exist.

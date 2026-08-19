@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   // Turbopack's root inference.
   turbopack: { root: __dirname },
   // The engine ships as TypeScript source; Next compiles it like app code.
-  transpilePackages: ['@bonsai/engine'],
+  transpilePackages: ['bonsai-engine'],
 };
 
 export default nextConfig;

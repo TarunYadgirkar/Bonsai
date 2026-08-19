@@ -1,4 +1,4 @@
-import { INTERNAL_TIER, complete, estimateTokens, insightGroundedIn, messagesTokens } from '@bonsai/engine';
+import { INTERNAL_TIER, complete, estimateTokens, insightGroundedIn, messagesTokens } from 'bonsai-engine';
 import { buildLog } from '@/lib/accounting';
 import { MergeRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
 import { checkRateLimit } from '@/lib/rate-limit';

@@ -8,7 +8,7 @@
  * doesn't either. Assertions are entity-presence checks, so they hold for the extractive mock
  * and for live models alike.
  */
-import type { Conversation, Message, UserProfile } from '@bonsai/engine';
+import type { Conversation, Message, UserProfile } from 'bonsai-engine';
 
 let seq = 0;
 export function msg(role: 'user' | 'assistant', content: string): Message {

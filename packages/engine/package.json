@@ -1,5 +1,5 @@
 {
-  "name": "@bonsai/engine",
+  "name": "bonsai-engine",
   "version": "0.1.0",
   "description": "Tree-structured conversation engine: path-based context compilation, model+effort routing, cherry-pick merge.",
   "license": "MIT",
@@ -7,7 +7,7 @@
   "homepage": "https://github.com/TarunYadgirkar/Bonsai/tree/main/packages/engine#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/TarunYadgirkar/Bonsai"
+    "url": "git+https://github.com/TarunYadgirkar/Bonsai.git"
   },
   "keywords": [
     "llm",
@@ -35,7 +35,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "prepublishOnly": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm')) { console.error('publish with pnpm — npm ignores the publishConfig exports swap'); process.exit(1) }\" && tsup",
+    "prepublishOnly": "node -e \"if(!process.env.npm_config_user_agent?.startsWith('pnpm')) { console.error('publish with pnpm \u2014 npm ignores the publishConfig exports swap'); process.exit(1) }\" && tsup",
     "clean": "rm -rf dist"
   },
   "publishConfig": {

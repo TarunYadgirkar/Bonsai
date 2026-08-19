@@ -1,11 +1,21 @@
 # 🌱 Bonsai
 
+[![ci](https://github.com/TarunYadgirkar/Bonsai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TarunYadgirkar/Bonsai/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/bonsai-engine)](https://www.npmjs.com/package/bonsai-engine)
+[![license: MIT](https://img.shields.io/badge/license-MIT-3E6B47)](LICENSE)
+
 **Prune the conversation to its living wood.** Bonsai turns AI chat from a growing scroll into a
 tree: branch a side question with a *compiled minimal brief* instead of the full history,
 auto-route each branch to the right model and effort, and merge exactly one distilled insight back
 into the trunk. It runs on the Claude subscription you already pay for — no API key.
 
 > The cheapest token is the one you don't send.
+
+**Try it in 60 seconds:** open the **[live demo](https://bonsai-connector.vercel.app)** (no keys, no
+account — briefs, routing, and pruning are real; answers are an honest mock), or attach Bonsai to
+your own claude.ai at **[/connect](https://bonsai-connector.vercel.app/connect)** — one click mints
+your private connector link, then say *"fork this side question with Bonsai"* in any chat and
+*"show my bonsai tree"* to see your garden render inline.
 
 ![The Bonsai web app — the garden tree, a compiled-brief branch, and per-branch economics](assets/generated/app-screenshot.jpg)
 
@@ -46,14 +56,17 @@ comes back. Bonsai is the loop those products don't have:
   correctness claim that makes compiled briefs safe (referent resolution at depth 2, salience over
   keyword noise). Differential and provider-agnostic. Runs in CI.
 
-## Four surfaces, one engine, zero API keys
+## Three surfaces, one engine, zero API keys
 
 | Surface | What it is |
 |---|---|
-| **Web app** (`app/`, `components/`) | The hosted demo + engine testbed. Mock-first: runs with zero keys. |
+| **MCP connector** (`app/api/mcp/`) | A claude.ai custom connector — self-serve at [/connect](https://bonsai-connector.vercel.app/connect). Claude compiles the brief in-conversation; the connector holds the tree and renders it inline as an interactive MCP Apps garden. |
 | **Claude Code plugin** (`plugin/`) | Branch = subagent with a compiled brief; merge = distilled report. Runs on your Claude Code subscription. |
-| **Chrome extension** (`extension/`) | MV3 side panel over claude.ai. Reads your chat, compiles a brief locally, pre-fills the branch — strictly human-in-the-loop, it never sends. |
-| **MCP connector** (`app/api/mcp/`) | A claude.ai custom connector. Claude compiles the brief in-conversation; the connector holds the tree. Deployed + wired live. |
+| **Web app** (`app/`, `components/`) | The hosted demo + engine testbed: streaming chat, ⌘K palette, export, per-branch economics. Mock-first: runs with zero keys. |
+
+(A Chrome extension surface lives in `extension/` with full e2e coverage but is deliberately
+parked: a claude.ai extension can never run the loop unattended, and its remaining prefill role
+is covered better by the connector.)
 
 Install the plugin:
 
@@ -64,10 +77,10 @@ Install the plugin:
 
 (The plugin currently lives on branch `copy-a`, not `main` — reference this branch until promotion, and the repo must be public.)
 
-The durable value is `@bonsai/engine` — a dependency-free TypeScript package the four surfaces all
+The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
 consume, and publishable on its own (`cd packages/engine && pnpm publish` builds a typed `dist` via
 `prepublishOnly`). Tree model, path assembly, salience compiler, learning router, honest pricing.
-168 unit tests; the referent-resolution benchmark runs in CI.
+212 unit tests; the referent-resolution benchmark runs in CI.
 
 ## Run it
 
@@ -86,7 +99,7 @@ to a working local path when its key is absent.
 
 | Path | What |
 |---|---|
-| `packages/engine/` | `@bonsai/engine` — the core. Zero runtime deps. |
+| `packages/engine/` | `bonsai-engine` — the core. Zero runtime deps. |
 | `app/` · `components/` | Next.js demo + API routes over the engine. |
 | `plugin/` · `extension/` | The Claude Code plugin and the Chrome extension. |
 | `evals/` | The referent-resolution + routing benchmark. |

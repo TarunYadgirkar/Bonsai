@@ -17,9 +17,9 @@ import type {
   SessionStats,
   Tier,
   UserProfile,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 
-export { PRICES_AS_OF } from '@bonsai/engine';
+export { PRICES_AS_OF } from 'bonsai-engine';
 
 export type {
   BranchNode,
@@ -45,7 +45,7 @@ export type {
   TokenBasis,
   TokenFigure,
   UserProfile,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 
 /* ---------- API contracts ---------- */
 

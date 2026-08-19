@@ -9,7 +9,7 @@ import {
   renderChatContext,
   route,
   widenedChatContext,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 import { buildLog } from '@/lib/accounting';
 import {
   appendMessage,

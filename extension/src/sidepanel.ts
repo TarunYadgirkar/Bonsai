@@ -10,7 +10,7 @@ import {
   routingLabel,
   type RoutingDecision,
   type Tier,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 import { branchPrompt, compileBranch, mergePrompt } from './compile';
 import { SELECTION_KEY, type StashedSelection } from './messages';
 import type { ActiveInfo, ContentToPanel, PrefillResult, TreeResult } from './messages';
@@ -38,7 +38,7 @@ async function toContent<T>(msg: unknown): Promise<T | undefined> {
 
 /* ---------- branch flow ---------- */
 
-let lastCompiled: { brief: import('@bonsai/engine').ContextBrief; routing: RoutingDecision } | null = null;
+let lastCompiled: { brief: import('bonsai-engine').ContextBrief; routing: RoutingDecision } | null = null;
 /** The conversation the current selection was made in, so compiling can't target the wrong chat. */
 let selectionConversationId: string | null = null;
 
@@ -83,7 +83,7 @@ async function compile(): Promise<void> {
 }
 
 function renderPreview(
-  compiled: { brief: import('@bonsai/engine').ContextBrief; routing: RoutingDecision },
+  compiled: { brief: import('bonsai-engine').ContextBrief; routing: RoutingDecision },
   parentConversationId: string,
   parentName: string,
 ): void {
@@ -133,7 +133,7 @@ function renderPreview(
 }
 
 async function openBranch(
-  brief: import('@bonsai/engine').ContextBrief,
+  brief: import('bonsai-engine').ContextBrief,
   routing: RoutingDecision,
   chosenTier: Tier,
   recommendedTier: Tier,

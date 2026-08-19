@@ -19,7 +19,7 @@ import {
   route,
   type Conversation,
   type ContextBrief,
-} from '@bonsai/engine';
+} from 'bonsai-engine';
 import { CASES, clubsRoot, conv, fundingRoot, msg, type EvalCase } from './cases';
 
 interface Verdict {

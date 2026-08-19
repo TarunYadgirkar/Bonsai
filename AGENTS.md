@@ -31,7 +31,7 @@ That is the interesting problem and the thing worth getting right. Surfaces are 
 ## Stack
 
 - Next.js (App Router) + TypeScript + Tailwind. Vercel deploys `main` only (`vercel.json` → `git.deploymentEnabled`).
-- The engine is an npm-workspace package: `packages/engine` (`@bonsai/engine`) — tree model,
+- The engine is an npm-workspace package: `packages/engine` (`bonsai-engine`) — tree model,
   path assembly, brief compiler, router, providers. Zero runtime deps; ships as TS source
   (`transpilePackages` in next.config.ts). Unit tests in `packages/engine/test`, evals in
   `evals/` (`npm run eval`).
@@ -116,7 +116,7 @@ Updated: 2026-08-19T03:20:00Z by claude session (lane A)
    needs a human or Cowork click of Compile / Open branch chat).
 3. **Enable cookie signing in prod**: `vercel env add SESSION_SECRET` (long random string) —
    the code ships signed-session + rate limiting now (wave 2); unset = unsigned demo mode.
-4. Then: `pnpm publish @bonsai/engine`, MCP Apps tree UI, connector OAuth.
+4. Then: `pnpm publish bonsai-engine`, MCP Apps tree UI, connector OAuth.
 
 **Session 2026-08-18 — Phase 4: app usability (see BUILDLOG for detail; 10 commits, 192 tests,
 15/15 evals, CI GREEN — it had been red since 08-12, root cause plugin/mcp deps never installed

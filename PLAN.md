@@ -30,7 +30,7 @@ old build). Full state + "next" live in `AGENTS.md → ## Ongoing`; the record i
 | # | Segment | State |
 |---|---------|-------|
 | 0 | Toolchain (tsx, vitest, typecheck) + this memo | done |
-| 1 | Extract `@bonsai/engine` package — injected LLM fn, Store interface, split types, unit tests | done |
+| 1 | Extract `bonsai-engine` package — injected LLM fn, Store interface, split types, unit tests | done |
 | 2 | True semantics — path-based compile, closed merge loop, context-first escalation, brief budgeting | done |
 | 3 | Live provider fixed — per-model param policy, real effort mapping, honest accounting, correct pricing | done |
 | 4 | Relational persistence on Neon (per-row, random ids) + API hardening (zod, error wrapper, guarded reset) | done |
@@ -45,7 +45,7 @@ old build). Full state + "next" live in `AGENTS.md → ## Ongoing`; the record i
 | 8 | Web app **redesign** — sumi-e ink on rice paper, garden signature, season cost scale (`DESIGN.md`); deployed | done |
 | 9 | **Learning router v2** — per-question-kind priors + classifier confidence + `mergeProfiles()` community cold-start | done |
 | 10 | **Salience compiler** + **rigorous stats** (tokenizer-gen correction, measured-vs-modeled provenance) | done |
-| 11 | **Moat** (`MOAT.md`) + recruiter README + **`@bonsai/engine` publishable** (tsup dist, `pnpm publish`) + logger + provider tests | done |
+| 11 | **Moat** (`MOAT.md`) + recruiter README + **`bonsai-engine` publishable** (tsup dist, `pnpm publish`) + logger + provider tests | done |
 
 Each segment: build clean → commit → push. Reviews per repo auto-routing.
 
@@ -63,7 +63,7 @@ pinning), migrations 004+005 applied to `br-old-fog`. Open items, in order:
 2. Side-panel buttons: one human/Cowork click-through of Compile / Open branch chat — the only
    UI path the harness can't reach.
 3. Promote `copy-a` → `main`/live demo when ready.
-4. `pnpm publish @bonsai/engine`; MCP Apps interactive tree inline in claude.ai (connector already
+4. `pnpm publish bonsai-engine`; MCP Apps interactive tree inline in claude.ai (connector already
    returns `structuredContent`); connector OAuth; streaming chat.
 5. If the demo grows real traffic: signed session cookies + rate limiting (closes the documented
    population-prior Sybil residual).
