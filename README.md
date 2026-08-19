@@ -17,7 +17,7 @@ your own claude.ai at **[/connect](https://bonsai-connector.vercel.app/connect)*
 your private connector link, then say *"fork this side question with Bonsai"* in any chat and
 *"show my bonsai tree"* to see your garden render inline.
 
-![The Bonsai web app — the garden tree, a compiled-brief branch, and per-branch economics](assets/generated/app-screenshot.jpg)
+![The whole loop in 60 seconds — fork with a compiled brief, prune a fact, merge one insight back, read the ledger](assets/generated/bonsai-loop.gif)
 
 **[Live demo](https://bonsai-connector.vercel.app)** · **[Interactive garden](https://claude.ai/code/artifact/b1b44d60-59a7-4237-8b56-26ae5c1b06ce)** · [The design system](DESIGN.md) · [The moat](MOAT.md)
 

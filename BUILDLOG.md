@@ -520,3 +520,17 @@ token reduction on the deliberately tiny mock fixtures — a stated conservative
 tree measures 97%+ per fork), `--json` machine-readable output, and evals/README.md with the
 method, run instructions (mock = CI gate, live = real grading), and the honest-caveats section
 (exact-substring scoring favors the baseline, not us). BENCHMARK.md + README updated.
+
+## 2026-08-19 (loop iter 5) — Launch prep: the demo GIF, Show HN package, directory checklist
+
+- README hero is now a 54s GIF of the real guided tour (Playwright video → ffmpeg, 800px,
+  4.3MB): fork with the brief sheet, a fact pruned on camera, merge, ledger.
+- docs/launch/show-hn.md: two literal titles, the founder first-comment built on the honesty
+  beat (the depth-3 dangling-referent bug our own benchmark caught), a response crib for the
+  three predictable objections, staggered per-surface follow-up plan.
+- docs/launch/connector-directory.md: submission checklist — six boxes already true, four open
+  (fresh-account OAuth attach test, SESSION_SECRET, privacy note, screenshots).
+
+This closes the five-segment loop campaign (brief sheet → OAuth → tour → BriefBench → launch
+prep). Remaining launch gates are Tarun-shaped: npm publish, SESSION_SECRET, one fresh-account
+attach test, then post.
