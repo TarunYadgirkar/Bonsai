@@ -11,6 +11,7 @@ import type {
   StateResponse,
 } from '@/lib/types';
 import { ChatPane } from './ChatPane';
+import { CommandPalette } from './CommandPalette';
 import { EconomicsPanel } from './EconomicsPanel';
 import { MergeFlight, type Flight } from './MergeFlight';
 import { TreeSidebar, type NodeStats } from './TreeSidebar';
@@ -128,6 +129,7 @@ export function Workspace() {
   /** The insight that just landed, so the parent node and the line itself can glow. */
   const [merged, setMerged] = useState<{ parentId: string; insightId: string } | null>(null);
   const [economicsOpen, setEconomicsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [demoMode, setDemoMode] = useState(false);
 
   // Honesty ribbon: without a provider key the answers come from the extractive mock. Say so —
@@ -143,6 +145,18 @@ export function Workspace() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // ⌘K / Ctrl-K from anywhere in the workspace.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, []);
 
   useEffect(() => {
@@ -676,6 +690,16 @@ export function Workspace() {
             select(flight.parentId);
             setMerged({ parentId: flight.parentId, insightId: flight.id });
           }}
+        />
+      )}
+
+      {paletteOpen && state && (
+        <CommandPalette
+          conversations={state.conversations}
+          onSelectBranch={select}
+          onNewChat={newChat}
+          onOpenEconomics={() => setEconomicsOpen(true)}
+          onClose={() => setPaletteOpen(false)}
         />
       )}
 
