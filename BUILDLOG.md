@@ -470,3 +470,21 @@ Executed against the new ROADMAP.md (111 items from the 11-scout sweep). Landed:
 
 Awaiting Tarun: promote copy-a→main + repo public (plugin install), `npm login` + publish or
 push a v0.1.0 tag with NPM_TOKEN set, SESSION_SECRET env, prod promote of this wave.
+
+## 2026-08-19 (evening) — PROMOTED: copy-a is main, repo is PUBLIC
+
+- Old main archived untouched as `main-pre-phase4` (its only divergence: a docs commit + its
+  own revert). copy-a absorbed it via a net-zero merge, then fast-forwarded `main` — no force,
+  nothing deleted.
+- **Repo made PUBLIC** after a full-history secret scan (only hits: a dummy postgres URL in an
+  old test fixture and the by-design dev-key literal that fails closed in prod). Anonymous
+  clone verified; `.claude-plugin/marketplace.json` at root → stranger `/plugin marketplace add
+  TarunYadgirkar/Bonsai` now works.
+- **Neon `main` branch migrated** 001→005 via Neon MCP, additive statements only (004's legacy
+  DELETE block skipped, per the br-old-fog precedent; the ancient `store_snapshot` table left
+  in place). Verified: full table set present.
+- The `bonsai` Vercel project auto-deployed the promoted main to bonsai-lac — the old demo URL
+  now serves the current app against the freshly migrated DB. CI green on `main` (both runs,
+  incl. plugin validate). Wave-1 confirmed READY + aliased on bonsai-connector.vercel.app.
+- Remaining (Tarun): `npm login` + publish bonsai-engine (or NPM_TOKEN secret + v0.1.0 tag),
+  `vercel env add SESSION_SECRET production` on both projects.

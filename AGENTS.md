@@ -94,7 +94,7 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-19T03:20:00Z by claude session (lane A)
+Updated: 2026-08-19T17:45:00Z by claude session (lane A) — copy-a IS main now; repo PUBLIC; keep committing on copy-a and fast-forwarding main (merge, never force)
 
 ### ▶ NEXT SESSION — do these first
 -1. **PROD IS CURRENT (2026-08-19)** — Phase 4 + wave 2 + panel fixes are LIVE on
