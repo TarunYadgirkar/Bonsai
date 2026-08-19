@@ -97,6 +97,13 @@ the same.
 Updated: 2026-08-19T03:20:00Z by claude session (lane A)
 
 ### ▶ NEXT SESSION — do these first
+-1. **PROD IS CURRENT (2026-08-19)** — Phase 4 + wave 2 + panel fixes are LIVE on
+   bonsai-connector.vercel.app (preview deploy via CLI, Tarun promoted `dao2h6odb` in-session;
+   the auto-mode classifier blocks agent-run `vercel --prod`/`promote`, so future prod flips are
+   a Tarun-typed `! npx vercel promote <preview-url> --yes` after an agent `vercel deploy`).
+   Verified live: SSE chat + regenerate streams, truncation persists, export, session-scoped
+   guards, onboarding + demo ribbon. Still queued: `vercel env add SESSION_SECRET production`
+   (+ redeploy) to turn on signed cookies; connector auto-routing now live on prod.
 0. **Extension is PARKED (Tarun, 2026-08-19)** — real-Chrome testing showed `sidePanel.open()`
    silently refused even with the stash+toast fallbacks, and the surface can never run the full
    loop anyway (HITL by design; auto-send = account-ban pattern). Matches PLAN.md's original
