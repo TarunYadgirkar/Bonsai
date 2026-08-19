@@ -97,6 +97,12 @@ the same.
 Updated: 2026-08-19T03:20:00Z by claude session (lane A)
 
 ### ▶ NEXT SESSION — do these first
+0. **Extension is PARKED (Tarun, 2026-08-19)** — real-Chrome testing showed `sidePanel.open()`
+   silently refused even with the stash+toast fallbacks, and the surface can never run the full
+   loop anyway (HITL by design; auto-send = account-ban pattern). Matches PLAN.md's original
+   "Cut" verdict. Both e2e suites stay green as regression cover, but no further investment.
+   The claude.ai surface is the CONNECTOR — full fork→branch→merge loop verified live in
+   Tarun's claude.ai this session (brief 76.4% pruned, garden totals 99.6%).
 1. **Promote prod** — `vercel --prod` from this worktree picks up Phase 4 (streaming, message
    actions, palette, export, connector auto-routing, the session-race fix). Needs Tarun's auth.
 2. **Side-panel buttons** — still the only unverified UI (Chrome side panel is browser chrome;
