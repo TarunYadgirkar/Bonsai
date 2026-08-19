@@ -19,7 +19,7 @@ import type {
   UserProfile,
 } from 'bonsai-engine';
 
-export { PRICES_AS_OF } from 'bonsai-engine';
+export { PRICES_AS_OF, ceilingCostUsd } from 'bonsai-engine';
 
 export type {
   BranchNode,

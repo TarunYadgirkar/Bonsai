@@ -277,11 +277,14 @@ export function ChatPane({
             </h2>
           )}
           {brief ? (
+            // The per-fork receipt: the concrete sent/avoided pair, not just a percentage.
             <p className="truncate text-[11px] text-bark">
-              <span className="tnum text-ink-soft">{brief.availableTokens.toLocaleString()}</span>{' '}
-              available <span className="tnum text-bark">→</span>{' '}
               <span className="tnum text-ink-soft">{brief.briefTokens.toLocaleString()}</span>{' '}
-              relevant <span className="tnum text-bark">→</span>{' '}
+              sent <span className="text-bark">·</span>{' '}
+              <span className="tnum text-moss">
+                {Math.max(0, brief.availableTokens - brief.briefTokens).toLocaleString()}
+              </span>{' '}
+              avoided <span className="text-bark">·</span>{' '}
               <span className="tnum text-moss">{brief.prunedPct.toFixed(1)}%</span> pruned
             </p>
           ) : (

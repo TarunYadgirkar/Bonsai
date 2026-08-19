@@ -173,7 +173,8 @@ function textResult(text: string, isError = false) {
 function economicsLine(node: McpNode): string {
   if (node.briefTokens === null) return '';
   if (node.availableTokens !== null && node.prunedPct !== null) {
-    return `${fmt(node.availableTokens)} → ${fmt(node.briefTokens)} tokens · ${node.prunedPct}% pruned`;
+    const avoided = Math.max(0, node.availableTokens - node.briefTokens);
+    return `${fmt(node.briefTokens)} sent · ${fmt(avoided)} avoided · ${node.prunedPct}% pruned`;
   }
   return `brief ≈ ${fmt(node.briefTokens)} tokens (pass availableTokensEstimate to see pruned %)`;
 }

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { EconomicsResponse, InferenceLog } from '@/lib/types';
-import { PRICES_AS_OF } from '@/lib/types';
+import { PRICES_AS_OF, ceilingCostUsd } from '@/lib/types';
 import { EFFORT_LABEL } from './ModeBadge';
 import { formatUsd } from './tokens';
 
@@ -302,7 +302,7 @@ export function EconomicsPanel({
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+                    <table className="w-full min-w-[800px] border-collapse text-left text-xs">
                       <thead>
                         <tr className="border-b border-rule-strong">
                           <th className="eyebrow px-3 py-2 text-left font-medium">time</th>
@@ -315,6 +315,9 @@ export function EconomicsPanel({
                           <th className="eyebrow px-3 py-2 text-right font-medium">cost</th>
                           <th className="eyebrow px-3 py-2 text-right font-medium">
                             baseline (modeled)
+                          </th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">
+                            ceiling (modeled)
                           </th>
                         </tr>
                       </thead>
@@ -351,6 +354,9 @@ export function EconomicsPanel({
                             </td>
                             <td className="tnum px-3 py-2 text-right text-bark line-through">
                               {formatUsd(log.baselineCostUsd)}
+                            </td>
+                            <td className="tnum px-3 py-2 text-right text-bark line-through">
+                              {formatUsd(ceilingCostUsd(log.baselineInputTokens, log.outputTokens))}
                             </td>
                           </tr>
                         ))}

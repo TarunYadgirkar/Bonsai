@@ -11,6 +11,7 @@ export {
   TIER_EFFORT,
   TIER_LABEL,
   PRICES_AS_OF,
+  ceilingCostUsd,
   costForModel,
   costForServedBy,
   isPricedServedBy,

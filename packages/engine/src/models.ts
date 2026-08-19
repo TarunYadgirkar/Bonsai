@@ -164,6 +164,14 @@ export function costForServedBy(
   return Math.round(usd * 1e6) / 1e6;
 }
 
+/**
+ * The counterfactual no vendor will ever show you: this request, carrying full history, on the
+ * ceiling model. Computable exactly from token counts with zero extra API calls.
+ */
+export function ceilingCostUsd(inputTokens: number, outputTokens: number): number {
+  return costForModel(CEILING_MODEL, inputTokens, outputTokens);
+}
+
 /** Legacy shape kept for callers that price by tier. Derived, so the catalog stays single-source. */
 export const MODEL_PRICING: Record<Tier, { input: number; output: number }> = {
   quick: { input: modelSpec(MODEL_TIERS.quick).input, output: modelSpec(MODEL_TIERS.quick).output },

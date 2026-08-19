@@ -96,7 +96,8 @@ export const TREE_APP_HTML = `<!doctype html>
   function nodeHtml(n, childrenHtml) {
     var econ = '';
     if (n.briefTokens != null && n.availableTokens != null) {
-      econ = ' ~' + n.availableTokens + '\\u2192' + n.briefTokens + ' tok';
+      var avoided = Math.max(0, n.availableTokens - n.briefTokens);
+      econ = ' ' + n.briefTokens + ' sent \\u00B7 ' + avoided + ' avoided';
       if (n.prunedPct != null && n.prunedPct > 0) econ += ' \\u00B7 ' + n.prunedPct + '% pruned';
     }
     var chip = n.model ? '<span class="chip">' + esc(n.model) + (n.effort ? ' \\u00B7 ' + esc(n.effort) : '') + '</span>' : '';
