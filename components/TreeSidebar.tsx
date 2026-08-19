@@ -297,6 +297,14 @@ export function TreeSidebar({
           <span className="ml-auto text-[10px] text-bark">example tree</span>
         </button>
 
+        <a
+          href="/connect"
+          className="flex w-full items-center gap-2 border-t border-rule px-4 py-2.5 text-left text-sm text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
+        >
+          <span className="font-medium text-ink">Attach to claude.ai</span>
+          <span className="ml-auto text-[10px] text-bark">your connector link</span>
+        </a>
+
         {/*
          * Two-step rather than a confirm() dialog: a browser modal blocks the page, and this
          * discards the current garden, so a stray click must not be enough.

@@ -442,6 +442,10 @@ export function ChatPane({
                 >
                   How it works, honestly — the repo
                 </a>
+                {' · '}
+                <a href="/connect" className="underline hover:text-ink-soft">
+                  use it inside claude.ai
+                </a>
               </p>
             </div>
           )}

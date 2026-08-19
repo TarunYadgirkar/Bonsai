@@ -106,6 +106,22 @@ function rowToNode(row: Record<string, unknown>): McpNode {
   };
 }
 
+/**
+ * Self-serve garden keys: one per web session, minted from /connect. The session id rides in
+ * `label` (schema untouched), so re-clicking returns the same key instead of minting piles of
+ * rows. Memory mode (no DATABASE_URL) hands back the dev key — the connector accepts only that
+ * key there anyway, and the whole flow stays honest for local demos.
+ */
+export async function issueKeyForSession(sessionId: string): Promise<string> {
+  if (!dbEnabled()) return DEV_KEY;
+  const label = `web:${sessionId}`;
+  const existing = await sql()`SELECT key FROM mcp_users WHERE label = ${label} LIMIT 1`;
+  if (existing.length > 0) return existing[0].key as string;
+  const key = `bk_${crypto.randomUUID().replace(/-/g, '')}`;
+  await sql()`INSERT INTO mcp_users (key, label) VALUES (${key}, ${label})`;
+  return key;
+}
+
 export async function validateKey(key: string): Promise<boolean> {
   if (!key) return false;
   if (dbEnabled()) {
