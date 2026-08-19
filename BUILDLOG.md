@@ -488,3 +488,18 @@ push a v0.1.0 tag with NPM_TOKEN set, SESSION_SECRET env, prod promote of this w
   incl. plugin validate). Wave-1 confirmed READY + aliased on bonsai-connector.vercel.app.
 - Remaining (Tarun): `npm login` + publish bonsai-engine (or NPM_TOKEN secret + v0.1.0 tag),
   `vercel env add SESSION_SECRET production` on both projects.
+
+## 2026-08-19 (loop iter 2) — Connector OAuth 2.1 + DCR (218 tests, flow live-verified)
+
+- Minimal honest authorization server, zero new deps (node:crypto): RFC 9728 PRM + RFC 8414 AS
+  metadata well-knowns, RFC 7591 DCR (public clients, https-or-localhost redirect URIs only),
+  PKCE S256 mandatory, single-use 5-min codes, opaque bearer tokens stored as sha256 hashes.
+  Identity = the same per-session garden key /connect mints; the consent page (sumi-e,
+  self-contained) rides the web session cookie. Migration 006 applied to Neon main + copy-a.
+- New bearer-only endpoint POST /api/mcp: no credentials → 401 with WWW-Authenticate pointing
+  at the PRM (the claude.ai OAuth trigger); bearer = OAuth token OR a raw garden key (same
+  trust, different carrier). Legacy /api/mcp/[key] untouched.
+- Full flow verified curl-for-curl against the real DB: 401 trigger → PRM → DCR → consent →
+  code → PKCE exchange → authenticated MCP initialize. Unit tests: redirect validation, DCR,
+  single-use codes, wrong-verifier rejection, token→key, forged-token rejection.
+- /connect now leads with the OAuth URL; the key link stays as the fallback carrier.
