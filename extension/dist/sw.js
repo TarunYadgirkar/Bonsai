@@ -44,8 +44,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     chrome.storage.session.set({ [SELECTION_KEY]: stash }).catch(() => {
     });
     const tabId = _sender.tab?.id;
-    if (tabId !== void 0) chrome.sidePanel.open({ tabId }).catch(() => {
-    });
+    if (tabId !== void 0) {
+      chrome.sidePanel.open({ tabId }).catch(() => {
+        chrome.tabs.sendMessage(tabId, {
+          type: "PANEL_HINT",
+          text: "Selection saved \u2014 click the \u{1F331} Bonsai icon in the toolbar to open the panel."
+        }).catch(() => {
+        });
+      });
+    }
     sendResponse({ ok: true });
     return true;
   }

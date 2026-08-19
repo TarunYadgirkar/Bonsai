@@ -122,6 +122,17 @@
     document.body.appendChild(host);
     chip = host;
   }
+  function showToast(text) {
+    const host = document.createElement("div");
+    const root = host.attachShadow({ mode: "open" });
+    const box = document.createElement("div");
+    box.textContent = text;
+    box.style.cssText = "font:500 12px system-ui;color:#fff;background:#1f6f43;border:1px solid #2e9e60;border-radius:8px;padding:8px 12px;box-shadow:0 4px 12px rgba(0,0,0,.4);max-width:320px";
+    root.appendChild(box);
+    host.style.cssText = "position:fixed;right:16px;top:16px;z-index:2147483647";
+    document.body.appendChild(host);
+    setTimeout(() => host.remove(), 5e3);
+  }
   var suppressNextMouseup = false;
   document.addEventListener("mouseup", () => {
     if (suppressNextMouseup) {
@@ -173,6 +184,11 @@
   }
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     const m = msg;
+    if (msg.type === "PANEL_HINT") {
+      showToast(msg.text ?? "Click the Bonsai toolbar icon.");
+      sendResponse({ ok: true });
+      return true;
+    }
     if (m.type === "GET_ACTIVE") {
       const info = {
         conversationId: conversationIdFromUrl(location.href),

@@ -43,9 +43,19 @@ chrome.runtime.onMessage.addListener((msg: { type: string; [k: string]: unknown 
     };
     chrome.storage.session.set({ [SELECTION_KEY]: stash }).catch(() => {});
     const tabId = _sender.tab?.id;
-    // sidePanel.open needs the user-gesture context this forwarded click carries; on older
-    // Chrome versions it throws — degrade to the stash + toolbar click.
-    if (tabId !== undefined) chrome.sidePanel.open({ tabId }).catch(() => {});
+    // sidePanel.open needs the user-gesture context this forwarded click carries. Where Chrome
+    // refuses (gesture not carried, older version), the click must not fail SILENTLY — tell the
+    // content script to say so; the stash still delivers the selection on the panel's next open.
+    if (tabId !== undefined) {
+      chrome.sidePanel.open({ tabId }).catch(() => {
+        chrome.tabs
+          .sendMessage(tabId, {
+            type: 'PANEL_HINT',
+            text: 'Selection saved — click the 🌱 Bonsai icon in the toolbar to open the panel.',
+          })
+          .catch(() => {});
+      });
+    }
     sendResponse({ ok: true });
     return true;
   }

@@ -94,6 +94,21 @@ function showChip(x: number, y: number, text: string): void {
   chip = host;
 }
 
+/** Ephemeral toast for the one failure the chip cannot show on its own: the panel refused to
+ *  auto-open (no user-gesture carry). Same shadow-DOM isolation as the chip. */
+function showToast(text: string): void {
+  const host = document.createElement('div');
+  const root = host.attachShadow({ mode: 'open' });
+  const box = document.createElement('div');
+  box.textContent = text;
+  box.style.cssText =
+    'font:500 12px system-ui;color:#fff;background:#1f6f43;border:1px solid #2e9e60;border-radius:8px;padding:8px 12px;box-shadow:0 4px 12px rgba(0,0,0,.4);max-width:320px';
+  root.appendChild(box);
+  host.style.cssText = 'position:fixed;right:16px;top:16px;z-index:2147483647';
+  document.body.appendChild(host);
+  setTimeout(() => host.remove(), 5000);
+}
+
 /** Set when the Branch chip was just clicked, so the ensuing mouseup doesn't re-open the chip. */
 let suppressNextMouseup = false;
 
@@ -164,6 +179,11 @@ function watchForConversationId(): void {
 
 chrome.runtime.onMessage.addListener((msg: PanelToContent | { type: string }, _sender, sendResponse) => {
   const m = msg as PanelToContent;
+  if (msg.type === 'PANEL_HINT') {
+    showToast((msg as { type: string; text?: string }).text ?? 'Click the Bonsai toolbar icon.');
+    sendResponse({ ok: true });
+    return true;
+  }
   if (m.type === 'GET_ACTIVE') {
     const info: ActiveInfo = {
       conversationId: conversationIdFromUrl(location.href),
