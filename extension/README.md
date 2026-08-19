@@ -53,8 +53,8 @@ cd extension && node build.mjs   # bundles src/ → dist/ (esbuild)
 
 Then in Chrome: `chrome://extensions` → enable **Developer mode** → **Load unpacked** →
 select this `extension/` folder. Open any claude.ai chat, then open Chrome's puzzle-piece
-extensions menu, pin Bonsai, and click it to open the side panel (the manifest ships no icons,
-so there's no toolbar icon until you pin it). If a claude.ai tab was already open when you
+extensions menu, pin Bonsai, and click its bonsai-tree icon to open the side panel.
+If a claude.ai tab was already open when you
 loaded the extension, reload that tab — content scripts attach on page load.
 
 ## Verified
