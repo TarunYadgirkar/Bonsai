@@ -534,3 +534,17 @@ method, run instructions (mock = CI gate, live = real grading), and the honest-c
 This closes the five-segment loop campaign (brief sheet → OAuth → tour → BriefBench → launch
 prep). Remaining launch gates are Tarun-shaped: npm publish, SESSION_SECRET, one fresh-account
 attach test, then post.
+
+## 2026-08-19 (post-loop wave) — merge chips, real-engine plugin, #32631 vocabulary
+
+- **Merge chips**: insights interleave into the parent transcript by timestamp as expandable
+  moss chips with open-branch links (the old above-thread disclosure removed); verified via a
+  real merge in Chromium. Note: the demo fixture ships zero insights — the tour mints one.
+- **Plugin routes with the real engine**: the 75-line hand-mirror in plugin/mcp/server.mjs is
+  deleted; build.mjs aliases 'bonsai-engine' to the TS source and bundles it, so the plugin gets
+  the actual classifier (kind/confidence/coverage) and token math. server.mjs is bundle-only
+  now; the smoke exercises dist/server.mjs; withStoreLock holds across async work; CI order is
+  build → dist-diff → smoke. AGENTS known-trap updated.
+- **Slash commands**: /bonsai:branch, /bonsai:tree, /bonsai:switch, /bonsai:diff — the exact
+  vocabulary of anthropics/claude-code#32631, implemented as thin commands over the existing
+  skills and MCP tools. Plugin 0.2.0, validate green.
