@@ -1,6 +1,7 @@
+import { canonicalOrigin } from '@/lib/origin';
 /** RFC 8414 Authorization Server Metadata. PKCE S256 only; public clients via DCR. */
 export function GET(request: Request): Response {
-  const origin = new URL(request.url).origin;
+  const origin = canonicalOrigin(request);
   return Response.json(
     {
       issuer: origin,

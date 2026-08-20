@@ -9,6 +9,33 @@ interface ConnectResponse {
 }
 
 /** The mint-my-link interaction on /connect. One key per browser session; repeat clicks reuse it. */
+function RevokeControl() {
+  const [state, setState] = useState<'idle' | 'busy' | number>('idle');
+  const revoke = async () => {
+    setState('busy');
+    try {
+      const res = await fetch('/api/oauth/revoke', { method: 'POST' });
+      const body = (await res.json()) as { revoked?: number };
+      setState(res.ok ? (body.revoked ?? 0) : 'idle');
+    } catch {
+      setState('idle');
+    }
+  };
+  return (
+    <div className="mt-3 border-t border-rule pt-3">
+      <button onClick={revoke} disabled={state === 'busy'} className="text-[11px] text-bark underline hover:text-ember disabled:opacity-40">
+        {state === 'busy' ? 'Revoking…' : 'Revoke connector access'}
+      </button>
+      {typeof state === 'number' && (
+        <span className="ml-2 text-[11px] text-moss">
+          {state} OAuth {state === 1 ? 'grant' : 'grants'} revoked — reconnect in claude.ai to
+          reauthorize.
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function ConnectCard() {
   const [result, setResult] = useState<ConnectResponse | null>(null);
   const [busy, setBusy] = useState(false);
@@ -64,6 +91,7 @@ export function ConnectCard() {
             Same browser, same link — coming back here returns this key rather than minting
             another.
           </p>
+          <RevokeControl />
         </div>
       ) : (
         <div className="flex flex-col items-start gap-2">

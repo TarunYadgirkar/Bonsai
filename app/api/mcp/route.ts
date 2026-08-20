@@ -6,6 +6,7 @@
  * /connect links and OAuth grants land in the same garden model. The legacy key-in-URL path
  * (/api/mcp/[key]) stays untouched for existing installs.
  */
+import { canonicalOrigin } from '@/lib/origin';
 import { createMcpHandler } from 'mcp-handler';
 import { keyForToken } from '@/lib/oauth';
 import { validateKey } from '@/lib/mcp-store';
@@ -32,7 +33,7 @@ function unauthorized(origin: string): Response {
 }
 
 async function handle(req: Request): Promise<Response> {
-  const origin = new URL(req.url).origin;
+  const origin = canonicalOrigin(req);
   const bearer = req.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
   if (!bearer) return unauthorized(origin);
 

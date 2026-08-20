@@ -556,3 +556,21 @@ quick question, side note, tangent, while-we're-at-it…). Deliberately conserva
 list IS the gate, silent when the user already said bonsai/branch/fork, on short prompts, and
 on malformed input; the nudge tells the model to ignore itself when the message is on-topic and
 never to mention the nudge. Unit-tested (positive cue naming, multiword cues, all silent paths).
+
+## 2026-08-20 — OAuth security-review fixes (222 tests, flow re-verified live)
+
+Adversarial security review of the OAuth AS (findings ranked; PKCE/single-use/redirect-match/
+escaping/SQLi/token-entropy all confirmed clean). Fixed the four real findings:
+- **HIGH — DCR rate-limit bypass**: /register + /token were session-keyed, but a cookieless
+  caller mints a fresh session per request so the window never accumulated. New IP-keyed `oauth`
+  bucket (20/min via x-forwarded-for) on both endpoints.
+- **MED-HIGH — non-expiring tokens + false revocation copy**: migration 007 adds a 90-day TTL
+  (slid forward on use); keyForToken rejects+prunes expired; token endpoint returns expires_in;
+  new POST /api/oauth/revoke + a Revoke control on /connect; consent copy rewritten to be true.
+- **MED — Host-header trust**: discovery docs + WWW-Authenticate now use canonicalOrigin()
+  (BONSAI_ORIGIN env wins over the request Host; set it in prod).
+- **LOW — consent clarity**: the page now shows the redirect destination host and flags the
+  client name as self-declared/unverified.
+Migration 007 applied to Neon main + copy-a. Live re-run: DCR→consent→code→token(expires_in
+90d)→MCP init→revoke→401. Left as documented (not bugs): raw-key carrier parity, code-consumed-
+before-PKCE griefing footnote.

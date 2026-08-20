@@ -11,7 +11,11 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { sql, dbEnabled } from './db';
 
 const CODE_TTL_MS = 5 * 60 * 1000;
+const TOKEN_TTL_MS = 90 * 24 * 60 * 60 * 1000;
 const MAX_REDIRECT_URIS = 5;
+
+/** Access-token lifetime in seconds, for the token endpoint's expires_in. */
+export const TOKEN_TTL_SECONDS = TOKEN_TTL_MS / 1000;
 
 export interface OauthClient {
   clientId: string;
@@ -24,7 +28,7 @@ const memCodes = new Map<
   string,
   { clientId: string; userKey: string; redirectUri: string; codeChallenge: string; expiresAt: number }
 >();
-const memTokens = new Map<string, { clientId: string; userKey: string }>();
+const memTokens = new Map<string, { clientId: string; userKey: string; expiresAt: number }>();
 
 function hash(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -137,25 +141,37 @@ export async function exchangeCode(params: {
   if (!pkceMatches(params.codeVerifier, row.codeChallenge)) return null;
 
   const token = opaque('bt');
+  const tokenExpiry = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
   if (dbEnabled()) {
     await sql()`
-      INSERT INTO oauth_tokens (token, client_id, user_key)
-      VALUES (${hash(token)}, ${row.clientId}, ${row.userKey})
+      INSERT INTO oauth_tokens (token, client_id, user_key, expires_at)
+      VALUES (${hash(token)}, ${row.clientId}, ${row.userKey}, ${tokenExpiry})
     `;
   } else {
-    memTokens.set(hash(token), { clientId: row.clientId, userKey: row.userKey });
+    memTokens.set(hash(token), {
+      clientId: row.clientId,
+      userKey: row.userKey,
+      expiresAt: Date.now() + TOKEN_TTL_MS,
+    });
   }
   return token;
 }
 
-/** Bearer token → garden key. Null on anything unknown; DB errors reject (fail closed). */
+/**
+ * Bearer token → garden key. Expired tokens are rejected; a live token slides its TTL forward on
+ * use so active connections persist but abandoned ones age out. Null on anything unknown; DB
+ * errors reject (fail closed).
+ */
 export async function keyForToken(token: string): Promise<string | null> {
   if (!token.startsWith('bt_')) return null;
   const key = hash(token);
   if (dbEnabled()) {
     try {
       const rows = await sql()`
-        UPDATE oauth_tokens SET last_used = now() WHERE token = ${key} RETURNING user_key
+        UPDATE oauth_tokens
+        SET last_used = now(), expires_at = now() + interval '90 days'
+        WHERE token = ${key} AND expires_at > now()
+        RETURNING user_key
       `;
       return rows.length ? (rows[0].user_key as string) : null;
     } catch (err) {
@@ -163,5 +179,28 @@ export async function keyForToken(token: string): Promise<string | null> {
       return null;
     }
   }
-  return memTokens.get(key)?.userKey ?? null;
+  const mem = memTokens.get(key);
+  if (!mem) return null;
+  if (mem.expiresAt < Date.now()) {
+    memTokens.delete(key);
+    return null;
+  }
+  mem.expiresAt = Date.now() + TOKEN_TTL_MS;
+  return mem.userKey;
+}
+
+/** Revoke every OAuth token bound to a garden key — the honest severance the consent page offers. */
+export async function revokeTokensForKey(userKey: string): Promise<number> {
+  if (dbEnabled()) {
+    const rows = await sql()`DELETE FROM oauth_tokens WHERE user_key = ${userKey} RETURNING token`;
+    return rows.length;
+  }
+  let n = 0;
+  for (const [k, v] of memTokens) {
+    if (v.userKey === userKey) {
+      memTokens.delete(k);
+      n += 1;
+    }
+  }
+  return n;
 }

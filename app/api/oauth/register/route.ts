@@ -1,13 +1,11 @@
 import { registerClient } from '@/lib/oauth';
-import { checkRateLimit } from '@/lib/rate-limit';
-import { resolveSession } from '@/lib/session';
+import { checkRateLimit, clientIp } from '@/lib/rate-limit';
 
 export const dynamic = 'force-dynamic';
 
 /** RFC 7591 Dynamic Client Registration — public clients only, no secrets issued. */
 export async function POST(request: Request): Promise<Response> {
-  const session = resolveSession(request);
-  const limit = checkRateLimit(session.id, 'mutation');
+  const limit = checkRateLimit(clientIp(request), 'oauth');
   if (!limit.ok) {
     return Response.json({ error: 'rate_limit_exceeded' }, { status: 429 });
   }

@@ -5,16 +5,33 @@
  */
 const WINDOW_MS = 60_000;
 
-export type RateLimitBucket = 'inference' | 'mutation';
+export type RateLimitBucket = 'inference' | 'mutation' | 'oauth';
 
-/** inference = routes that can hit a paid model; mutation = cheap state changes. */
+/**
+ * inference = routes that can hit a paid model; mutation = cheap state changes; oauth = the
+ * unauthenticated DCR/token endpoints (keyed by client IP, not session — a cookieless caller
+ * mints a fresh session per request, so session-keyed limiting never accumulates against it).
+ */
 const LIMITS: Record<RateLimitBucket, number> = {
   inference: 20,
   mutation: 60,
+  oauth: 20,
 };
 
 const hits = new Map<string, number[]>();
 let lastSweep = 0;
+
+/**
+ * Best-effort client IP for the unauthenticated OAuth endpoints, from the platform's forwarding
+ * header. Spoofable in theory, but it's the only signal that survives a cookieless caller; the
+ * per-instance caveat already applies. Falls back to a shared bucket so a header-stripped flood
+ * still throttles collectively rather than not at all.
+ */
+export function clientIp(request: Request): string {
+  const fwd = request.headers.get('x-forwarded-for');
+  if (fwd) return fwd.split(',')[0]!.trim();
+  return request.headers.get('x-real-ip')?.trim() || 'unknown';
+}
 
 /** Drop windows that have fully expired so the map stays bounded by active sessions. */
 function sweep(now: number): void {
@@ -28,12 +45,12 @@ function sweep(now: number): void {
 }
 
 export function checkRateLimit(
-  sessionId: string,
+  identity: string,
   bucket: RateLimitBucket,
 ): { ok: true } | { ok: false; retryAfterSeconds: number } {
   const now = Date.now();
   sweep(now);
-  const key = `${bucket}:${sessionId}`;
+  const key = `${bucket}:${identity}`;
   const recent = (hits.get(key) ?? []).filter((t) => now - t < WINDOW_MS);
   if (recent.length >= LIMITS[bucket]) {
     hits.set(key, recent);

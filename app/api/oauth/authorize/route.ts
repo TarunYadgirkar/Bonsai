@@ -42,6 +42,13 @@ function esc(s: string): string {
 }
 
 function consentPage(p: AuthParams, clientName: string): string {
+  const dest = (() => {
+    try {
+      return new URL(p.redirectUri).host;
+    } catch {
+      return p.redirectUri;
+    }
+  })();
   const qs = new URLSearchParams({
     client_id: p.clientId,
     redirect_uri: p.redirectUri,
@@ -69,9 +76,12 @@ function consentPage(p: AuthParams, clientName: string): string {
   <h1>🌱 Bonsai</h1>
   <p><span class="who">${esc(clientName)}</span> wants to connect to your Bonsai garden:
      fork side-questions with compiled briefs, merge insights back, and read your tree.</p>
+  <p class="note">Redirects to <span class="who">${esc(dest)}</span> after approval — approve only
+     if you recognise that destination. The client name above is self-declared and unverified.</p>
   <button type="submit">Approve — grow my garden</button>
-  <p class="note">Approving binds this browser's garden to the client. No account, no password —
-     the grant can be severed by clearing this site's cookies before a future approval.</p>
+  <p class="note">Approving mints an access token bound to this browser's garden (valid 90 days,
+     renewed on use). Revoke anytime at <span class="who">/connect</span> → Revoke connector
+     access.</p>
 </form></body></html>`;
 }
 

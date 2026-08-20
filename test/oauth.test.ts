@@ -7,6 +7,7 @@ import {
   keyForToken,
   pkceMatches,
   registerClient,
+  revokeTokensForKey,
   validRedirectUri,
 } from '../lib/oauth';
 
@@ -80,5 +81,28 @@ describe('oauth (memory mode)', () => {
     const { verifier, challenge } = pkcePair();
     expect(pkceMatches(verifier, challenge)).toBe(true);
     expect(pkceMatches(verifier + 'x', challenge)).toBe(false);
+  });
+});
+
+describe('oauth token lifetime + revocation (memory mode)', () => {
+  it('a revoked token stops resolving to its key', async () => {
+    const { verifier, challenge } = pkcePair();
+    const client = await registerClient(['https://claude.ai/cb'], 'Claude');
+    const code = await createCode({
+      clientId: client!.clientId,
+      userKey: 'bk_revoke_me',
+      redirectUri: 'https://claude.ai/cb',
+      codeChallenge: challenge,
+    });
+    const token = await exchangeCode({
+      code,
+      clientId: client!.clientId,
+      redirectUri: 'https://claude.ai/cb',
+      codeVerifier: verifier,
+    });
+    expect(await keyForToken(token!)).toBe('bk_revoke_me');
+    const revoked = await revokeTokensForKey('bk_revoke_me');
+    expect(revoked).toBe(1);
+    expect(await keyForToken(token!)).toBeNull();
   });
 });
