@@ -48,6 +48,7 @@ export const POST = apiRoute(BranchPreviewRequestSchema, async (body, request) =
     availableTokens,
     anchorMessageId: body.anchorMessageId,
     anchorFact: path.anchorFact,
+    inheritedFacts: path.inheritedFacts,
   });
 
   logInference(

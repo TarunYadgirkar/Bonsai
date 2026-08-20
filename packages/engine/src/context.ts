@@ -27,6 +27,9 @@ export interface AssembledPath {
    * question never names the entity can compile to "It closes September 11" — dangling referent).
    */
   anchorFact?: string;
+  /** The inherited brief's full fact list, verbatim — so the compiler composes and pins them
+   *  rather than re-summarizing (paraphrase is where resolved referents and identifiers die). */
+  inheritedFacts?: string[];
 }
 
 /** Nearest ancestor profile — only the root carries one, but any node may be forked. */
@@ -68,6 +71,7 @@ export function assemblePath(params: {
   return {
     markdown,
     tokens: estimateTokens(markdown),
+    ...(parent.brief?.facts.length ? { inheritedFacts: parent.brief.facts } : {}),
     scopedMessages,
     ...(anchorFact ? { anchorFact } : {}),
   };

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compileBrief, type CompileParams, insightGroundedIn, curateBrief } from '../src/compiler';
+import { compileBrief, type CompileParams, insightGroundedIn, curateBrief, reconcileVerbatim } from '../src/compiler';
 import { estimateTokens, prunedPct } from '../src/tokens';
 import type { UserProfile } from '../src/types';
 import { fakeComplete, llmResult } from './helpers';
@@ -276,5 +276,55 @@ describe('curateBrief', () => {
   it('falls back to the first compiled fact when everything was pruned', () => {
     const curated = curateBrief(base, []);
     expect(curated.facts).toEqual(['Anchor: the deficit is $29M.']);
+  });
+});
+
+describe('no-recompression invariant', () => {
+  const inherited = [
+    'Free Ventures applications close September 11; the info session is September 3.',
+    'ML@B first-semester workload averages 8-10 hrs/week plus a 3-4 hr education track.',
+  ];
+
+  it('reconcileVerbatim replaces a light paraphrase with the inherited fact byte-for-byte', () => {
+    // A light paraphrase (reordered, near-complete) — the decay vector the invariant guards:
+    // it keeps almost all content tokens, so it reconciles back to the verbatim inherited fact.
+    const paraphrase = 'The info session is September 3 and Free Ventures applications close September 11.';
+    expect(reconcileVerbatim(paraphrase, inherited)).toBe(inherited[0]);
+  });
+
+  it('leaves an aggressive rewrite that drops content alone (it is a different, reduced fact)', () => {
+    const reduced = 'Free Ventures apps are due mid-September.';
+    expect(reconcileVerbatim(reduced, inherited)).toBe(reduced);
+  });
+
+  it('leaves a genuinely novel fact untouched', () => {
+    const novel = 'Blueprint keeps a steady 6-8 hrs per week with low variance.';
+    expect(reconcileVerbatim(novel, inherited)).toBe(novel);
+  });
+
+  it('is a no-op on an exact match', () => {
+    expect(reconcileVerbatim(inherited[1], inherited)).toBe(inherited[1]);
+  });
+
+  it('compileBrief carries a kept inherited fact through byte-identical (mock)', async () => {
+    // The mock compiler is extractive, so feed the inherited fact as the path and confirm the
+    // reconciler pins it verbatim rather than letting any transform mutate it.
+    const { brief } = await compileBrief({
+      briefId: 'b',
+      branchId: 'br',
+      pathMarkdown: `## Inherited context\n- ${inherited[0]}\n- ${inherited[1]}`,
+      selection: 'Free Ventures',
+      question: 'when do applications close?',
+      availableTokens: 500,
+      inheritedFacts: inherited,
+      anchorFact: inherited[0],
+    });
+    // Whatever facts survive, none may be a mutated version of an inherited fact: each fact is
+    // either verbatim-inherited or shares no strong overlap with the inherited set.
+    for (const f of brief.facts) {
+      const reconciled = reconcileVerbatim(f, inherited);
+      expect(f).toBe(reconciled); // already verbatim — the compiler output never paraphrased one
+    }
+    expect(brief.facts).toContain(inherited[0]);
   });
 });

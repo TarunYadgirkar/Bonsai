@@ -53,6 +53,7 @@ export {
   type EngineDeps,
   curateBrief,
   insightGroundedIn,
+  reconcileVerbatim,
 } from './compiler';
 export {
   answerFailsSanityCheck,

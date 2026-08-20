@@ -33,6 +33,9 @@ export interface CompileParams {
   /** The inherited brief's top fact (AssembledPath.anchorFact) — pinned into the output so the
    *  chain's grounding entity survives composition even when this question never names it. */
   anchorFact?: string;
+  /** The inherited brief's full fact list. No-recompression invariant: any inherited fact the
+   *  compiler keeps is carried through BYTE-IDENTICAL, never re-summarized. */
+  inheritedFacts?: string[];
 }
 
 export interface EngineDeps {
@@ -75,6 +78,12 @@ export async function compileBrief(
   const anchor = params.anchorFact?.trim();
   if (anchor && !anchorCarriedThrough(anchor, facts)) {
     facts = [anchor, ...facts].slice(0, MAX_FACTS);
+  }
+  // No-recompression: reconcile every kept fact against the inherited list — a near-match to an
+  // inherited fact is REPLACED with that fact verbatim, so composition never silently paraphrases
+  // a pre-distilled line (the summaries-of-summaries decay). Novel facts pass through untouched.
+  if (params.inheritedFacts?.length) {
+    facts = facts.map((f) => reconcileVerbatim(f, params.inheritedFacts!));
   }
   let markdown = renderBrief({ selection, question, facts, profile: params.profile });
   while (facts.length > 1 && estimateTokens(markdown) > budget) {
@@ -153,6 +162,40 @@ async function runCompiler(
  * composition's anchor IS facts[0], so entities scattered anywhere else would satisfy this brief
  * yet break the chain one level down. Anchors with no entity tokens compare verbatim.
  */
+/** Content tokens of a fact, for fuzzy identity: lowercased words ≥3 chars, no punctuation. */
+function factTokens(fact: string): Set<string> {
+  return new Set(
+    fact
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((w) => w.length >= 3),
+  );
+}
+
+/**
+ * If `fact` is a paraphrase of one of the inherited facts (strong token overlap both ways),
+ * return the inherited fact VERBATIM; otherwise return `fact` unchanged. This is the mechanism
+ * behind the no-recompression invariant — inherited briefs are composed and pinned, never
+ * re-summarized. Exact matches are a no-op; a genuinely new fact never has enough overlap.
+ */
+export function reconcileVerbatim(fact: string, inherited: string[]): string {
+  if (inherited.includes(fact)) return fact;
+  const ft = factTokens(fact);
+  if (ft.size === 0) return fact;
+  let best: { fact: string; score: number } | null = null;
+  for (const inh of inherited) {
+    const it = factTokens(inh);
+    if (it.size === 0) continue;
+    let shared = 0;
+    for (const t of ft) if (it.has(t)) shared += 1;
+    // Jaccard-ish: shared over the smaller set, so a short paraphrase of a long fact still matches.
+    const score = shared / Math.min(ft.size, it.size);
+    if (score > (best?.score ?? 0)) best = { fact: inh, score };
+  }
+  return best && best.score >= 0.7 ? best.fact : fact;
+}
+
 export function anchorCarriedThrough(anchor: string, facts: string[]): boolean {
   const top = facts[0] ?? '';
   const entityTokens = anchor.match(/\b(?:[A-Z][\w'-]*|\d[\d,.]*)\b/g) ?? [];

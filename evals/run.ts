@@ -54,6 +54,7 @@ async function compileFor(
     question,
     availableTokens: estimateTokens(path.markdown),
     anchorFact: path.anchorFact,
+    inheritedFacts: path.inheritedFacts,
   });
   // The full-history baseline arm: what a Save-As fork would have sent — the whole assembled
   // path plus the question. Same fidelity checks trivially pass on it; the comparison is tokens.

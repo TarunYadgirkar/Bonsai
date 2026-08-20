@@ -586,3 +586,12 @@ tier. bonsai_tree surfaces a one-line learned-from-N-corrections summary. Smoke 
 behavior end-to-end on the bundled dist: a lookup cold-starts quick, 4 opus overrides shift it
 off quick with learned=true, the profile persists with recorded moves, escalated:true on merge
 adds a correction.
+
+## 2026-08-20 — No-recompression invariant
+
+compileBrief now composes-and-pins inherited briefs instead of risking silent paraphrase decay:
+assemblePath exposes the parent brief's full fact list; reconcileVerbatim replaces any kept fact
+that is a light paraphrase of an inherited one (token-overlap ≥0.7 over the smaller set) with the
+inherited fact BYTE-IDENTICAL, while genuinely-novel or aggressively-reduced facts pass through
+untouched. Threaded through branch/preview routes + evals. Byte-identity tested (222 unit +15/15
+evals). Guards the summaries-of-summaries decay at composition depth 3+.

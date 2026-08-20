@@ -62,6 +62,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
     availableTokens,
     anchorMessageId: body.anchorMessageId,
     anchorFact: path.anchorFact,
+    inheritedFacts: path.inheritedFacts,
   });
   // A curated fact list from the preview sheet replaces the compiler's — with the anchor
   // invariant re-enforced and the receipt recomputed. curated:true rides on the brief.
@@ -70,6 +71,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
         question,
         profile: profileFor(parent, byId),
         anchorFact: path.anchorFact,
+        inheritedFacts: path.inheritedFacts,
       })
     : compiled.brief;
 
