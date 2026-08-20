@@ -430,6 +430,9 @@ That is what this branch's brief supports; anything beyond it would need more of
     if (anchor && !anchorCarriedThrough(anchor, facts)) {
       facts = [anchor, ...facts].slice(0, MAX_FACTS);
     }
+    if (params.inheritedFacts?.length) {
+      facts = facts.map((f) => reconcileVerbatim(f, params.inheritedFacts));
+    }
     let markdown = renderBrief({ selection, question, facts, profile: params.profile });
     while (facts.length > 1 && estimateTokens(markdown) > budget) {
       facts = facts.slice(0, -1);
@@ -487,6 +490,26 @@ That is what this branch's brief supports; anything beyond it would need more of
         ...result.servedBy ? { servedBy: result.servedBy } : {}
       }
     };
+  }
+  function factTokens(fact) {
+    return new Set(
+      fact.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length >= 3)
+    );
+  }
+  function reconcileVerbatim(fact, inherited) {
+    if (inherited.includes(fact)) return fact;
+    const ft = factTokens(fact);
+    if (ft.size === 0) return fact;
+    let best = null;
+    for (const inh of inherited) {
+      const it = factTokens(inh);
+      if (it.size === 0) continue;
+      let shared = 0;
+      for (const t of ft) if (it.has(t)) shared += 1;
+      const score = shared / Math.min(ft.size, it.size);
+      if (score > (best?.score ?? 0)) best = { fact: inh, score };
+    }
+    return best && best.score >= 0.7 ? best.fact : fact;
   }
   function anchorCarriedThrough(anchor, facts) {
     const top = facts[0] ?? "";
