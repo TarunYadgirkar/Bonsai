@@ -31658,6 +31658,15 @@ var TIER_ORDER = ["quick", "thoughtful", "deep"];
 var MIN_MOVES = 3;
 var SHIFT_THRESHOLD = 0.6;
 var DOWNSHIFT_CONFIDENCE_FLOOR = 0.5;
+function emptyStat() {
+  return { up: 0, down: 0, kept: 0, dropped: 0, moves: 0 };
+}
+function emptyTierStats() {
+  return { quick: emptyStat(), thoughtful: emptyStat(), deep: emptyStat() };
+}
+function emptyProfile() {
+  return { version: 2, tiers: emptyTierStats(), kinds: {} };
+}
 function numeric(n) {
   return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
 }
@@ -31692,6 +31701,45 @@ function normalizeProfile(raw) {
 function step(tier, delta) {
   const i = TIER_ORDER.indexOf(tier);
   return TIER_ORDER[Math.max(0, Math.min(TIER_ORDER.length - 1, i + delta))];
+}
+function applyEvent(stat, event) {
+  switch (event.kind) {
+    case "override": {
+      const from = TIER_ORDER.indexOf(event.classifiedTier);
+      const to = TIER_ORDER.indexOf(event.chosenTier ?? event.classifiedTier);
+      if (to > from) {
+        stat.up += 1;
+        stat.moves += 1;
+      } else if (to < from) {
+        stat.down += 1;
+        stat.moves += 1;
+      }
+      break;
+    }
+    case "escalation":
+      stat.up += 1;
+      stat.moves += 1;
+      break;
+    case "merge":
+      stat.kept += 1;
+      break;
+    case "abandon":
+      stat.dropped += 1;
+      break;
+  }
+}
+function recordFeedback(profile, event) {
+  const base = normalizeProfile(profile);
+  const tiers = { ...base.tiers, [event.classifiedTier]: { ...base.tiers[event.classifiedTier] } };
+  applyEvent(tiers[event.classifiedTier], event);
+  const kinds = { ...base.kinds };
+  if (event.questionKind) {
+    const existing = kinds[event.questionKind] ?? emptyTierStats();
+    const updated = { ...existing, [event.classifiedTier]: { ...existing[event.classifiedTier] } };
+    applyEvent(updated[event.classifiedTier], event);
+    kinds[event.questionKind] = updated;
+  }
+  return { version: 2, tiers, kinds };
 }
 function adjustForProfile(classifiedTier, profile, opts = {}) {
   const confidence = clampConfidence(opts.confidence);
@@ -31889,7 +31937,7 @@ function tierForModel(modelId) {
   if (/opus|fable/i.test(modelId)) return "deep";
   return null;
 }
-async function route2(question, pinned, briefFacts) {
+async function route2(question, pinned, briefFacts, profile) {
   const briefMarkdown = briefFacts.map((f) => `- ${f}`).join("\n");
   const brief = {
     id: "plugin_brief",
@@ -31905,7 +31953,8 @@ async function route2(question, pinned, briefFacts) {
   const decision2 = await route({
     question,
     brief: briefFacts.length ? brief : void 0,
-    contextTokens: estimateTokens(briefMarkdown)
+    contextTokens: estimateTokens(briefMarkdown),
+    profile
   });
   const tier = pinned?.model && tierForModel(pinned.model) || decision2.tier;
   return {
@@ -31913,7 +31962,12 @@ async function route2(question, pinned, briefFacts) {
     model: pinned?.model ?? TIER_DEFAULTS[tier].model,
     effort: pinned?.effort ?? TIER_DEFAULTS[tier].effort,
     agentType: AGENT_TYPES[tier],
-    covered: briefFacts.length ? decision2.coveredByBrief !== false : true
+    covered: briefFacts.length ? decision2.coveredByBrief !== false : true,
+    // The classifier's PRE-learning tier — the baseline a manual pick is an override against,
+    // and what feedback is attributed to (so a bad learned shift self-corrects).
+    classifiedTier: decision2.classifiedTier ?? decision2.tier,
+    learned: decision2.learned === true,
+    kind: decision2.kind
   };
 }
 function dataDir() {
@@ -32043,8 +32097,21 @@ async function handleForkLocked(args) {
       nodes[sibling.id] = { ...sibling, status: "abandoned" };
     }
   }
-  const routing = await route2(args.question, args.pinned, args.briefFacts);
+  const profile = store.profile ?? emptyProfile();
+  const routing = await route2(args.question, args.pinned, args.briefFacts, profile);
   const isCovered = routing.covered;
+  let nextProfile = profile;
+  if (args.pinned?.model) {
+    const pinnedTier = tierForModel(args.pinned.model);
+    if (pinnedTier && pinnedTier !== routing.classifiedTier) {
+      nextProfile = recordFeedback(profile, {
+        kind: "override",
+        classifiedTier: routing.classifiedTier,
+        chosenTier: pinnedTier,
+        questionKind: routing.kind
+      });
+    }
+  }
   const briefMarkdown = renderBrief(args);
   const briefTokens = estimateTokens(briefMarkdown);
   const factTokens = args.briefFacts.reduce((sum, fact) => sum + estimateTokens(fact), 0);
@@ -32064,11 +32131,13 @@ async function handleForkLocked(args) {
     tier: routing.tier,
     model: routing.model,
     effort: routing.effort,
+    ...routing.kind ? { kind: routing.kind } : {},
     covered: isCovered,
     status: "open",
     createdAt: now
   };
   store.trees[key] = { ...tree, nodes: { ...nodes, [node.id]: node }, updatedAt: now };
+  store.profile = nextProfile;
   saveStore(store);
   return {
     branchId: node.id,
@@ -32076,6 +32145,8 @@ async function handleForkLocked(args) {
     model: routing.model,
     effort: routing.effort,
     tier: routing.tier,
+    // True when this session's learned priors moved the pick off the classifier's tier.
+    learned: routing.learned,
     covered: isCovered,
     briefTokens,
     availableTokens,
@@ -32110,6 +32181,13 @@ function handleMergeLocked(args) {
   const now = (/* @__PURE__ */ new Date()).toISOString();
   const updated = { ...node, status: "merged", insight };
   store.trees[key] = { ...tree, nodes: { ...tree.nodes, [node.id]: updated }, updatedAt: now };
+  if (args.escalated && node.tier) {
+    store.profile = recordFeedback(store.profile ?? emptyProfile(), {
+      kind: "escalation",
+      classifiedTier: node.tier,
+      questionKind: node.kind
+    });
+  }
   saveStore(store);
   return {
     parentId: node.parentId,
@@ -32202,10 +32280,19 @@ function renderTree(tree) {
   );
   return lines.join("\n");
 }
+function learningLine(profile) {
+  if (!profile?.tiers) return "";
+  const moves = Object.values(profile.tiers).reduce((n, t) => n + (t.moves ?? 0), 0);
+  const kinds = Object.keys(profile.kinds ?? {}).length;
+  if (moves === 0) return "";
+  return `
+routing learned from ${moves} correction${moves === 1 ? "" : "s"}` + (kinds ? ` across ${kinds} question kind${kinds === 1 ? "" : "s"}` : "") + " \u2014 future forks route accordingly.";
+}
 function handleTree(args) {
-  const tree = loadStore().trees[treeKey(args.cwd)];
+  const store = loadStore();
+  const tree = store.trees[treeKey(args.cwd)];
   if (!tree) return "Empty tree. Fork a branch with bonsai_fork.";
-  return renderTree(tree);
+  return renderTree(tree) + learningLine(store.profile);
 }
 var jsonResult = (result) => ({ content: [{ type: "text", text: JSON.stringify(result, null, 2) }] });
 var textResult = (text) => ({ content: [{ type: "text", text }] });
@@ -32239,6 +32326,7 @@ server.registerTool(
     inputSchema: {
       branchId: external_exports.string().min(1),
       insight: external_exports.string().min(1).describe("The single durable conclusion, \u226420 words, referents resolved."),
+      escalated: external_exports.boolean().optional().describe("True if the branch subagent needed a stronger model/effort than routed \u2014 teaches the router this question kind starts too low."),
       cwd: cwdParam
     }
   },

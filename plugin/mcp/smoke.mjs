@@ -204,6 +204,77 @@ try {
   assert.equal(afterReset.trees[CWD], undefined);
   check('bonsai_reset refuses without confirm, deletes only that tree key with confirm');
 
+  // --- learning flywheel: overrides shift the classifier, escalation is recorded ---
+  const LCWD = '/tmp/learn-project';
+  // A short factual lookup the classifier routes 'quick'. Pin it to opus (deep) 4x — each is one
+  // override up. After enough, the router should pre-empt and route the same question deep.
+  const lookupQ = 'When do Free Ventures applications close?';
+  const lookupFacts = ['Free Ventures applications close September 11.'];
+  const firstFork = toolJson(
+    await callTool('bonsai_fork', {
+      selection: 'Free Ventures',
+      question: lookupQ,
+      briefFacts: lookupFacts,
+      cwd: LCWD,
+    }),
+  );
+  assert.equal(firstFork.tier, 'quick', `cold lookup routes quick, got ${firstFork.tier}`);
+  check('learning: a lookup cold-starts at quick');
+
+  for (let i = 0; i < 4; i += 1) {
+    toolJson(
+      await callTool('bonsai_fork', {
+        selection: 'Free Ventures',
+        question: lookupQ,
+        briefFacts: lookupFacts,
+        pinned: { model: 'claude-opus-5' },
+        cwd: LCWD,
+      }),
+    );
+  }
+  const warmFork = toolJson(
+    await callTool('bonsai_fork', {
+      selection: 'Free Ventures',
+      question: lookupQ,
+      briefFacts: lookupFacts,
+      cwd: LCWD,
+    }),
+  );
+  assert.notEqual(warmFork.tier, 'quick', `after 4 overrides the lookup should route higher, still ${warmFork.tier}`);
+  assert.equal(warmFork.learned, true, 'warm fork reports learned=true');
+  check('learning: repeated opus overrides shift the same lookup off quick (flywheel on the plugin)');
+
+  const learnStore = JSON.parse(readFileSync(join(dataDir, 'trees.json'), 'utf8'));
+  assert.ok(learnStore.profile, 'routing profile persisted in plugin data');
+  assert.ok(
+    Object.values(learnStore.profile.tiers).reduce((n, t) => n + (t.moves ?? 0), 0) >= 4,
+    'profile recorded at least the 4 override corrections',
+  );
+  check('learning: routing profile persists in trees.json with recorded corrections');
+
+  const learnTree = toolText(await callTool('bonsai_tree', { cwd: LCWD }));
+  assert.match(learnTree, /routing learned from \d+ correction/, 'tree shows the learning summary line');
+  check('learning: bonsai_tree surfaces the learned-corrections line');
+
+  // Escalation on merge trains too: fork fresh, merge with escalated:true, expect a recorded move.
+  const escFork = toolJson(
+    await callTool('bonsai_fork', {
+      selection: 'ranking',
+      question: 'Rank the three clubs by expected value given my constraints and explain the trade-offs.',
+      briefFacts: ['Clubs: Free Ventures, ML@B, Blueprint.', 'Constraint: 8-10 hrs/week cap.'],
+      cwd: LCWD,
+    }),
+  );
+  const movesBefore = Object.values(
+    JSON.parse(readFileSync(join(dataDir, 'trees.json'), 'utf8')).profile.tiers,
+  ).reduce((n, t) => n + (t.moves ?? 0), 0);
+  toolJson(await callTool('bonsai_merge', { branchId: escFork.branchId, insight: 'ML@B edges it on builder fit.', escalated: true, cwd: LCWD }));
+  const movesAfter = Object.values(
+    JSON.parse(readFileSync(join(dataDir, 'trees.json'), 'utf8')).profile.tiers,
+  ).reduce((n, t) => n + (t.moves ?? 0), 0);
+  assert.ok(movesAfter > movesBefore, 'escalated merge records an additional correction');
+  check('learning: escalated:true on merge records an escalation correction');
+
   console.log(`\nsmoke: ${checks.length}/${checks.length} checks passed`);
   process.exitCode = 0;
 } catch (error) {

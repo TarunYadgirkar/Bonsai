@@ -574,3 +574,15 @@ escaping/SQLi/token-entropy all confirmed clean). Fixed the four real findings:
 Migration 007 applied to Neon main + copy-a. Live re-run: DCR→consent→code→token(expires_in
 90d)→MCP init→revoke→401. Left as documented (not bugs): raw-key carrier parity, code-consumed-
 before-PKCE griefing footnote.
+
+## 2026-08-20 — Plugin-side learning: the flywheel on the primary surface (17/17 smoke)
+
+MOAT.md's routing flywheel now collects on the plugin, not just the web app. The plugin store
+gains a persisted `profile`; forks route through it (adjustForProfile via the real engine);
+a pinned model that lands on a different tier than the classifier records one override
+(attributed to the classifier's pre-learning tier, questionKind carried); bonsai_merge gains an
+optional `escalated` flag that records the "started too low" signal against the branch's routed
+tier. bonsai_tree surfaces a one-line learned-from-N-corrections summary. Smoke proves the real
+behavior end-to-end on the bundled dist: a lookup cold-starts quick, 4 opus overrides shift it
+off quick with learned=true, the profile persists with recorded moves, escalated:true on merge
+adds a correction.

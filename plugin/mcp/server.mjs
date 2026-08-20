@@ -14,7 +14,14 @@ import { z } from 'zod';
  * is the only supported way to RUN this file — `node server.mjs` unbundled cannot resolve the
  * TS engine, which is why the smoke exercises dist/server.mjs.
  */
-import { estimateTokens, prunedPct, route as engineRoute, TIER_DEFAULTS } from 'bonsai-engine';
+import {
+  emptyProfile,
+  estimateTokens,
+  prunedPct,
+  recordFeedback,
+  route as engineRoute,
+  TIER_DEFAULTS,
+} from 'bonsai-engine';
 
 /* ---------- plugin routing ---------- */
 
@@ -35,7 +42,7 @@ function tierForModel(modelId) {
  * Route through the real engine router (classifier kind + confidence + brief coverage), then
  * apply the plugin's pinned-model override the same way the web app honours manual picks.
  */
-async function route(question, pinned, briefFacts) {
+async function route(question, pinned, briefFacts, profile) {
   const briefMarkdown = briefFacts.map((f) => `- ${f}`).join('\n');
   const brief = {
     id: 'plugin_brief',
@@ -52,6 +59,7 @@ async function route(question, pinned, briefFacts) {
     question,
     brief: briefFacts.length ? brief : undefined,
     contextTokens: estimateTokens(briefMarkdown),
+    profile,
   });
   const tier = (pinned?.model && tierForModel(pinned.model)) || decision.tier;
   return {
@@ -60,6 +68,11 @@ async function route(question, pinned, briefFacts) {
     effort: pinned?.effort ?? TIER_DEFAULTS[tier].effort,
     agentType: AGENT_TYPES[tier],
     covered: briefFacts.length ? decision.coveredByBrief !== false : true,
+    // The classifier's PRE-learning tier — the baseline a manual pick is an override against,
+    // and what feedback is attributed to (so a bad learned shift self-corrects).
+    classifiedTier: decision.classifiedTier ?? decision.tier,
+    learned: decision.learned === true,
+    kind: decision.kind,
   };
 }
 
@@ -233,8 +246,25 @@ async function handleForkLocked(args) {
     }
   }
 
-  const routing = await route(args.question, args.pinned, args.briefFacts);
+  const profile = store.profile ?? emptyProfile();
+  const routing = await route(args.question, args.pinned, args.briefFacts, profile);
   const isCovered = routing.covered;
+
+  // The flywheel on the primary surface: a pinned model that lands on a different tier than the
+  // classifier chose is one labeled override — attributed to the classifier's PRE-learning tier
+  // so a bad learned shift becomes its own counter-evidence, exactly as the web app does it.
+  let nextProfile = profile;
+  if (args.pinned?.model) {
+    const pinnedTier = tierForModel(args.pinned.model);
+    if (pinnedTier && pinnedTier !== routing.classifiedTier) {
+      nextProfile = recordFeedback(profile, {
+        kind: 'override',
+        classifiedTier: routing.classifiedTier,
+        chosenTier: pinnedTier,
+        questionKind: routing.kind,
+      });
+    }
+  }
   const briefMarkdown = renderBrief(args);
   const briefTokens = estimateTokens(briefMarkdown);
   const factTokens = args.briefFacts.reduce((sum, fact) => sum + estimateTokens(fact), 0);
@@ -255,12 +285,14 @@ async function handleForkLocked(args) {
     tier: routing.tier,
     model: routing.model,
     effort: routing.effort,
+    ...(routing.kind ? { kind: routing.kind } : {}),
     covered: isCovered,
     status: 'open',
     createdAt: now,
   };
 
   store.trees[key] = { ...tree, nodes: { ...nodes, [node.id]: node }, updatedAt: now };
+  store.profile = nextProfile;
   saveStore(store);
 
   return {
@@ -269,6 +301,8 @@ async function handleForkLocked(args) {
     model: routing.model,
     effort: routing.effort,
     tier: routing.tier,
+    // True when this session's learned priors moved the pick off the classifier's tier.
+    learned: routing.learned,
     covered: isCovered,
     briefTokens,
     availableTokens,
@@ -304,6 +338,16 @@ function handleMergeLocked(args) {
   const now = new Date().toISOString();
   const updated = { ...node, status: 'merged', insight };
   store.trees[key] = { ...tree, nodes: { ...tree.nodes, [node.id]: updated }, updatedAt: now };
+
+  // Escalation is the "classifier started too low" signal — recorded against the tier the branch
+  // was routed to, its questionKind carried so per-kind priors train (mirrors the web app).
+  if (args.escalated && node.tier) {
+    store.profile = recordFeedback(store.profile ?? emptyProfile(), {
+      kind: 'escalation',
+      classifiedTier: node.tier,
+      questionKind: node.kind,
+    });
+  }
   saveStore(store);
 
   return {
@@ -414,10 +458,22 @@ function renderTree(tree) {
   return lines.join('\n');
 }
 
+/** One-line learning summary: how much routing evidence this session's profile holds. */
+function learningLine(profile) {
+  if (!profile?.tiers) return '';
+  const moves = Object.values(profile.tiers).reduce((n, t) => n + (t.moves ?? 0), 0);
+  const kinds = Object.keys(profile.kinds ?? {}).length;
+  if (moves === 0) return '';
+  return `\nrouting learned from ${moves} correction${moves === 1 ? '' : 's'}` +
+    (kinds ? ` across ${kinds} question kind${kinds === 1 ? '' : 's'}` : '') +
+    ' — future forks route accordingly.';
+}
+
 function handleTree(args) {
-  const tree = loadStore().trees[treeKey(args.cwd)];
+  const store = loadStore();
+  const tree = store.trees[treeKey(args.cwd)];
   if (!tree) return 'Empty tree. Fork a branch with bonsai_fork.';
-  return renderTree(tree);
+  return renderTree(tree) + learningLine(store.profile);
 }
 
 /* ---------- server ---------- */
@@ -463,6 +519,10 @@ server.registerTool(
     inputSchema: {
       branchId: z.string().min(1),
       insight: z.string().min(1).describe('The single durable conclusion, ≤20 words, referents resolved.'),
+      escalated: z
+        .boolean()
+        .optional()
+        .describe('True if the branch subagent needed a stronger model/effort than routed — teaches the router this question kind starts too low.'),
       cwd: cwdParam,
     },
   },
