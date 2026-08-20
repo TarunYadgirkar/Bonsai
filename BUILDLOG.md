@@ -548,3 +548,11 @@ attach test, then post.
 - **Slash commands**: /bonsai:branch, /bonsai:tree, /bonsai:switch, /bonsai:diff — the exact
   vocabulary of anthropics/claude-code#32631, implemented as thin commands over the existing
   skills and MCP tools. Plugin 0.2.0, validate green.
+
+## 2026-08-19 — Side-question hook (plugin 0.2.x continues)
+
+UserPromptSubmit hook nudges the branch skill when a prompt opens with tangent phrasing (btw,
+quick question, side note, tangent, while-we're-at-it…). Deliberately conservative: the cue
+list IS the gate, silent when the user already said bonsai/branch/fork, on short prompts, and
+on malformed input; the nudge tells the model to ignore itself when the message is on-topic and
+never to mention the nudge. Unit-tested (positive cue naming, multiword cues, all silent paths).
