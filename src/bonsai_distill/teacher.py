@@ -90,25 +90,37 @@ def compile_example(client: anthropic.Anthropic, ex: Example) -> list[dict] | No
 
 
 def compile_all(
-    examples: list[Example], on_progress=None, on_result=None
+    examples: list[Example], on_progress=None, on_result=None, workers: int = 8
 ) -> tuple[list[dict], list[str]]:
     """on_result(records | None, example_id) fires after every example so callers can
-    stream-write — a crash mid-run must not lose paid teacher output."""
+    stream-write — a crash mid-run must not lose paid teacher output. Callbacks run
+    under a lock, so callers need no synchronization of their own."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from threading import Lock
+
     client = _client()
     kept: list[dict] = []
     rejected: list[str] = []
-    for i, ex in enumerate(examples):
+    lock = Lock()
+
+    def run_one(ex: Example) -> tuple[Example, list[dict] | None]:
         try:
-            records = compile_example(client, ex)
+            return ex, compile_example(client, ex)
         except anthropic.RateLimitError:
             time.sleep(30)
-            records = compile_example(client, ex)
-        if records is None:
-            rejected.append(ex.id)
-        else:
-            kept.extend(records)
-        if on_result:
-            on_result(records, ex.id)
-        if on_progress:
-            on_progress(i + 1, len(examples), len(kept), len(rejected))
+            return ex, compile_example(client, ex)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(run_one, ex) for ex in examples]
+        for done, fut in enumerate(as_completed(futures), 1):
+            ex, records = fut.result()
+            with lock:
+                if records is None:
+                    rejected.append(ex.id)
+                else:
+                    kept.extend(records)
+                if on_result:
+                    on_result(records, ex.id)
+                if on_progress:
+                    on_progress(done, len(examples), len(kept), len(rejected))
     return kept, rejected
