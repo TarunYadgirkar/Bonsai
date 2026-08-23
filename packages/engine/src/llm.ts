@@ -459,8 +459,12 @@ const INSIGHT_MAX_WORDS = 20;
 function mockDistill(prompt: string): string {
   const topic = /Branch topic:\s*(.*)$/m.exec(prompt)?.[1] ?? '';
   const body = prompt.split(/^Branch topic:.*$/m).pop() ?? prompt;
-  // An insight is a conclusion, so the branch's own questions are not candidates for it.
-  const statements = sentencesOf(body).filter((s) => !s.endsWith('?'));
+  // An insight is a conclusion the branch reached, so only assistant-authored statements are
+  // candidates — a user turn that happens to end in a period (an imperative, a request) is
+  // still a question in spirit, and the ?-suffix check alone let those through.
+  const statements = sentencesWithRole(body)
+    .filter((s) => s.role === 'assistant' && !s.text.endsWith('?'))
+    .map((s) => s.text);
   const best = rankByRelevance(statements, keywords(topic), 1, topic)[0];
   if (!best) return `No durable conclusion reached on ${topic || 'this branch'}.`;
   const words = best.replace(/\*\*/g, '').split(/\s+/);

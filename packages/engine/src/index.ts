@@ -52,6 +52,7 @@ export {
   type CompileUsage,
   type EngineDeps,
   curateBrief,
+  insightEchoesUserTurn,
   insightGroundedIn,
   reconcileVerbatim,
 } from './compiler';

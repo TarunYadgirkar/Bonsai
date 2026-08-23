@@ -1,4 +1,4 @@
-import { INTERNAL_TIER, complete, estimateTokens, insightGroundedIn, messagesTokens } from 'bonsai-engine';
+import { INTERNAL_TIER, complete, estimateTokens, insightEchoesUserTurn, insightGroundedIn, messagesTokens } from 'bonsai-engine';
 import { buildLog } from '@/lib/accounting';
 import { MergeRequestSchema, apiError, apiRoute, persistenceError } from '@/lib/api';
 import { checkRateLimit } from '@/lib/rate-limit';
@@ -129,8 +129,12 @@ async function distill(branch: Conversation): Promise<string> {
   // Faithfulness gate: a distilled line asserting numbers or names the branch never said is a
   // hallucination about to enter the parent's context permanently. One corrective retry, then
   // the extractive fallback — grounded by construction — rather than merging fiction.
+  // Echo gate: a line copied from a user turn passes the grounding check by construction —
+  // it is literally in the transcript — but a question is not a conclusion.
   const transcript = turns.map((m) => m.content).join('\n');
-  if (insightGroundedIn(line, transcript).grounded) return line;
+  const userTurns = turns.filter((m) => m.role === 'user').map((m) => m.content);
+  if (insightGroundedIn(line, transcript).grounded && !insightEchoesUserTurn(line, userTurns))
+    return line;
 
   const retry = await complete({
     tier: INTERNAL_TIER,
@@ -146,7 +150,12 @@ async function distill(branch: Conversation): Promise<string> {
     ],
   });
   const retried = retry.text.trim().split('\n')[0]?.replace(/^["']|["']$/g, '') ?? '';
-  if (retried && insightGroundedIn(retried, transcript).grounded) return retried;
+  if (
+    retried &&
+    insightGroundedIn(retried, transcript).grounded &&
+    !insightEchoesUserTurn(retried, userTurns)
+  )
+    return retried;
 
   const lastAnswer = [...turns].reverse().find((m) => m.role === 'assistant')?.content ?? '';
   const extractive = lastAnswer.split(/(?<=[.!?])\s+/)[0]?.trim();

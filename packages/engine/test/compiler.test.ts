@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { compileBrief, type CompileParams, insightGroundedIn, curateBrief, reconcileVerbatim } from '../src/compiler';
+import { compileBrief, type CompileParams, insightEchoesUserTurn, insightGroundedIn, curateBrief, reconcileVerbatim } from '../src/compiler';
 import { estimateTokens, prunedPct } from '../src/tokens';
 import type { UserProfile } from '../src/types';
 import { fakeComplete, llmResult } from './helpers';
@@ -246,6 +246,36 @@ describe('insightGroundedIn', () => {
     expect(
       insightGroundedIn('Sacramento and Oakland drive the pension deficit.', transcript).grounded,
     ).toBe(false);
+  });
+});
+
+describe('insightEchoesUserTurn', () => {
+  const userTurns = [
+    'When do Free Ventures applications close?',
+    'Thanks. Given my goals, workload, and everything we\'ve learned, rank my top 3 clubs and explain the opportunity cost of each.',
+  ];
+
+  it('catches a verbatim echo of a user question', () => {
+    expect(insightEchoesUserTurn('When do Free Ventures applications close?', userTurns)).toBe(true);
+  });
+
+  it('catches a period-terminated imperative, punctuation- and case-insensitive', () => {
+    expect(
+      insightEchoesUserTurn(
+        'Given my goals, workload, and everything we\'ve learned, rank my top 3 clubs and explain the opportunity cost of each',
+        userTurns,
+      ),
+    ).toBe(true);
+  });
+
+  it('passes a genuine conclusion that merely shares vocabulary', () => {
+    expect(
+      insightEchoesUserTurn('Free Ventures applications close September 11.', userTurns),
+    ).toBe(false);
+  });
+
+  it('passes an empty line without matching everything', () => {
+    expect(insightEchoesUserTurn('', userTurns)).toBe(false);
   });
 });
 

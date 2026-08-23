@@ -321,3 +321,24 @@ export function insightGroundedIn(
   missing.push(...novelCapitals);
   return { grounded: !numberMissing && novelCapitals.length <= 1, missing };
 }
+
+const normalizeForEcho = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/**
+ * Complements insightGroundedIn: a distilled line copied verbatim from a user turn is grounded
+ * by construction, yet it is a question, not a conclusion. Matches against each user turn as a
+ * whole and sentence-by-sentence, punctuation- and case-insensitive.
+ */
+export function insightEchoesUserTurn(insight: string, userTurns: string[]): boolean {
+  const needle = normalizeForEcho(insight);
+  if (!needle) return false;
+  return userTurns.some(
+    (turn) =>
+      normalizeForEcho(turn) === needle ||
+      turn.split(/(?<=[.!?])\s+/).some((sentence) => normalizeForEcho(sentence) === needle),
+  );
+}

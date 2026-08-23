@@ -302,6 +302,26 @@ describe('mock provider path', () => {
     expect(result.text.split(/\s+/).length).toBeLessThanOrEqual(20);
   });
 
+  it('never distills a user turn into the insight, even a period-terminated imperative', async () => {
+    const result = await complete({
+      tier: 'quick',
+      messages: [
+        { role: 'system', content: 'Distill this branch into its single durable conclusion.' },
+        {
+          role: 'user',
+          content: [
+            'Branch topic: club rankings',
+            '',
+            'user: Given my goals, rank my top 3 clubs and explain the opportunity cost of each club.',
+            '',
+            'user: When do Free Ventures applications close?',
+          ].join('\n'),
+        },
+      ],
+    });
+    expect(result.text).toBe('No durable conclusion reached on club rankings.');
+  });
+
   it('ellipsises a distilled conclusion longer than 20 words', async () => {
     const longConclusion =
       'Free Ventures applications close September 11 and the info session on September 3 means the draft, the budget slide, and the team slide must all be polished well before recruiting season begins.';
