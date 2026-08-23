@@ -23,6 +23,7 @@ parser.add_argument("--teacher", default="Qwen/Qwen2.5-7B-Instruct")
 parser.add_argument("--out", default="runs/gkd")
 parser.add_argument("--smoke", action="store_true")
 parser.add_argument("--pure-on-policy", action="store_true")
+parser.add_argument("--max-records", type=int, help="cap training records (local scaled-down runs)")
 parser.add_argument("--epochs", type=float, default=1)
 parser.add_argument("--lr", type=float, default=1e-5)
 args = parser.parse_args()
@@ -51,6 +52,8 @@ dataset = load_dataset("json", data_files=data_path, split="train")
 dataset = dataset.remove_columns([c for c in dataset.column_names if c != "messages"])
 if args.smoke:
     dataset = dataset.select(range(min(16, len(dataset))))
+elif args.max_records:
+    dataset = dataset.shuffle(seed=7).select(range(min(args.max_records, len(dataset))))
 
 lmbda, beta = (1.0, 1.0) if args.pure_on_policy else (0.5, 0.5)
 config = GKDConfig(

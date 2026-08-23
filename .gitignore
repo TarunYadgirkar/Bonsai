@@ -5,5 +5,4 @@ __pycache__/
 data/*.jsonl
 data/*.json
 runs/
-results/
 .DS_Store
