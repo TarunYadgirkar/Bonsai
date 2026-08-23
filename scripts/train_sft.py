@@ -19,8 +19,14 @@ args = parser.parse_args()
 if args.smoke:
     args.student = SMOKE_STUDENT
 
+import torch
 from datasets import load_dataset
+from transformers import AutoModelForCausalLM
 from trl import SFTConfig, SFTTrainer
+
+# transformers 5.x parallel weight loading segfaults on MPS when TRL loads from a
+# path string — preload the model object instead
+model = AutoModelForCausalLM.from_pretrained(args.student, dtype=torch.bfloat16)
 
 data_path = str(Path(__file__).parent.parent / "data" / "teacher_train.jsonl")
 dataset = load_dataset("json", data_files=data_path, split="train")
@@ -34,13 +40,12 @@ config = SFTConfig(
     learning_rate=args.lr,
     per_device_train_batch_size=4,
     gradient_accumulation_steps=4,
-    bf16=True,
     logging_steps=10,
     save_strategy="no",
     report_to=[],
     max_length=4096,
 )
-trainer = SFTTrainer(model=args.student, args=config, train_dataset=dataset)
+trainer = SFTTrainer(model=model, args=config, train_dataset=dataset)
 trainer.train()
 trainer.save_model(args.out)
 print(f"saved to {args.out}")

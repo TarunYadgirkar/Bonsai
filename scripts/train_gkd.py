@@ -29,8 +29,9 @@ args = parser.parse_args()
 if args.smoke:
     args.student, args.teacher = SMOKE_STUDENT, "HuggingFaceTB/SmolLM2-360M-Instruct"
 
+import torch
 from datasets import load_dataset
-from transformers import AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from trl.experimental.gkd import GKDConfig, GKDTrainer
 
 probe = "Branch brief — 55,000 dollars, September 11."
@@ -39,6 +40,11 @@ teacher_tok = AutoTokenizer.from_pretrained(args.teacher)
 assert student_tok.encode(probe) == teacher_tok.encode(probe), (
     f"tokenizer mismatch: {args.student} vs {args.teacher} — token-level GKD requires a shared vocab"
 )
+
+# preload both models: transformers 5.x parallel weight loading segfaults on MPS when
+# TRL loads from a path string
+student_model = AutoModelForCausalLM.from_pretrained(args.student, dtype=torch.bfloat16)
+teacher_model = AutoModelForCausalLM.from_pretrained(args.teacher, dtype=torch.bfloat16)
 
 data_path = str(Path(__file__).parent.parent / "data" / "teacher_train.jsonl")
 dataset = load_dataset("json", data_files=data_path, split="train")
@@ -49,7 +55,6 @@ if args.smoke:
 lmbda, beta = (1.0, 1.0) if args.pure_on_policy else (0.5, 0.5)
 config = GKDConfig(
     output_dir=args.out,
-    teacher_model_name_or_path=args.teacher,
     lmbda=lmbda,
     beta=beta,
     temperature=1.0,
@@ -57,14 +62,14 @@ config = GKDConfig(
     learning_rate=args.lr,
     per_device_train_batch_size=2,
     gradient_accumulation_steps=8,
-    bf16=True,
     logging_steps=10,
     save_strategy="no",
     report_to=[],
     max_length=4096,
 )
 trainer = GKDTrainer(
-    model=args.student,
+    model=student_model,
+    teacher_model=teacher_model,
     args=config,
     train_dataset=dataset,
     processing_class=student_tok,
