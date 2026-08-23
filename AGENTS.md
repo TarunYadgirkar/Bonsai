@@ -94,43 +94,38 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-19T17:45:00Z by claude session (lane A) — copy-a IS main now; repo PUBLIC; keep committing on copy-a and fast-forwarding main (merge, never force)
+Updated: 2026-08-23T05:50:35Z by claude session — merge-bug fix shipped on copy-a; main fast-forward PENDING Tarun
 
-### ▶ NEXT SESSION — do these first
--1. **PROD IS CURRENT (2026-08-19)** — Phase 4 + wave 2 + panel fixes are LIVE on
-   bonsai-connector.vercel.app (preview deploy via CLI, Tarun promoted `dao2h6odb` in-session;
-   the auto-mode classifier blocks agent-run `vercel --prod`/`promote`, so future prod flips are
-   a Tarun-typed `! npx vercel promote <preview-url> --yes` after an agent `vercel deploy`).
-   Verified live: SSE chat + regenerate streams, truncation persists, export, session-scoped
-   guards, onboarding + demo ribbon. Still queued: `vercel env add SESSION_SECRET production`
-   (+ redeploy) to turn on signed cookies; connector auto-routing now live on prod.
-0. **Extension is PARKED (Tarun, 2026-08-19)** — real-Chrome testing showed `sidePanel.open()`
-   silently refused even with the stash+toast fallbacks, and the surface can never run the full
-   loop anyway (HITL by design; auto-send = account-ban pattern). Matches PLAN.md's original
-   "Cut" verdict. Both e2e suites stay green as regression cover, but no further investment.
-   The claude.ai surface is the CONNECTOR — full fork→branch→merge loop verified live in
-   Tarun's claude.ai this session (brief 76.4% pruned, garden totals 99.6%).
-1. **Promote prod** — `vercel --prod` from this worktree picks up Phase 4 (streaming, message
-   actions, palette, export, connector auto-routing, the session-race fix). Needs Tarun's auth.
-2. **Side-panel buttons** — still the only unverified UI (Chrome side panel is browser chrome;
-   needs a human or Cowork click of Compile / Open branch chat).
-3. **Enable cookie signing in prod**: `vercel env add SESSION_SECRET` (long random string) —
-   the code ships signed-session + rate limiting now (wave 2); unset = unsigned demo mode.
-4. Then: `pnpm publish bonsai-engine`, MCP Apps tree UI, connector OAuth.
+Done:
+- `e48c176` fix: never merge a user turn as the distilled insight. Root cause of the legacy
+  question-insights (hackathon-day mock distiller): pre-`5725f5d` had no question filter, and
+  the filter added there only catches `?`-suffix, so period-terminated imperatives slipped
+  through. Two-layer fix: engine `mockDistill` considers assistant-authored sentences only
+  (`sentencesWithRole`), and new exported `insightEchoesUserTurn` (compiler.ts) rejects
+  distilled lines that normalize-match a user turn — wired into `app/api/merge/route.ts` beside
+  the grounding gate (covers real-model echoes too, which the grounding gate passes by
+  construction). 232/232 tests, 15/15 evals, build clean, plugin MCP dist rebuilt + committed.
+  Prod Neon data was already clean (0 insights on main).
+- Real-data corpus exported to `~/TarunsCode/bonsai-distill-corpus/` (conclusions.jsonl,
+  eval.jsonl, README with provenance) for the bonsai-distill experiment. Entire real insight
+  population = one fact cluster; the two question-rows were excluded and are what triggered the
+  fix above.
+- Mahogany hackathon repo moved `hackathons/` → `archive/mahogany-mongodb` (same loop as
+  Bonsai, collapsed per Tarun).
 
-**Session 2026-08-18 — Phase 4: app usability (see BUILDLOG for detail; 10 commits, 192 tests,
-15/15 evals, CI GREEN — it had been red since 08-12, root cause plugin/mcp deps never installed
-in CI; fixed):**
-- Regenerate + edit-and-rerun (`/api/message`, engine `truncateForRerun`, real row deletes on
-  truncation), rename/archive from the UI (`/api/node`).
-- Streaming chat end-to-end: `POST /api/chat/stream` SSE, native Anthropic streaming + mock
-  paced stream, escalation `restart` events, client-abort → provider-fetch cancellation,
-  buffered fallback. Verified in Chromium against a real model.
-- ⌘K palette (search all branches/messages/insights + quick actions), `GET /api/export`
-  (garden/subtree, md/json).
-- Connector fork: model/effort optional — engine classifier + community prior route it;
-  divergence hints returned. Extension icons shipped (`extension/make-icons.mjs`).
-- Fixed a real first-visit bug: state/economics session-cookie race (economics no longer mints).
+Blocked:
+- Fast-forward of `main` to `e48c176` + push: auto-mode classifier blocks agent-run pushes to
+  main; Tarun runs `cd ~/TarunsCode/bonsai && git merge --ff-only copy-a && git push origin main`
+  (then his usual `npx vercel promote` for bonsai-connector prod).
+- Mahogany's real Atlas insights for the corpus: connection string lives in hook-blocked `.env`.
+
+Next:
+1. After Tarun pushes main: confirm bonsai-lac auto-deploy picked up `e48c176`, then promote
+   bonsai-connector prod (Tarun-typed).
+2. Still queued from before: `vercel env add SESSION_SECRET production` (+ redeploy),
+   `pnpm publish bonsai-engine`, MCP Apps tree UI, connector OAuth.
+
+Standing:
 - Run the FULL CI sequence locally before pushing (Tarun asked — no more failure emails):
   typecheck, extension tsc+build+dist-diff, `npm ci --prefix plugin/mcp` + smoke + build +
   dist-diff, tests, evals, build, engine tsup smoke.
