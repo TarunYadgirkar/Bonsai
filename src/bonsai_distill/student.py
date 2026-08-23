@@ -35,19 +35,22 @@ class StudentModel:
             {"role": "system", "content": COMPILER_SYSTEM},
             {"role": "user", "content": user_prompt},
         ]
-        inputs = self.tokenizer.apply_chat_template(
-            chat, add_generation_prompt=True, return_tensors="pt"
-        ).to(self.device)
+        encoded = self.tokenizer.apply_chat_template(
+            chat, add_generation_prompt=True, return_tensors="pt", return_dict=True
+        )
+        input_ids = encoded["input_ids"].to(self.device)
+        attention_mask = encoded["attention_mask"].to(self.device)
         start = time.perf_counter()
         with torch.no_grad():
             out = self.model.generate(
-                inputs,
+                input_ids,
+                attention_mask=attention_mask,
                 max_new_tokens=600,
                 do_sample=False,
                 pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
         latency = time.perf_counter() - start
-        generated = out[0][inputs.shape[1] :]
+        generated = out[0][input_ids.shape[1] :]
         text = self.tokenizer.decode(generated, skip_special_tokens=True)
         return parse_compiler_output(text), {
             "latency_s": round(latency, 3),
