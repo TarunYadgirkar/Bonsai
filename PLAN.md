@@ -1,7 +1,7 @@
-# PLAN.md — lane A campaign
+# PLAN.md — campaign
 
-Lane A's direction memo. What this lane is building, in order, and why. Living document —
-updated as segments land. Read `LANE.md` for lane boundaries, `AGENTS.md` for repo rules.
+Direction memo. What is being built, in order, and why. Living document —
+updated as segments land. Read `AGENTS.md` for repo rules.
 
 ## Thesis
 
@@ -97,10 +97,9 @@ poisoning, not dollars. Sherlock risk is real (native /fork rewritten twice in J
 anthropics/claude-code#32631 specs fork+merge+tree) — the moat is brief quality + merge
 contract, so the segment-5 eval harness is strategic, not hygiene.
 
-## Non-goals for this lane (for now)
+## Non-goals (for now)
 
 - No durable cross-conversation memory layer — still an open decision per AGENTS.md.
-- No coordination with copy-b.
 - Web app stays a demo/testbed; it is not the product bet.
 
 ## Segments — Phase 4 (usable as a daily app) — 2026-08-18

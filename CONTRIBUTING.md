@@ -40,7 +40,7 @@ Optional keys (names in `.env.example`): `DATABASE_URL` (Neon) for durable stora
 
 ## The CI gate
 
-`.github/workflows/ci.yml` runs on every push to `main`/`copy-a`/`copy-b` and every PR. It must be
+`.github/workflows/ci.yml` runs on every push to `main` and every PR. It must be
 green before merge. In order:
 
 ```

@@ -20,13 +20,12 @@ That is the interesting problem and the thing worth getting right. Surfaces are 
 
 | Branch | Purpose |
 |---|---|
-| `main` | Current best state. The only branch Vercel deploys. |
+| `main` | Current best state. The only branch Vercel deploys. Work happens here. |
 | `og` | Clean baseline, forked from `main`. Do not build on it. |
-| `copy-a` | Independent exploration lane. |
-| `copy-b` | Independent exploration lane. |
-| `hackathon-copy` | Frozen archive of the Aug 7 2026 submission, sponsor integrations intact. **Never commit here.** |
 
-`copy-a` and `copy-b` are free lanes — they may go the same direction or diverge completely. Do not coordinate them, and do not merge one into the other. Tarun decides what reaches `main`.
+The `copy-a`/`copy-b` exploration lanes were collapsed into `main` on 2026-09-17 (copy-a was
+identical to main; copy-b never diverged beyond its lane brief). The frozen Aug 7 2026 hackathon
+submission lives in the private `TarunYadgirkar/bonsai-hackathon` repo, sponsor integrations intact.
 
 ## Stack
 
@@ -48,15 +47,14 @@ There is deliberately **no durable-memory layer** right now. The hackathon one w
 
 ### Neon — one database branch per git branch
 
-Project `bonsai` (`wild-feather-67393800`). Each lane gets its own isolated database so branches cannot clobber each other or production:
+Project `bonsai` (`wild-feather-67393800`). Local development gets its own isolated database so it cannot clobber production:
 
 | Neon branch | Serves |
 |---|---|
 | `main` | Vercel production |
-| `copy-a` | the `copy-a` lane |
-| `copy-b` | the `copy-b` lane |
+| `local-dev` | Tarun's laptop |
 
-Connection strings come from the Neon console. Put the one for your lane in `.env.local` as `DATABASE_URL`. **Never point your lane at the `main` Neon branch** — you will overwrite the live demo's tree.
+Connection strings come from the Neon console. Put the `local-dev` one in `.env.local` as `DATABASE_URL`. **Never point local dev at the `main` Neon branch** — you will overwrite the live demo's tree.
 
 ## Mock-first rule
 
@@ -94,7 +92,18 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-08-23T05:50:35Z by claude session — merge-bug fix shipped on copy-a; main fast-forward PENDING Tarun
+Updated: 2026-09-17 by claude session — lanes collapsed; single-branch workflow on `main`
+
+Done (2026-09-17):
+- `main` already contained everything from `copy-a` (fast-forward landed). Deleted branches
+  `copy-a`, `copy-b`, `hackathon-copy`, `main-pre-phase4` locally and on GitHub; removed the
+  `~/TarunsCode/bonsai-copy-a` / `bonsai-copy-b` worktrees; dropped `LANE.md`. Hackathon
+  snapshot survives verbatim in private repo `TarunYadgirkar/bonsai-hackathon`.
+- `~/TarunsCode/bonsai/.vercel` now links to the `bonsai-connector` project (prod), which used
+  to live only in the copy-a worktree. `bonsai-lac` still auto-deploys from git.
+- Neon branches `copy-a`/`copy-b` are orphaned and can be deleted in the console.
+
+Previous entry (2026-08-23):
 
 Done:
 - `e48c176` fix: never merge a user turn as the distilled insight. Root cause of the legacy
