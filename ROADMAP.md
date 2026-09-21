@@ -9,7 +9,7 @@ Living document — check items off, reprioritize freely; the record stays in BU
 
 - Branching is fully commoditized: ChatGPT, Gemini, Grok, LibreChat, Open WebUI, Lobe, TypingMind all ship copy-forks; HN explicitly calls it table stakes.
 - Every vendor fork copies full history because vendors bill by the token — an adversarial incentive that makes compiled minimal briefs Bonsai's durably unclaimed lane.
-- Merge-back exists nowhere shipped (only 36-star forky and the unassigned claude-code #32631 spec); sherlock risk is highest in Claude Code within ~12 months (tree view + summary merge are spec'd; briefs and routing are not).
+- ~~Merge-back exists nowhere shipped~~ **Sherlocked 2026-08-13:** Claude Code v2.1.232 made `/fork` a background subagent that inherits the full transcript and returns its result (see the 2026-09-21 landscape update below). Briefs, routing, and the tree remain unshipped natively; #32631 and #69712 (merge-back into a `/branch`) are still open or closed-not-planned.
 - Routing is validated and hot (RouteLLM, Not Diamond, OpenRouter, FrugalGPT), but the GPT-5 silent-router backlash proved readable reasons + never-override-manual-picks is the trust posture nobody currently claims.
 - Compression-at-fork-boundary beats compression-at-buffer-overflow, with public evidence: Claude auto-compact complaints, context-rot research, and ContextBranch's 58% reduction / +13% on distant explorations.
 - Tree UIs never mainstream as primary surfaces (Loom, Flowith, canvas apps); linear-read pane + tree-as-map is the surviving pattern, and the map must ship with fork, never retrofitted.
@@ -17,6 +17,29 @@ Living document — check items off, reprioritize freely; the record stays in BU
 - Distribution reality today: no Bonsai surface is usable by a stranger — broken plugin install, operator-manual connector keys, unpublished npm package, mock-only public demo.
 - Credibility rests on the benchmark becoming public, named, and third-party-runnable with a full-history baseline number, because the field's self-reported benchmarks are reflexively distrusted.
 - Posture: race the sherlock clock — fix distribution now, occupy the fork/merge/tree vocabulary, publish auditable receipts, and deepen the three moats (brief compiler, routing flywheel, one-insight merge) before native tools ship the shallow versions.
+
+## Landscape update — 2026-09-21
+
+Read against Claude Code 2.1.273 and the current platform pricing page.
+
+- **Native `/fork` is a round-trip now.** Since v2.1.232 (Aug 13) a fork is a background subagent
+  that inherits the entire parent conversation, shares its prompt cache, runs on the parent's
+  model, and returns its result. `/btw` answers a side question inline. `/branch` is a clean
+  detached session. Nothing native compiles a brief, routes across models, or keeps a tree.
+- **The cost story needed a second baseline.** Cache reads are 0.1x list input (0.025x on Fable
+  5.1), so "tokens avoided × list price" overstated the savings against a warm native fork by up
+  to 10x. The engine now carries a cache-warm baseline beside the list-rate one and the ledger
+  leads with it. That was P2 "cache-aware baseline honesty"; it is done and it was really P0.
+- **Prices moved.** Sonnet 5 stayed at $2/$10 (the September increase was cancelled). Fable 5.1
+  is the ceiling ($10/$50, cache reads $0.25). Catalog and upstream ids updated, PRICES_AS_OF
+  2026-09-21.
+- **What is still Bonsai's:** the compiled brief (context hygiene + subscription headroom), the
+  cross-model router with readable reasons, the one-insight grounded merge, and the tree with
+  per-branch economics. Reprioritized: the plugin should stop competing with `/btw` on the
+  cheap path and lean into what native cannot do — routing the branch to Haiku/Sonnet, and
+  surfacing the tree.
+- **Repo state:** 237 tests, 15/15 evals, plugin smoke 17/17, builds clean, both live deploys
+  answering 200. `bonsai-engine` is still unpublished on npm.
 
 ## P0 — ship blockers for public use
 
@@ -67,7 +90,7 @@ _The moat-deepening work: briefs visible, merges auditable, savings shareable._
 - [ ] **Tree legibility past 30 nodes: DOITree collapse-to-badge elision ('+12 branches · $X saved') plus focus-follows-conversation auto-expand/collapse** — Obsidian's lesson is local-graph-beats-hairball, and elision badges double as an economics surface; the tree must answer 'where am I', not 'show me everything'. `web-app` `medium`
 - [ ] **Encode state and cost on every tree node: colored state rail, token-heat tint, routed-tier glyph** — Status-free graph nodes are Obsidian users' top complaint, and Bonsai's routing/economics data belongs in the map, not only the ledger. `web-app` `small`
 - [ ] **One-click branch pruning: abandon-with-reason tombstones plus a 'clean up merged/dead branches' sweep with undo** — Junk-branch accumulation is the top real-world complaint against every shipped branching UI (Open WebUI #8928, ChatGPT, HuggingChat). `web-app` `small`
-- [ ] **Comparison table at the top of README, landing, and marketplace listing: Bonsai vs /btw vs /fork vs ChatGPT branch vs LibreChat (context carried, routing, merge-back, tree, cost)** — Native /btw and /fork are the first objection every 2026 user raises — /btw has no merge and full context, /fork copies everything; the table is the pitch. `docs` `small`
+- [ ] **Comparison table at the top of README, landing, and marketplace listing: Bonsai vs /btw vs /fork vs ChatGPT branch vs LibreChat (context carried, routing, merge-back, tree, cost)** — Native /btw and /fork are the first objection every 2026 user raises — /fork now returns a result but copies everything on the same model; the table is the pitch. **Promoted to next after the 2026-09-21 landscape read.** `docs` `small`
 - [ ] **Adversarial-incentive positioning rewrite: 'vendors copy your whole history because they bill you for it; Bonsai compiles a brief'** — Branch-as-copy is table stakes everywhere; the incentive framing is the sharpest one-sentence differentiation available and is verifiably true. `growth` `small`
 - [ ] **Landing route restructure to converting order: 3-second hero with animated brief-compile, problem-oriented feature blocks, metrics trust block, FAQ, loud CTA** — The demo currently opens into the app; a 3-second-legible hero is the difference between a bounce and a fork. `web-app` `medium`
 - [x] **VHS-scripted demo GIFs per surface (fork→route→merge with the token counter), CI-regenerated, above the fold in both READMEs** — 62% of top-100 repos lead with motion and the loop is inherently animated; a .tape script never goes stale. `docs` **(done: 54s tour recorded via Playwright→ffmpeg, 800px/4.3MB, README hero)** `medium`
@@ -95,7 +118,7 @@ _Quality, trust, and finish._
 - [ ] **Engine-side computeGardenLayout(tree, focusId, density) returning positioned nodes/edges with LOD tiers, shared by web sidebar and MCP Apps view** — One dependency-free layout function keeps the two surfaces pixel-consistent and unit-testable instead of parallel layout logic. `engine` `medium`
 - [ ] **Per-turn effort routing inside a branch with escalation decay, instead of one decision per branch** — Not Diamond Code's per-step routing claims 20%+ savings; a branch that escalated once shouldn't stay pinned high for trivial follow-ups. `engine` `medium`
 - [ ] **Cache-aware routing: weight decisions toward the model with a warm prompt cache in costForModel** — Cache-read pricing at ~10% often inverts the cheap-model choice; honest cost accounting must include it. `engine` `medium`
-- [ ] **Cache-aware baseline honesty: discount the counterfactual to cache-read price for the cached prefix, and say so in the methodology note** — Savvy developers will immediately object that full history would be cache-priced; pre-empting the strongest objection is what survives Hacker News. `engine` `medium`
+- [x] **Cache-aware baseline honesty: discount the counterfactual to cache-read price for the cached prefix, and say so in the methodology note** **(done 2026-09-21: `warmBaselineCostUsd` + `warmBaselineOf`, whole history priced as cached — generous to the baseline; ledger, per-row table, evals README)** — Savvy developers will immediately object that full history would be cache-priced; pre-empting the strongest objection is what survives Hacker News. `engine` `medium`
 - [ ] **Trailing 7-day recency weighting on community priors (OpenRouter-style) instead of all-time aggregation** — Model quality and pricing shift fast; stale all-time priors mis-route after every model release. `engine` `small`
 - [ ] **Entity linking in the compiler: per-path alias map so 'GRFP'/'the fellowship'/'NSF GRFP' count as one entity in salience and anchor carry-through** — mem0's one clearly-working idea; anchorCarriedThrough currently matches capitalized tokens literally and misses rephrasings. `engine` `medium`
 - [ ] **Routing profile as inspectable memory: settings pane listing learned per-kind tier preferences with delete/reset** — Bonsai does have a durable memory layer (the flywheel); ChatGPT memory's top criticism is opacity, so inspectability is cheap differentiation. `web-app` `small`

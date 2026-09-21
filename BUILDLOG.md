@@ -3,6 +3,31 @@
 Running log of what landed, decisions made, and facts verified. Newest first. One entry per
 work segment; PLAN.md holds the forward plan, this holds the record.
 
+## 2026-09-21 — Landscape re-read: native /fork sherlocked merge-back; cache-warm baseline
+
+Session goal was "is Bonsai still useful, and start upgrading it." Facts verified against Claude
+Code 2.1.273 docs/changelog and the platform pricing page:
+
+- Claude Code `/fork` has been a round-trip background subagent since v2.1.232 (2026-08-13): full
+  transcript inherited, prompt cache shared, parent's model, result returned. `/btw` = inline side
+  question, `/branch` = detached session. No compiled brief, no cross-model routing, no tree.
+- Sonnet 5 stays $2/$10 (Sept 1 increase cancelled). Fable 5.1 is the ceiling: $10/$50, cache
+  reads $0.25 (0.025x; every other model 0.1x).
+
+Landed:
+- **Engine**: `ModelSpec.cacheRead`; Sonnet 5 rate fixed (was $3/$15); ceiling label Fable 5.1,
+  upstream id `claude-fable-5-1` (catalog id `claude-fable-5` kept — it is persisted in
+  inference_logs rows). New `warmBaselineCostUsd` / `warmCeilingCostUsd` / `warmBaselineOf`: the
+  full-copy counterfactual with the ENTIRE history priced at the cache-hit rate (deliberately
+  generous to the baseline). `SessionSavings` and `savingsCurve` carry warm figures; derived from
+  stored token counts, so legacy rows need no migration. PRICES_AS_OF 2026-09-21.
+- **Web**: `/api/economics` returns `warmCostUsd` + `warmCostSavedPct`; ledger states the warm
+  comparison in a sentence under the season bars and adds a "warm fork (modeled)" column.
+- **Docs**: README, PRODUCT, MOAT, evals/README, ROADMAP (landscape section; cache item checked;
+  comparison table promoted) repositioned around what native `/fork` did and did not take.
+- Gates: 237/237 tests, 15/15 evals, plugin smoke 17/17, extension + plugin dists rebuilt, Next
+  build + engine tsup smoke clean.
+
 ## 2026-08-12 — Adversarial audit → all 36 findings fixed → live-deployed + tested
 
 A 56-agent adversarial review (8 dimensions, verify pass) of the whole copy-a diff surfaced 36

@@ -4,9 +4,12 @@
 
 Every chat product stores conversation as one growing log, and every branching feature shipped
 so far — ChatGPT's "Branch in new chat" (Sept 2025), Gemini's copy of it (May 2026), Claude
-Code's `/fork`, LibreChat, Msty, TypingMind — forks by **copying the full history**. That is
-Save-As, not branching: the copy drags every token of context along, the side question runs on
-the priciest possible context, and nothing the branch learns ever comes back.
+Code's `/fork` and `/btw`, LibreChat, Msty, TypingMind — forks by **copying the full history**.
+That is Save-As, not branching: the copy drags every token of context along and the side question
+runs on the priciest possible context. Claude Code's `/fork` (a background subagent that inherits
+the whole transcript and returns its result, default since v2.1.232) closed the "nothing comes
+back" gap in August 2026. It did not touch the other three: the copy is still total, the branch
+runs on the parent's model, and there is no tree.
 
 Bonsai is the loop those products don't have:
 
@@ -85,9 +88,26 @@ behavior, not an AI judge; priors persist per user.
 - **Streaming surfaces.** The engine escalation ladder is whole-response; streaming lands with
   the first surface that needs it.
 
+## What native `/fork` changed (2026-09-21 read)
+
+Merge-back is no longer unclaimed: Claude Code forks return their result to the parent. Three
+things stay Bonsai's, and they are the three that were always the product:
+
+- **The compiled brief.** A native fork copies the whole transcript. Bonsai sends ≤8
+  referent-resolved facts. On the API that is the bill; on a subscription it is usage headroom;
+  on every surface it is immunity from the parent's noise.
+- **Cross-model routing.** A native fork runs on the parent's model. Bonsai routes the branch
+  to the cheapest model and effort that covers the question, and never overrides a manual pick.
+- **The one-insight contract and the tree.** A native fork returns whatever it returns, and
+  the tree is invisible. Bonsai returns one grounded, referent-resolved sentence and keeps the
+  map with per-branch economics.
+
+The economics claim had to change with it. A cache-shared fork reads the parent history at the
+cache-hit rate, so the ledger now shows two baselines: full copy at list price and full copy
+with the whole history priced as cached. Bonsai leads with the second one.
+
 ## Positioning in one paragraph
 
-Everyone else's branch is Save-As: a full copy that never comes back. Bonsai branches start
-from a compiled minimal brief, get routed to the right model and effort automatically, and
-return exactly one distilled insight to the parent — riding the Claude subscription you
-already pay for.
+Everyone else's branch is a full copy on the same model. Bonsai branches start from a compiled
+minimal brief, get routed to the right model and effort automatically, and return exactly one
+distilled insight to the parent — riding the Claude subscription you already pay for.

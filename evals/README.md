@@ -44,5 +44,9 @@ Nonzero exit on any failure. The harness is ~700 lines of plain TypeScript
 - **Containment scoring is exact-substring**, which is strict on the compiler (paraphrase counts
   as a miss) and generous on the baseline (full history trivially contains everything). That
   asymmetry favors the baseline, not us.
+- **The token reduction is not the dollar reduction.** A cache-shared native fork re-reads the
+  parent history at the cache-hit rate (0.1x list input; 0.025x on Fable 5.1), so a 44% token
+  cut is a much smaller dollar cut against a warm fork. The app's ledger reports both baselines;
+  quote the warm one when the comparison is Claude Code's `/fork`.
 - Third-party runs, adversarial cases, and PRs adding failure modes are welcome — a benchmark we
   only ever pass at home proves nothing.

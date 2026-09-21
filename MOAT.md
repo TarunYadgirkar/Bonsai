@@ -13,8 +13,10 @@ stands.
   is copyable. It's a head start, not a moat.
 - **The tree UI.** "Branching chat" is commoditized — ChatGPT (Sept 2025), Gemini (May 2026),
   LibreChat, Msty. The tree alone defends nothing.
-- **Riding the subscription.** A real distribution advantage, but the big labs can (and may) ship
-  native fork/merge; `/fork` was rewritten twice in June 2026. This is a timing edge, not a wall.
+- **Riding the subscription.** A real distribution advantage, but the big labs can (and did) ship
+  native fork/merge: Claude Code's `/fork` became a round-trip background subagent in August 2026
+  (v2.1.232). What it still lacks is the compiled brief, cross-model routing, and the tree. This
+  is a timing edge, not a wall, and the clock has already run once.
 
 ## The two real moats — and they compound
 

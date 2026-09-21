@@ -92,7 +92,26 @@ the same.
 
 ## Ongoing
 
-Updated: 2026-09-17 by claude session — lanes collapsed; single-branch workflow on `main`
+Updated: 2026-09-21 by claude session — landscape re-read + cache-warm baseline landed
+
+Done (2026-09-21):
+- Verified: Claude Code `/fork` is a round-trip full-transcript background subagent since
+  v2.1.232 (merge-back sherlocked); no native brief, routing, or tree. Sonnet 5 is $2/$10 for
+  good; Fable 5.1 is the ceiling with $0.25 cache reads.
+- Engine: `cacheRead` on every ModelSpec, `warmBaselineCostUsd`/`warmBaselineOf`, Sonnet 5 rate
+  fixed, ceiling upstream `claude-fable-5-1` (catalog id unchanged). Ledger shows the warm
+  baseline. Docs repositioned (README, PRODUCT, MOAT, ROADMAP landscape section, evals/README).
+- All gates green locally (237 tests, 15/15 evals, smoke 17/17, both dists rebuilt, build clean).
+
+Next:
+1. README comparison table (Bonsai vs /fork vs /btw vs /branch vs ChatGPT branch) — promoted.
+2. Plugin: lean into what native cannot do — cross-model routing line in the fork result, and a
+   SessionStart "N open branches" nudge. Consider silencing the side-question hook when the
+   user already typed `/btw`.
+3. Still queued: `vercel env add SESSION_SECRET production`, `npm publish bonsai-engine`, MCP
+   Apps interactive garden.
+
+Previous entry (2026-09-17): lanes collapsed; single-branch workflow on `main`
 
 Done (2026-09-17):
 - `main` already contained everything from `copy-a` (fast-forward landed). Deleted branches

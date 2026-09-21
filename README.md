@@ -26,9 +26,11 @@ your private connector link, then say *"fork this side question with Bonsai"* in
 ## Why it's different
 
 Every branching chat that shipped — ChatGPT (Sept 2025), Gemini (May 2026), LibreChat, Msty,
-TypingMind — forks by **copying the whole history**. That's Save-As: the copy drags every token
-along, the side question runs on the priciest possible context, and nothing the branch learns ever
-comes back. Bonsai is the loop those products don't have:
+TypingMind — forks by **copying the whole history**. Claude Code's native `/fork` (default since
+v2.1.232, Aug 2026) is the first one that brings a result back, and it still copies the whole
+transcript, runs on the parent's model, and keeps no tree. A full copy drags every token along,
+the side question runs on the priciest possible context, and the branch inherits every wrong turn.
+Bonsai is the loop those products don't have:
 
 1. **Fork with a compiled brief.** A branch inherits ≤8 referent-resolved facts plus an explicit
    note of what was excluded — a 19,000-token trunk becomes a ~400-token brief. Briefs compose
@@ -51,7 +53,10 @@ comes back. Bonsai is the loop those products don't have:
   confidence-gated, with a `mergeProfiles()` community cold-start. This is the [moat](MOAT.md): the
   routing memory compounds per-user *and* across users.
 - **Honest economics** (`stats.ts`) — tokenizer-generation correction (the 4.7+/5 tokenizer runs
-  ~1.3× heavier), measured-vs-modeled provenance on every figure, per-purpose and per-model spend.
+  ~1.3× heavier), measured-vs-modeled provenance on every figure, per-purpose and per-model spend,
+  and two baselines: the list-rate full copy and the **cache-warm** full copy (what a native
+  cache-shared fork actually pays, with the entire history priced as a cache hit). The savings
+  figure that survives the "but it's cached" objection is the one the ledger leads with.
 - **A referent-resolution benchmark** ([`evals/`](BENCHMARK.md)) — `npm run eval` *executes* the
   correctness claim that makes compiled briefs safe (referent resolution at depth 2, salience over
   keyword noise). Differential and provider-agnostic. Runs in CI.
@@ -80,7 +85,7 @@ Install the plugin:
 The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
 consume, and publishable on its own (`cd packages/engine && pnpm publish` builds a typed `dist` via
 `prepublishOnly`). Tree model, path assembly, salience compiler, learning router, honest pricing.
-218 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
+237 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
 
 ## Run it
 
