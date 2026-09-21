@@ -3,7 +3,7 @@
  * aggregation, and the cumulative savings curve. Pure functions over InferenceLog rows —
  * no I/O, no store coupling.
  */
-import { MODELS } from './models';
+import { MODELS, MODEL_TIERS, warmBaselineCostUsd } from './models';
 import type { InferenceLog, InferencePurpose } from './types';
 
 /** Where a number came from: provider-reported usage, or a chars/4-style heuristic. */
@@ -64,10 +64,15 @@ export interface SessionSavings {
   /** The baseline is always a modeled counterfactual — never measured billing. */
   baselineInputTokens: number;
   baselineCostUsd: number;
+  /** Full history on the strong model with the transcript read from a warm prompt cache — the
+   *  cache-shared native-fork counterfactual. The honest floor of the savings claim. */
+  warmBaselineCostUsd: number;
   tokensSaved: number;
   costSavedUsd: number;
+  warmCostSavedUsd: number;
   tokensSavedPct: number;
   costSavedPct: number;
+  warmCostSavedPct: number;
 }
 
 export interface SessionStats {
@@ -102,6 +107,11 @@ const pctSaved = (baseline: number, actual: number): number =>
   baseline > 0 ? Math.round(((baseline - actual) / baseline) * 1000) / 10 : 0;
 
 const rowBasis = (log: StatsLog): TokenBasis => (log.measured ? 'measured' : 'estimated');
+
+/** Rows store the list-rate baseline; the warm one derives from the same token counts, so
+ *  legacy rows get it for free and the two never disagree about what was sent. */
+export const warmBaselineOf = (log: StatsLog): number =>
+  warmBaselineCostUsd(MODEL_TIERS.deep, log.baselineInputTokens, log.outputTokens);
 
 function totalsOf(rows: readonly StatsLog[]): GroupTotals {
   return rows.reduce<GroupTotals>(
@@ -157,6 +167,7 @@ export function sessionStats(logs: readonly StatsLog[]): SessionStats {
 
   const baselineInputTokens = logs.reduce((sum, l) => sum + l.baselineInputTokens, 0);
   const baselineCostUsd = roundUsd(logs.reduce((sum, l) => sum + l.baselineCostUsd, 0));
+  const warmBaselineTotal = roundUsd(logs.reduce((sum, l) => sum + warmBaselineOf(l), 0));
 
   const chats = logs.filter((l) => l.purpose === 'chat');
 
@@ -167,10 +178,13 @@ export function sessionStats(logs: readonly StatsLog[]): SessionStats {
     savings: {
       baselineInputTokens,
       baselineCostUsd,
+      warmBaselineCostUsd: warmBaselineTotal,
       tokensSaved: baselineInputTokens - inputTokens.value,
       costSavedUsd: roundUsd(baselineCostUsd - costUsd.value),
+      warmCostSavedUsd: roundUsd(warmBaselineTotal - costUsd.value),
       tokensSavedPct: pctSaved(baselineInputTokens, inputTokens.value),
       costSavedPct: pctSaved(baselineCostUsd, costUsd.value),
+      warmCostSavedPct: pctSaved(warmBaselineTotal, costUsd.value),
     },
     byPurpose: purposeBreakdown(logs, rawCost.value),
     byModel: modelBreakdown(logs, rawCost.value),
@@ -186,15 +200,19 @@ export interface SavingsPoint {
   actual: number;
   /** Cumulative modeled full-history strong-model spend through inference i, USD. */
   baseline: number;
+  /** Same, with the history read from a warm prompt cache. */
+  warm: number;
 }
 
 /** Cumulative actual-vs-baseline cost per inference, in log order — sparkline-ready. */
 export function savingsCurve(logs: readonly StatsLog[]): SavingsPoint[] {
   let actual = 0;
   let baseline = 0;
+  let warm = 0;
   return logs.map((log, idx) => {
     actual += log.estCostUsd;
     baseline += log.baselineCostUsd;
-    return { i: idx + 1, actual: roundUsd(actual), baseline: roundUsd(baseline) };
+    warm += warmBaselineOf(log);
+    return { i: idx + 1, actual: roundUsd(actual), baseline: roundUsd(baseline), warm: roundUsd(warm) };
   });
 }

@@ -56,13 +56,13 @@ const RUNG_BY_MODEL: Record<string, Rung> = {
   'claude-fable-5': 'CEILING',
 };
 
-/** Verified against provider model pages 2026-08-10. Re-verify before shipping — ids rot. */
+/** Anthropic ids verified 2026-09-21 (Fable 5.1 is the ceiling); others 2026-08-10. Re-verify before shipping — ids rot. */
 const DEFAULT_UPSTREAM: Record<string, Record<Rung, string>> = {
   anthropic: {
     QUICK: 'claude-haiku-4-5-20251001',
     MID: 'claude-sonnet-5',
     DEEP: 'claude-opus-5',
-    CEILING: 'claude-fable-5',
+    CEILING: 'claude-fable-5-1',
   },
   openai: {
     QUICK: 'gpt-5.4-mini',

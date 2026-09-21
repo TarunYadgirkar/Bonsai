@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { EconomicsResponse, InferenceLog } from '@/lib/types';
-import { PRICES_AS_OF, ceilingCostUsd } from '@/lib/types';
+import { PRICES_AS_OF, ceilingCostUsd, warmCeilingCostUsd } from '@/lib/types';
 import { EFFORT_LABEL } from './ModeBadge';
 import { formatUsd } from './tokens';
 
@@ -236,6 +236,15 @@ export function EconomicsPanel({
                 />
               </section>
 
+              <p className="mt-4 text-xs leading-relaxed text-ink-soft">
+                A cache-shared fork (Claude Code&apos;s native <code>/fork</code>) reads the parent
+                history at the cache-hit rate instead of list price. Against that warmer baseline
+                of <span className="tnum">{formatUsd(data.baseline.warmCostUsd ?? 0)}</span>, routed
+                spend is still{' '}
+                <span className="tnum">{(data.baseline.warmCostSavedPct ?? 0).toFixed(1)}%</span> lower.
+                The whole history is priced as cached, which favors the baseline.
+              </p>
+
               <section className="mt-7 flex flex-wrap items-baseline gap-x-10 gap-y-3 border-t border-rule pt-5">
                 <div className="flex items-baseline gap-2">
                   <span className="tnum text-4xl leading-none text-ink">
@@ -319,6 +328,9 @@ export function EconomicsPanel({
                           <th className="eyebrow px-3 py-2 text-right font-medium">
                             ceiling (modeled)
                           </th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">
+                            warm fork (modeled)
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
@@ -357,6 +369,9 @@ export function EconomicsPanel({
                             </td>
                             <td className="tnum px-3 py-2 text-right text-bark line-through">
                               {formatUsd(ceilingCostUsd(log.baselineInputTokens, log.outputTokens))}
+                            </td>
+                            <td className="tnum px-3 py-2 text-right text-bark line-through">
+                              {formatUsd(warmCeilingCostUsd(log.baselineInputTokens, log.outputTokens))}
                             </td>
                           </tr>
                         ))}

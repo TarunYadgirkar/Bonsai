@@ -1,4 +1,4 @@
-import { savingsCurve, sessionStats } from 'bonsai-engine';
+import { savingsCurve, sessionStats, warmBaselineOf } from 'bonsai-engine';
 import { apiRoute } from '@/lib/api';
 import { resolveSession } from '@/lib/session';
 import { loadWorkingSet } from '@/lib/store';
@@ -34,12 +34,15 @@ export const GET = apiRoute(null, async (_body, request) => {
 
   const baselineInput = priced.reduce((sum, l) => sum + l.baselineInputTokens, 0);
   const baselineCost = priced.reduce((sum, l) => sum + l.baselineCostUsd, 0);
+  const warmCost = priced.reduce((sum, l) => sum + warmBaselineOf(l), 0);
 
   const baseline: EconomicsBaseline = {
     inputTokens: baselineInput,
     costUsd: Math.round(baselineCost * 1e6) / 1e6,
+    warmCostUsd: Math.round(warmCost * 1e6) / 1e6,
     tokensSavedPct: pctSaved(baselineInput, totals.inputTokens),
     costSavedPct: pctSaved(baselineCost, totals.costUsd),
+    warmCostSavedPct: pctSaved(warmCost, totals.costUsd),
   };
 
   const response: EconomicsResponse = {

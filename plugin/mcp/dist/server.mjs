@@ -31024,14 +31024,16 @@ var MODELS = [
     tier: "quick",
     input: 1,
     output: 5,
+    cacheRead: 0.1,
     blurb: "Fastest and cheapest. Fact lookups answerable straight from the brief."
   },
   {
     id: "claude-sonnet-5",
     label: "Sonnet 5",
     tier: "thoughtful",
-    input: 3,
-    output: 15,
+    input: 2,
+    output: 10,
+    cacheRead: 0.2,
     blurb: "Balanced. Synthesis and explanation across a handful of facts."
   },
   {
@@ -31040,14 +31042,16 @@ var MODELS = [
     tier: "deep",
     input: 5,
     output: 25,
+    cacheRead: 0.5,
     blurb: "Deep reasoning. Multi-constraint ranking and weighing trade-offs."
   },
   {
     id: "claude-fable-5",
-    label: "Fable 5",
+    label: "Fable 5.1",
     tier: "deep",
     input: 10,
     output: 50,
+    cacheRead: 0.25,
     blurb: "The ceiling. Where a deep answer goes when it still is not good enough."
   }
 ];
@@ -31149,7 +31153,7 @@ var DEFAULT_UPSTREAM = {
     QUICK: "claude-haiku-4-5-20251001",
     MID: "claude-sonnet-5",
     DEEP: "claude-opus-5",
-    CEILING: "claude-fable-5"
+    CEILING: "claude-fable-5-1"
   },
   openai: {
     QUICK: "gpt-5.4-mini",

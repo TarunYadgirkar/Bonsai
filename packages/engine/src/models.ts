@@ -17,16 +17,23 @@ export interface ModelSpec {
    * frozen at three values (lib/types.ts) — the ladder above deep is expressed by model, not tier.
    */
   tier: Tier;
-  /** USD per 1M tokens. Modeled — Fable's rate is a placeholder, not a published figure. */
+  /** USD per 1M tokens, list rate. */
   input: number;
   output: number;
+  /**
+   * USD per 1M tokens on a prompt-cache hit. This is what a full-history fork actually pays for
+   * the parent transcript once the parent has warmed the cache — the honest baseline for a
+   * cache-shared native fork, not the list rate.
+   */
+  cacheRead: number;
   /** One line for the picker's hover card. */
   blurb: string;
 }
 
 /**
- * Rates verified against platform.claude.com pricing 2026-08-10. Sonnet 5 carries intro pricing
- * ($2/$10) until 2026-08-31; the standard rate is stored because it is the durable number.
+ * Rates verified against platform.claude.com pricing 2026-09-21. Sonnet 5's $2/$10 launch price
+ * became the standard price (the September 1 increase was cancelled). Cache reads are 0.1x list
+ * input on every model except Fable 5.1, where they are 0.025x.
  */
 export const MODELS: ModelSpec[] = [
   {
@@ -35,14 +42,16 @@ export const MODELS: ModelSpec[] = [
     tier: 'quick',
     input: 1,
     output: 5,
+    cacheRead: 0.1,
     blurb: 'Fastest and cheapest. Fact lookups answerable straight from the brief.',
   },
   {
     id: 'claude-sonnet-5',
     label: 'Sonnet 5',
     tier: 'thoughtful',
-    input: 3,
-    output: 15,
+    input: 2,
+    output: 10,
+    cacheRead: 0.2,
     blurb: 'Balanced. Synthesis and explanation across a handful of facts.',
   },
   {
@@ -51,14 +60,16 @@ export const MODELS: ModelSpec[] = [
     tier: 'deep',
     input: 5,
     output: 25,
+    cacheRead: 0.5,
     blurb: 'Deep reasoning. Multi-constraint ranking and weighing trade-offs.',
   },
   {
     id: 'claude-fable-5',
-    label: 'Fable 5',
+    label: 'Fable 5.1',
     tier: 'deep',
     input: 10,
     output: 50,
+    cacheRead: 0.25,
     blurb: 'The ceiling. Where a deep answer goes when it still is not good enough.',
   },
 ];
@@ -123,11 +134,11 @@ export function costForModel(modelId: string, inputTokens: number, outputTokens:
 /** The whole price catalog (ModelSpec rates + UPSTREAM_RATES) was last verified against
  *  provider pricing pages on this date. Surfaced in the economics UI — stale prices should
  *  look stale, not eternal. */
-export const PRICES_AS_OF = '2026-08-10';
+export const PRICES_AS_OF = '2026-09-21';
 
 /**
  * Rates for non-Anthropic upstreams (provider.ts DEFAULT_UPSTREAM), USD per MTok, verified
- * 2026-08-10. When `servedBy` names one of these, spend must be priced at ITS rate — pricing a
+ * 2026-08-10 (not re-verified 2026-09-21 — Anthropic rates were). When `servedBy` names one of these, spend must be priced at ITS rate — pricing a
  * gpt answer at Claude rates is fiction.
  */
 const UPSTREAM_RATES: Record<string, { input: number; output: number }> = {
@@ -170,6 +181,26 @@ export function costForServedBy(
  */
 export function ceilingCostUsd(inputTokens: number, outputTokens: number): number {
   return costForModel(CEILING_MODEL, inputTokens, outputTokens);
+}
+
+/**
+ * The cache-honest counterfactual. A native fork (Claude Code `/fork`, any cache-shared copy)
+ * does not re-pay list price for the parent transcript: it reads it from the prompt cache. This
+ * prices the ENTIRE baseline input at the model's cache-hit rate — deliberately generous to the
+ * baseline (the new question itself is never cached) so the savings it implies are a floor.
+ */
+export function warmBaselineCostUsd(
+  modelId: string,
+  baselineInputTokens: number,
+  outputTokens: number,
+): number {
+  const rate = modelSpec(modelId);
+  const usd = (baselineInputTokens * rate.cacheRead + outputTokens * rate.output) / 1_000_000;
+  return Math.round(usd * 1e6) / 1e6;
+}
+
+export function warmCeilingCostUsd(baselineInputTokens: number, outputTokens: number): number {
+  return warmBaselineCostUsd(CEILING_MODEL, baselineInputTokens, outputTokens);
 }
 
 /** Legacy shape kept for callers that price by tier. Derived, so the catalog stays single-source. */

@@ -17,14 +17,16 @@
       tier: "quick",
       input: 1,
       output: 5,
+      cacheRead: 0.1,
       blurb: "Fastest and cheapest. Fact lookups answerable straight from the brief."
     },
     {
       id: "claude-sonnet-5",
       label: "Sonnet 5",
       tier: "thoughtful",
-      input: 3,
-      output: 15,
+      input: 2,
+      output: 10,
+      cacheRead: 0.2,
       blurb: "Balanced. Synthesis and explanation across a handful of facts."
     },
     {
@@ -33,14 +35,16 @@
       tier: "deep",
       input: 5,
       output: 25,
+      cacheRead: 0.5,
       blurb: "Deep reasoning. Multi-constraint ranking and weighing trade-offs."
     },
     {
       id: "claude-fable-5",
-      label: "Fable 5",
+      label: "Fable 5.1",
       tier: "deep",
       input: 10,
       output: 50,
+      cacheRead: 0.25,
       blurb: "The ceiling. Where a deep answer goes when it still is not good enough."
     }
   ];
@@ -364,7 +368,7 @@ That is what this branch's brief supports; anything beyond it would need more of
   function mockDistill(prompt) {
     const topic = /Branch topic:\s*(.*)$/m.exec(prompt)?.[1] ?? "";
     const body = prompt.split(/^Branch topic:.*$/m).pop() ?? prompt;
-    const statements = sentencesOf(body).filter((s) => !s.endsWith("?"));
+    const statements = sentencesWithRole(body).filter((s) => s.role === "assistant" && !s.text.endsWith("?")).map((s) => s.text);
     const best = rankByRelevance(statements, keywords(topic), 1, topic)[0];
     if (!best) return `No durable conclusion reached on ${topic || "this branch"}.`;
     const words = best.replace(/\*\*/g, "").split(/\s+/);

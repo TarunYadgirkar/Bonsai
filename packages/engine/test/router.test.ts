@@ -519,7 +519,7 @@ describe('completeWithEscalation', () => {
     expect(out.routing.escalated).toBe(true);
     expect(out.routing.tier).toBe('deep');
     expect(out.routing.model).toBe('claude-fable-5');
-    expect(out.routing.label).toBe('Fable 5 · High effort');
+    expect(out.routing.label).toBe('Fable 5.1 · High effort');
     expect(out.routing.estCostUsd).toBe(0.75);
   });
 

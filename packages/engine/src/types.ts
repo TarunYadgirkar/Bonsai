@@ -204,8 +204,12 @@ export interface EconomicsTotals {
 export interface EconomicsBaseline {
   /** Full-history input tokens across every logged inference. */
   inputTokens: number;
-  /** Strong-model-always cost across every logged inference. */
+  /** Strong-model-always cost across every logged inference, at list input rates. */
   costUsd: number;
+  /** The same counterfactual with the full history read from a warm prompt cache — what a
+   *  cache-shared native fork actually pays. Always ≤ costUsd. */
+  warmCostUsd: number;
   tokensSavedPct: number;
   costSavedPct: number;
+  warmCostSavedPct: number;
 }

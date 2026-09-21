@@ -5,6 +5,7 @@ import {
   measuredFigure,
   savingsCurve,
   sessionStats,
+  warmBaselineOf,
   type StatsLog,
 } from '../src/stats';
 import {
@@ -216,6 +217,21 @@ describe('sessionStats', () => {
     expect(savings.costSavedPct).toBe(81.9);
   });
 
+  it('reports the cache-warm baseline beside the list-rate one, never larger', () => {
+    const rows = fixture();
+    const { savings } = sessionStats(rows);
+    const expected = rows.reduce((sum, l) => sum + warmBaselineOf(l), 0);
+    expect(savings.warmBaselineCostUsd).toBeCloseTo(expected, 6);
+    expect(savings.warmBaselineCostUsd).toBeLessThan(savings.baselineCostUsd);
+    expect(savings.warmCostSavedUsd).toBeCloseTo(savings.warmBaselineCostUsd - 0.0078, 6);
+    expect(savings.warmCostSavedPct).toBeLessThan(savings.costSavedPct);
+  });
+
+  it('derives a single row warm baseline from its stored token counts', () => {
+    // 1000 cached tokens on Opus 5 ($0.50/M) + 50 output ($25/M).
+    expect(warmBaselineOf(log())).toBe(0.00175);
+  });
+
   it('breaks down by purpose in canonical order with cost shares summing to ~100', () => {
     const { byPurpose } = sessionStats(fixture());
     expect(byPurpose.map((p) => p.purpose)).toEqual(['chat', 'compile', 'classify', 'merge']);
@@ -278,7 +294,7 @@ describe('savingsCurve', () => {
     const curve = savingsCurve(fixture());
     expect(curve).toHaveLength(6);
     expect(curve.map((p) => p.i)).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(curve[0]).toEqual({ i: 1, actual: 0.00035, baseline: 0.00625 });
+    expect(curve[0]).toEqual({ i: 1, actual: 0.00035, baseline: 0.00625, warm: 0.00175 });
     expect(curve[5].actual).toBeCloseTo(0.0078, 6);
     expect(curve[5].baseline).toBeCloseTo(0.043, 6);
   });
