@@ -13,7 +13,7 @@ export type TurnCommand =
   | { kind: 'abandon' };
 
 const FORK =
-  /^(?:(?:hold on|hang on|wait|quick|real quick)[,.!]?\s+)?(?:(?:a\s+)?side\s+(?:question|thought)|tangent|btw|branch(?:\s+(?:off|here))?)\b\s*[:,.\-–—]?\s*([\s\S]*)$/i;
+  /^(?:(?:hold on|hang on|wait|quick|real quick)[,.!]?\s+)?(?:(?:(?:a\s+)?side\s+(?:question|thought))\b\s*[:,.\-–—]?|(?:tangent|btw|branch(?:\s+(?:off|here))?)\s*[:,\-–—])\s*([\s\S]*)$/i;
 
 const MERGE =
   /^(?:(?:merge|keep|save)\s+(?:that|this|it)|remember\s+(?:that|this)|that'?s\s+(?:useful|good|it),?\s+merge\s+it|(?:go|take\s+me)\s+back\s+to\s+the\s+(?:main|trunk|original)(?:\s+thread)?)\s*[.!]?$/i;

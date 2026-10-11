@@ -91,7 +91,7 @@ Install the plugin:
 The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
 consume. It is not on npm yet; it is built to publish on its own (`cd packages/engine && pnpm
 publish` builds a typed `dist` via `prepublishOnly`). Tree model, path assembly, salience compiler,
-learning router, recall, honest pricing. 279 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
+learning router, recall, honest pricing. 283 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
 
 ## Run it
 

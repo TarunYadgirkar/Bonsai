@@ -7,7 +7,7 @@ describe('parseTurnCommand', () => {
     ['Hold on, side question, how big is the Hertz stipend?', 'how big is the Hertz stipend?'],
     ['wait side thought - is ML@B worth the spike?', 'is ML@B worth the spike?'],
     ['tangent: what does Codebase build?', 'what does Codebase build?'],
-    ['btw what time is the info session', 'what time is the info session'],
+    ['btw, what time is the info session', 'what time is the info session'],
     ['branch off: compare the two deadlines', 'compare the two deadlines'],
   ])('forks on %j', (text, question) => {
     expect(parseTurnCommand(text)).toEqual({ kind: 'fork', question });
@@ -35,6 +35,9 @@ describe('parseTurnCommand', () => {
     'never mind the deadline, what about workload?',
     'side question:',
     'btw ok',
+    'branch prediction is how CPUs guess',
+    'btw what time is it',
+    'tangent lines touch a curve once',
     '',
     'Merge that with the earlier plan and rank them',
   ])('leaves %j as an ordinary message', (text) => {

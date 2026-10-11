@@ -170,7 +170,11 @@ function fmt(n: number): string {
  */
 function oneLine(text: string): string {
   // Control chars only (incl. newlines/tabs/DEL) collapse to a space; hyphens etc. survive.
-  const stripped = Array.from(text, (ch) => (ch.codePointAt(0)! < 0x20 || ch === '\u007f' ? ' ' : ch)).join('');
+  const stripped = Array.from(text, (ch) =>
+    ch.codePointAt(0)! < 0x20 || ['\u007f', '\u0085', '\u2028', '\u2029'].includes(ch) ? ' ' : ch,
+  )
+    .join('')
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '');
   return stripped.replace(/\s{2,}/g, ' ').trim();
 }
 

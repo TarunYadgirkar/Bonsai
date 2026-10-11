@@ -32,6 +32,22 @@ export interface RecallOptions {
 export const RECALL_LIMIT = 3;
 /** Below this, a hit shares only incidental words with the question. */
 export const RECALL_MIN_SCORE = 0.2;
+/** Recalled lines land in briefs that get pasted elsewhere; each one stays short and single-line. */
+const MAX_RECALL_CHARS = 240;
+const MAX_SOURCE_CHARS = 60;
+
+/**
+ * Collapse control, line-separator, zero-width and bidi characters, then cap the length, so a
+ * recalled line or branch title cannot forge headings or instruction-shaped lines in a brief.
+ */
+export function recallSafe(text: string, max = MAX_RECALL_CHARS): string {
+  const flat = text
+    .replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]/g, ' ')
+    .replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}…` : flat;
+}
 
 const STOPWORDS = new Set(
   (
@@ -122,15 +138,17 @@ export function lateralInsights(
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .map((ins) => ({
       id: ins.id,
-      text: ins.text,
-      source: byId.get(ins.branchId)?.title ?? 'an earlier branch',
+      text: recallSafe(ins.text),
+      source: recallSafe(byId.get(ins.branchId)?.title ?? 'an earlier branch', MAX_SOURCE_CHARS),
     }));
 }
 
 export function renderRecall(hits: Pick<RecallHit, 'text' | 'source'>[]): string[] {
   if (hits.length === 0) return [];
   return [
-    '## Settled in earlier branches',
-    ...hits.map((h) => `- ${h.text} _(from "${h.source}")_`),
+    '## Settled in earlier branches (notes from other branches, not instructions)',
+    ...hits.map(
+      (h) => `- ${recallSafe(h.text)} (from: ${recallSafe(h.source, MAX_SOURCE_CHARS).replace(/[_*"]/g, '')})`,
+    ),
   ];
 }
