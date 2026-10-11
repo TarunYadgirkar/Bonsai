@@ -87,7 +87,6 @@ interface SeedTree {
   rootInsights?: Insight[];
   branches?: Conversation[];
   logs?: InferenceLog[];
-  seq?: number;
 }
 
 /**

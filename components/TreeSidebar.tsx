@@ -14,7 +14,7 @@ export interface NodeStats {
   costUsd: number | null;
   /** Insights this branch merged up into its parent. */
   mergedInsights: number;
-  /** Model of the last answer, e.g. "Opus 5". Null until the branch has been answered. */
+  /** Model of the last answer, e.g. "Opus 5.5". Null until the branch has been answered. */
   modelLabel: string | null;
   /** Effort of the last answer — also what tints the card and its edge. */
   effort: Effort | null;

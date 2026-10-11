@@ -3,7 +3,7 @@
  * aggregation, and the cumulative savings curve. Pure functions over InferenceLog rows —
  * no I/O, no store coupling.
  */
-import { MODELS, MODEL_TIERS, warmBaselineCostUsd } from './models';
+import { MODEL_TIERS, modelLabelFor, warmBaselineCostUsd } from './models';
 import type { InferenceLog, InferencePurpose } from './types';
 
 /** Where a number came from: provider-reported usage, or a chars/4-style heuristic. */
@@ -126,7 +126,7 @@ function totalsOf(rows: readonly StatsLog[]): GroupTotals {
 }
 
 /** modelSpec() falls back to the catalog's first entry, which would mislabel unknown ids. */
-const modelLabel = (id: string): string => MODELS.find((m) => m.id === id)?.label ?? id;
+const modelLabel = modelLabelFor;
 
 function purposeBreakdown(logs: readonly StatsLog[], totalCostUsd: number): PurposeStats[] {
   return PURPOSE_ORDER.flatMap((purpose) => {

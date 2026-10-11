@@ -6,14 +6,14 @@ import type { Effort, Tier } from './types';
  * The catalog behind the mode picker: three Claude models × four effort levels, plus Auto
  * (no explicit choice — the router classifies and picks for you).
  *
- * These are display names and published-rate pricing used to model spend; lib/provider.ts maps them
- * onto real upstream ids. Change them here only; nothing else in the codebase may name a model.
+ * Each id is the real Anthropic model id (provider.ts calls it as-is) and carries its published
+ * rate. Change them here only; nothing else in the codebase may name a model.
  */
 export interface ModelSpec {
   id: string;
   label: string;
   /**
-   * Tier used for classification and baselines. Opus 5 and Fable 5 share `deep` because `Tier` is
+   * Tier used for classification and baselines. Opus 5.5 and Fable 5.1 share `deep` because `Tier` is
    * frozen at three values (lib/types.ts) — the ladder above deep is expressed by model, not tier.
    */
   tier: Tier;
@@ -31,23 +31,23 @@ export interface ModelSpec {
 }
 
 /**
- * Rates verified against platform.claude.com pricing 2026-09-21. Sonnet 5's $2/$10 launch price
- * became the standard price (the September 1 increase was cancelled). Cache reads are 0.1x list
- * input on every model except Fable 5.1, where they are 0.025x.
+ * Rates verified against platform.claude.com pricing 2026-10-10. Cache reads are 0.1x list input
+ * except on Opus 5.5 ($0.20, 0.05x) and Fable 5.1 ($0.25, 0.025x). Haiku 5.5's rate is the <=100K-token
+ * prompt card; briefs never get near that, and the ceiling baseline is priced on Fable anyway.
  */
 export const MODELS: ModelSpec[] = [
   {
-    id: 'claude-haiku-4-5',
-    label: 'Haiku 4.5',
+    id: 'claude-haiku-5-5',
+    label: 'Haiku 5.5',
     tier: 'quick',
-    input: 1,
-    output: 5,
-    cacheRead: 0.1,
+    input: 0.1,
+    output: 0.5,
+    cacheRead: 0.01,
     blurb: 'Fastest and cheapest. Fact lookups answerable straight from the brief.',
   },
   {
-    id: 'claude-sonnet-5',
-    label: 'Sonnet 5',
+    id: 'claude-sonnet-5-5',
+    label: 'Sonnet 5.5',
     tier: 'thoughtful',
     input: 2,
     output: 10,
@@ -55,16 +55,16 @@ export const MODELS: ModelSpec[] = [
     blurb: 'Balanced. Synthesis and explanation across a handful of facts.',
   },
   {
-    id: 'claude-opus-5',
-    label: 'Opus 5',
+    id: 'claude-opus-5-5',
+    label: 'Opus 5.5',
     tier: 'deep',
-    input: 5,
-    output: 25,
-    cacheRead: 0.5,
+    input: 4,
+    output: 20,
+    cacheRead: 0.2,
     blurb: 'Deep reasoning. Multi-constraint ranking and weighing trade-offs.',
   },
   {
-    id: 'claude-fable-5',
+    id: 'claude-fable-5-1',
     label: 'Fable 5.1',
     tier: 'deep',
     input: 10,
@@ -75,7 +75,30 @@ export const MODELS: ModelSpec[] = [
 ];
 
 /** Top of the ladder: what a failed deep answer escalates onto, and the highest manual pick. */
-export const CEILING_MODEL = 'claude-fable-5';
+export const CEILING_MODEL = 'claude-fable-5-1';
+
+/**
+ * Catalog ids before the 2026-10 refresh, mapped to their successors. Stored trees, extension
+ * pins and plugin pins still carry these; they resolve to the successor rather than silently
+ * landing on the first catalog entry. Historical rows keep their own label (`legacyLabel`).
+ */
+export const LEGACY_MODEL_IDS: Record<string, { successor: string; label: string }> = {
+  'claude-haiku-4-5': { successor: 'claude-haiku-5-5', label: 'Haiku 4.5' },
+  'claude-sonnet-5': { successor: 'claude-sonnet-5-5', label: 'Sonnet 5' },
+  'claude-opus-5': { successor: 'claude-opus-5-5', label: 'Opus 5' },
+  'claude-fable-5': { successor: 'claude-fable-5-1', label: 'Fable 5' },
+};
+
+/** Catalog id for any id the app has ever stored: current ids pass through, legacy ids map forward. */
+export function canonicalModelId(id: string): string {
+  if (MODELS.some((m) => m.id === id)) return id;
+  return LEGACY_MODEL_IDS[id]?.successor ?? id;
+}
+
+/** Display label for a stored id, without relabelling history as the successor. */
+export function modelLabelFor(id: string): string {
+  return MODELS.find((m) => m.id === id)?.label ?? LEGACY_MODEL_IDS[id]?.label ?? id;
+}
 
 export interface EffortSpec {
   level: Effort;
@@ -94,9 +117,9 @@ export const EFFORTS: EffortSpec[] = [
 
 /** What Auto picks when the classifier lands on a tier. */
 export const TIER_DEFAULTS: Record<Tier, { model: string; effort: Effort }> = {
-  quick: { model: 'claude-haiku-4-5', effort: 'low' },
-  thoughtful: { model: 'claude-sonnet-5', effort: 'medium' },
-  deep: { model: 'claude-opus-5', effort: 'high' },
+  quick: { model: 'claude-haiku-5-5', effort: 'low' },
+  thoughtful: { model: 'claude-sonnet-5-5', effort: 'medium' },
+  deep: { model: 'claude-opus-5-5', effort: 'high' },
 };
 
 export const MODEL_TIERS: Record<Tier, string> = {
@@ -106,7 +129,8 @@ export const MODEL_TIERS: Record<Tier, string> = {
 };
 
 export function modelSpec(id: string): ModelSpec {
-  return MODELS.find((m) => m.id === id) ?? MODELS[0];
+  const canonical = canonicalModelId(id);
+  return MODELS.find((m) => m.id === canonical) ?? MODELS[0];
 }
 
 export function effortSpec(level: Effort): EffortSpec {
@@ -134,11 +158,11 @@ export function costForModel(modelId: string, inputTokens: number, outputTokens:
 /** The whole price catalog (ModelSpec rates + UPSTREAM_RATES) was last verified against
  *  provider pricing pages on this date. Surfaced in the economics UI — stale prices should
  *  look stale, not eternal. */
-export const PRICES_AS_OF = '2026-09-21';
+export const PRICES_AS_OF = '2026-10-10';
 
 /**
  * Rates for non-Anthropic upstreams (provider.ts DEFAULT_UPSTREAM), USD per MTok, verified
- * 2026-08-10 (not re-verified 2026-09-21 — Anthropic rates were). When `servedBy` names one of these, spend must be priced at ITS rate — pricing a
+ * 2026-08-10 (not re-verified since; Anthropic rates were, 2026-10-10). When `servedBy` names one of these, spend must be priced at ITS rate — pricing a
  * gpt answer at Claude rates is fiction.
  */
 const UPSTREAM_RATES: Record<string, { input: number; output: number }> = {
@@ -159,7 +183,8 @@ const UPSTREAM_RATES: Record<string, { input: number; output: number }> = {
 export function isPricedServedBy(servedBy: string | undefined): boolean {
   if (!servedBy) return true;
   if (UPSTREAM_RATES[servedBy]) return true;
-  return MODELS.some((m) => servedBy.startsWith(m.id));
+  const known = [...MODELS.map((m) => m.id), ...Object.keys(LEGACY_MODEL_IDS)];
+  return known.some((id) => servedBy.startsWith(id));
 }
 
 /** Cost at the rate of whichever model actually answered; Bonsai-catalog rate otherwise. */
@@ -225,7 +250,7 @@ export const TIER_EFFORT: Record<Tier, string> = {
 
 /**
  * How a routing decision reads on screen: model and effort, the way Claude states it —
- * "Opus 5 · High effort". The old ⚡/🧠/🔬 tier names are gone from the surface (Tarun,
+ * "Opus 5.5 · High effort". The old ⚡/🧠/🔬 tier names are gone from the surface (Tarun,
  * 2026-08-07); `Tier` survives only as the classifier's internal 1-3 mapping.
  */
 export function routingLabel(modelId: string, effort: Effort): string {

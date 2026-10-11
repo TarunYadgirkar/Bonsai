@@ -71,7 +71,7 @@ describe('providerComplete — anthropic', () => {
     });
 
     const result = await providerComplete({
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       messages: MESSAGES,
       maxTokens: 300,
     });
@@ -80,7 +80,7 @@ describe('providerComplete — anthropic', () => {
       text: 'Applications close on March 1.',
       inputTokens: 42,
       outputTokens: 11,
-      servedBy: 'claude-sonnet-5',
+      servedBy: 'claude-sonnet-5-5',
     });
   });
 
@@ -89,7 +89,7 @@ describe('providerComplete — anthropic', () => {
     stubFetch({ ok: false, status: 429, text: 'rate limited' });
 
     const result = await providerComplete({
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       messages: MESSAGES,
       maxTokens: 300,
     });
@@ -109,7 +109,7 @@ describe('providerComplete — anthropic', () => {
     });
 
     const result = await providerComplete({
-      model: 'claude-fable-5',
+      model: 'claude-fable-5-1',
       messages: MESSAGES,
       maxTokens: 300,
     });
@@ -129,7 +129,7 @@ describe('providerComplete — anthropic', () => {
     });
 
     const result = await providerComplete({
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       messages: MESSAGES,
       maxTokens: 300,
     });
@@ -150,7 +150,7 @@ describe('providerComplete — openai', () => {
     });
 
     const result = await providerComplete({
-      model: 'claude-sonnet-5',
+      model: 'claude-sonnet-5-5',
       messages: MESSAGES,
       maxTokens: 512,
     });

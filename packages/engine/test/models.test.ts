@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LEGACY_MODEL_IDS,
+  canonicalModelId,
+  isPricedServedBy,
+  modelLabelFor,
   CEILING_MODEL,
   EFFORTS,
   MODELS,
@@ -20,50 +24,50 @@ const TIERS: Tier[] = ['quick', 'thoughtful', 'deep'];
 
 describe('modelSpec', () => {
   it('resolves each catalog id', () => {
-    expect(modelSpec('claude-haiku-4-5').label).toBe('Haiku 4.5');
-    expect(modelSpec('claude-sonnet-5').label).toBe('Sonnet 5');
-    expect(modelSpec('claude-opus-5').label).toBe('Opus 5');
-    expect(modelSpec('claude-fable-5').input).toBe(10);
+    expect(modelSpec('claude-haiku-5-5').label).toBe('Haiku 5.5');
+    expect(modelSpec('claude-sonnet-5-5').label).toBe('Sonnet 5.5');
+    expect(modelSpec('claude-opus-5-5').label).toBe('Opus 5.5');
+    expect(modelSpec('claude-fable-5-1').input).toBe(10);
   });
 
   it('falls back to the first model on unknown ids', () => {
     expect(modelSpec('gpt-4o')).toBe(MODELS[0]);
-    expect(modelSpec('').id).toBe('claude-haiku-4-5');
+    expect(modelSpec('').id).toBe('claude-haiku-5-5');
   });
 });
 
 describe('costForModel', () => {
   it('prices per million tokens at the model rates', () => {
-    expect(costForModel('claude-opus-5', 1000, 200)).toBe(0.01);
-    expect(costForModel('claude-haiku-4-5', 123, 456)).toBe(0.002403);
-    expect(costForModel('claude-fable-5', 1_000_000, 0)).toBe(10);
-    expect(costForModel('claude-sonnet-5', 1_000_000, 1_000_000)).toBe(12);
-    expect(costForModel('claude-sonnet-5', 0, 0)).toBe(0);
+    expect(costForModel('claude-opus-5-5', 1000, 200)).toBe(0.008);
+    expect(costForModel('claude-haiku-5-5', 123, 456)).toBe(0.00024);
+    expect(costForModel('claude-fable-5-1', 1_000_000, 0)).toBe(10);
+    expect(costForModel('claude-sonnet-5-5', 1_000_000, 1_000_000)).toBe(12);
+    expect(costForModel('claude-sonnet-5-5', 0, 0)).toBe(0);
   });
 
   it('rounds to six decimals', () => {
-    expect(costForModel('claude-haiku-4-5', 0.3, 0)).toBe(0);
-    expect(costForModel('claude-haiku-4-5', 0.5, 0)).toBe(0.000001);
+    expect(costForModel('claude-sonnet-5-5', 0.2, 0)).toBe(0);
+    expect(costForModel('claude-sonnet-5-5', 0.5, 0)).toBe(0.000001);
   });
 
   it('prices unknown models at the fallback model rates', () => {
-    expect(costForModel('nope', 1_000_000, 1_000_000)).toBe(6);
+    expect(costForModel('nope', 1_000_000, 1_000_000)).toBe(0.6);
   });
 });
 
 describe('estimateCostUsd', () => {
   it('prices a tier at its default model', () => {
-    expect(estimateCostUsd('deep', 1000, 200)).toBe(costForModel('claude-opus-5', 1000, 200));
-    expect(estimateCostUsd('quick', 1000, 200)).toBe(costForModel('claude-haiku-4-5', 1000, 200));
+    expect(estimateCostUsd('deep', 1000, 200)).toBe(costForModel('claude-opus-5-5', 1000, 200));
+    expect(estimateCostUsd('quick', 1000, 200)).toBe(costForModel('claude-haiku-5-5', 1000, 200));
   });
 });
 
 describe('tierFor', () => {
   it('maps each model to its tier', () => {
-    expect(tierFor('claude-haiku-4-5')).toBe('quick');
-    expect(tierFor('claude-sonnet-5')).toBe('thoughtful');
-    expect(tierFor('claude-opus-5')).toBe('deep');
-    expect(tierFor('claude-fable-5')).toBe('deep');
+    expect(tierFor('claude-haiku-5-5')).toBe('quick');
+    expect(tierFor('claude-sonnet-5-5')).toBe('thoughtful');
+    expect(tierFor('claude-opus-5-5')).toBe('deep');
+    expect(tierFor('claude-fable-5-1')).toBe('deep');
   });
 
   it('falls back to quick on unknown ids', () => {
@@ -86,13 +90,13 @@ describe('effortSpec', () => {
 
 describe('routingLabel', () => {
   it('reads model · effort', () => {
-    expect(routingLabel('claude-opus-5', 'high')).toBe('Opus 5 · High effort');
-    expect(routingLabel('claude-sonnet-5', 'medium')).toBe('Sonnet 5 · Medium effort');
-    expect(routingLabel('claude-fable-5', 'max')).toBe('Fable 5.1 · Max effort');
+    expect(routingLabel('claude-opus-5-5', 'high')).toBe('Opus 5.5 · High effort');
+    expect(routingLabel('claude-sonnet-5-5', 'medium')).toBe('Sonnet 5.5 · Medium effort');
+    expect(routingLabel('claude-fable-5-1', 'max')).toBe('Fable 5.1 · Max effort');
   });
 
   it('inherits both fallbacks on unknown inputs', () => {
-    expect(routingLabel('nope', 'turbo' as unknown as Effort)).toBe('Haiku 4.5 · Low effort');
+    expect(routingLabel('nope', 'turbo' as unknown as Effort)).toBe('Haiku 5.5 · Low effort');
   });
 });
 
@@ -108,8 +112,8 @@ describe('catalog consistency', () => {
     expect(EFFORTS.map((e) => e.level)).toEqual(['low', 'medium', 'high', 'max']);
   });
 
-  it('CEILING_MODEL is claude-fable-5 and sits in the catalog on deep', () => {
-    expect(CEILING_MODEL).toBe('claude-fable-5');
+  it('CEILING_MODEL is claude-fable-5-1 and sits in the catalog on deep', () => {
+    expect(CEILING_MODEL).toBe('claude-fable-5-1');
     expect(MODELS.some((m) => m.id === CEILING_MODEL)).toBe(true);
     expect(modelSpec(CEILING_MODEL).tier).toBe('deep');
   });
@@ -117,9 +121,9 @@ describe('catalog consistency', () => {
 
 describe('warmBaselineCostUsd', () => {
   it('prices the whole baseline input at the cache-hit rate and output at list', () => {
-    // 1M cached tokens on Opus 5 = $0.50; 1M output = $25.
-    expect(warmBaselineCostUsd('claude-opus-5', 1_000_000, 1_000_000)).toBe(25.5);
-    expect(warmBaselineCostUsd('claude-haiku-4-5', 1_000_000, 0)).toBe(0.1);
+    // 1M cached tokens on Opus 5.5 = $0.20; 1M output = $20.
+    expect(warmBaselineCostUsd('claude-opus-5-5', 1_000_000, 1_000_000)).toBe(20.2);
+    expect(warmBaselineCostUsd('claude-haiku-5-5', 1_000_000, 0)).toBe(0.01);
   });
 
   it('is never above the list-rate counterfactual', () => {
@@ -130,11 +134,39 @@ describe('warmBaselineCostUsd', () => {
     }
   });
 
-  it('cache reads are 0.1x list input everywhere except Fable 5.1 at 0.025x', () => {
+  it('cache reads are 0.1x list input except Opus 5.5 at 0.05x and Fable 5.1 at 0.025x', () => {
+    const ratio: Record<string, number> = { 'claude-opus-5-5': 0.05, 'claude-fable-5-1': 0.025 };
     for (const m of MODELS) {
-      const expected = m.id === 'claude-fable-5' ? 0.025 : 0.1;
+      const expected = ratio[m.id] ?? 0.1;
       expect(m.cacheRead / m.input).toBeCloseTo(expected, 6);
     }
     expect(warmCeilingCostUsd(1_000_000, 0)).toBe(0.25);
+  });
+});
+
+describe('legacy model ids', () => {
+  it('maps every pre-refresh id onto a catalog successor', () => {
+    for (const [old, { successor }] of Object.entries(LEGACY_MODEL_IDS)) {
+      expect(canonicalModelId(old), old).toBe(successor);
+      expect(MODELS.some((m) => m.id === successor), successor).toBe(true);
+    }
+  });
+
+  it('resolves a stored pin to its successor instead of the first catalog entry', () => {
+    expect(modelSpec('claude-opus-5').id).toBe('claude-opus-5-5');
+    expect(modelSpec('claude-fable-5').id).toBe('claude-fable-5-1');
+    expect(tierFor('claude-sonnet-5')).toBe('thoughtful');
+  });
+
+  it('keeps the historical label for stored rows', () => {
+    expect(modelLabelFor('claude-haiku-4-5')).toBe('Haiku 4.5');
+    expect(modelLabelFor('claude-haiku-5-5')).toBe('Haiku 5.5');
+    expect(modelLabelFor('gpt-5.5')).toBe('gpt-5.5');
+  });
+
+  it('still prices historical servedBy ids', () => {
+    expect(isPricedServedBy('claude-haiku-4-5-20251001')).toBe(true);
+    expect(isPricedServedBy('claude-opus-5-5')).toBe(true);
+    expect(isPricedServedBy('mystery-model')).toBe(false);
   });
 });

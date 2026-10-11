@@ -25,7 +25,7 @@ const log = (overrides: Partial<StatsLog> = {}): StatsLog => {
     branchId: 'b1',
     purpose: 'chat',
     tier: 'quick',
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     effort: 'low',
     inputTokens: 100,
     outputTokens: 50,
@@ -40,10 +40,10 @@ const log = (overrides: Partial<StatsLog> = {}): StatsLog => {
 
 /** Mixed purposes, models, escalation, and an override — all rows flagged measured. */
 const fixture = (): StatsLog[] => [
-  log({ purpose: 'chat', model: 'claude-haiku-4-5', measured: true }),
+  log({ purpose: 'chat', model: 'claude-haiku-5-5', measured: true }),
   log({
     purpose: 'chat',
-    model: 'claude-sonnet-5',
+    model: 'claude-sonnet-5-5',
     tier: 'thoughtful',
     effort: 'medium',
     inputTokens: 200,
@@ -56,7 +56,7 @@ const fixture = (): StatsLog[] => [
   }),
   log({
     purpose: 'chat',
-    model: 'claude-opus-5',
+    model: 'claude-opus-5-5',
     tier: 'deep',
     effort: 'high',
     inputTokens: 300,
@@ -99,6 +99,7 @@ const fixture = (): StatsLog[] => [
 describe('TOKENIZER_GENERATION', () => {
   it('pins the verified factors: 1.0 for haiku-4-5/older, 1.3 for 5-family and 4.7+', () => {
     expect(TOKENIZER_GENERATION['claude-haiku-4-5']).toBe(1.0);
+    expect(TOKENIZER_GENERATION['claude-haiku-5']).toBe(1.3);
     expect(TOKENIZER_GENERATION['claude-sonnet-5']).toBe(1.3);
     expect(TOKENIZER_GENERATION['claude-opus-5']).toBe(1.3);
     expect(TOKENIZER_GENERATION['claude-fable-5']).toBe(1.3);
@@ -111,10 +112,10 @@ describe('TOKENIZER_GENERATION', () => {
 
 describe('tokenizerFactor', () => {
   it('resolves the catalog models', () => {
-    expect(tokenizerFactor('claude-haiku-4-5')).toBe(1.0);
-    expect(tokenizerFactor('claude-sonnet-5')).toBe(1.3);
-    expect(tokenizerFactor('claude-opus-5')).toBe(1.3);
-    expect(tokenizerFactor('claude-fable-5')).toBe(1.3);
+    expect(tokenizerFactor('claude-haiku-5-5')).toBe(1.3);
+    expect(tokenizerFactor('claude-sonnet-5-5')).toBe(1.3);
+    expect(tokenizerFactor('claude-opus-5-5')).toBe(1.3);
+    expect(tokenizerFactor('claude-fable-5-1')).toBe(1.3);
   });
 
   it('matches by prefix, so date-suffixed upstream ids resolve', () => {
@@ -140,14 +141,15 @@ describe('estimateTokensFor', () => {
   it('is chars/4 times the generation factor', () => {
     const text = 'a'.repeat(400); // 100 base tokens
     expect(estimateTokensFor(text, 'claude-haiku-4-5')).toBe(100);
-    expect(estimateTokensFor(text, 'claude-opus-5')).toBe(130);
-    expect(estimateTokensFor(text, 'claude-fable-5')).toBe(130);
+    expect(estimateTokensFor(text, 'claude-haiku-5-5')).toBe(130);
+    expect(estimateTokensFor(text, 'claude-opus-5-5')).toBe(130);
+    expect(estimateTokensFor(text, 'claude-fable-5-1')).toBe(130);
   });
 
   it('rounds up and handles empty text', () => {
-    expect(estimateTokensFor('', 'claude-opus-5')).toBe(0);
+    expect(estimateTokensFor('', 'claude-opus-5-5')).toBe(0);
     expect(estimateTokensFor('abcde', 'claude-haiku-4-5')).toBe(2); // 1.25 → 2
-    expect(estimateTokensFor('abcde', 'claude-opus-5')).toBe(2); // 1.625 → 2
+    expect(estimateTokensFor('abcde', 'claude-opus-5-5')).toBe(2); // 1.625 → 2
   });
 
   it('agrees with the legacy estimator for factor-1.0 models', () => {
@@ -228,8 +230,8 @@ describe('sessionStats', () => {
   });
 
   it('derives a single row warm baseline from its stored token counts', () => {
-    // 1000 cached tokens on Opus 5 ($0.50/M) + 50 output ($25/M).
-    expect(warmBaselineOf(log())).toBe(0.00175);
+    // 1000 cached tokens on Opus 5.5 ($0.20/M) + 50 output ($20/M).
+    expect(warmBaselineOf(log())).toBe(0.0012);
   });
 
   it('breaks down by purpose in canonical order with cost shares summing to ~100', () => {
@@ -255,11 +257,11 @@ describe('sessionStats', () => {
   it('breaks down by model, biggest spend first, with catalog labels', () => {
     const { byModel } = sessionStats(fixture());
     expect(byModel.map((m) => m.model)).toEqual([
-      'claude-opus-5',
-      'claude-sonnet-5',
-      'claude-haiku-4-5',
+      'claude-opus-5-5',
+      'claude-sonnet-5-5',
+      'claude-haiku-5-5',
     ]);
-    expect(byModel.map((m) => m.label)).toEqual(['Opus 5', 'Sonnet 5', 'Haiku 4.5']);
+    expect(byModel.map((m) => m.label)).toEqual(['Opus 5.5', 'Sonnet 5.5', 'Haiku 5.5']);
     const haiku = byModel[2];
     expect(haiku.count).toBe(4);
     expect(haiku.costUsd).toBeCloseTo(0.0017, 6);
@@ -294,7 +296,7 @@ describe('savingsCurve', () => {
     const curve = savingsCurve(fixture());
     expect(curve).toHaveLength(6);
     expect(curve.map((p) => p.i)).toEqual([1, 2, 3, 4, 5, 6]);
-    expect(curve[0]).toEqual({ i: 1, actual: 0.00035, baseline: 0.00625, warm: 0.00175 });
+    expect(curve[0]).toEqual({ i: 1, actual: 0.00035, baseline: 0.00625, warm: 0.0012 });
     expect(curve[5].actual).toBeCloseTo(0.0078, 6);
     expect(curve[5].baseline).toBeCloseTo(0.043, 6);
   });

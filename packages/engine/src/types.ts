@@ -84,9 +84,9 @@ export interface RoutingDecision {
   model: string;
   /** Effort actually used. Optional so pre-M5 consumers still compile; always set by the engine. */
   effort?: Effort;
-  /** Display label for the chosen model, e.g. "Opus 5". Always set by the engine. */
+  /** Display label for the chosen model, e.g. "Opus 5.5". Always set by the engine. */
   modelLabel?: string;
-  /** What the chip should read: "Opus 5 · High effort". No tier names on the surface. */
+  /** What the chip should read: "Opus 5.5 · High effort". No tier names on the surface. */
   label?: string;
   /**
    * Upstream model that actually answered, when a live provider served it. Absent on the mock.

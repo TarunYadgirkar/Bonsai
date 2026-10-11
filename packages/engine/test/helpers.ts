@@ -3,7 +3,7 @@ import type { CompleteFn, CompleteParams, CompleteResult } from '../src/llm';
 export function llmResult(text: string, overrides: Partial<CompleteResult> = {}): CompleteResult {
   return {
     text,
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     tier: 'quick',
     inputTokens: 100,
     outputTokens: 40,

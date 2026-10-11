@@ -3,20 +3,20 @@
  * mock and nothing else changes (AGENTS.md mock-first rule).
  *
  *   ANTHROPIC_API_KEY   → api.anthropic.com/v1/messages       — the honest one: every model name
- *                          on screen (Haiku 4.5 / Sonnet 5 / Opus 5 / Fable 5) is the model that
- *                          actually answered.
+ *                          on screen (Haiku 5.5 / Sonnet 5.5 / Opus 5.5 / Fable 5.1) is the
+ *                          model that actually answered: catalog ids ARE the upstream ids.
  *   OPENAI_API_KEY      → api.openai.com/v1/chat/completions
  *   XAI_API_KEY         → api.x.ai/v1/chat/completions
  *
- * Request shape is driven by a per-model capability record — the 4.6+/5 Claude models reject
- * sampling params (400) and take reasoning effort via output_config.effort, while Haiku 4.5 is
- * the reverse. Never hand-build a request body outside `anthropicBody`.
+ * Request shape is driven by a per-model capability record — current Claude models reject
+ * sampling params (400) and take reasoning effort via output_config.effort, while a legacy
+ * Haiku 4.5 override is the reverse. Never hand-build a request body outside `anthropicBody`.
  *
  * Every failure returns null and the caller falls back to the mock. A dead key, a wrong model
  * name, a rate limit and a timeout all degrade to a working demo (rule 8).
  */
 import { logger } from './logger';
-import { MODELS } from './models';
+import { CEILING_MODEL, MODELS, TIER_DEFAULTS, canonicalModelId } from './models';
 import type { Effort } from './types';
 
 export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'mock';
@@ -40,30 +40,29 @@ export function isLiveProvider(): boolean {
  * the mock rather than breaking the demo, and the fix is an env var rather than a deploy.
  */
 function upstreamModel(bonsaiModelId: string): string {
-  const rung = RUNG_BY_MODEL[bonsaiModelId] ?? 'QUICK';
+  const model = canonicalModelId(bonsaiModelId);
+  const rung = RUNG_BY_MODEL[model] ?? 'QUICK';
   const provider = providerName();
   const override = process.env[`BONSAI_MODEL_${provider.toUpperCase()}_${rung}`];
   if (override) return override;
-  return DEFAULT_UPSTREAM[provider]?.[rung] ?? bonsaiModelId;
+  return DEFAULT_UPSTREAM[provider]?.[rung] ?? model;
 }
 
 type Rung = 'QUICK' | 'MID' | 'DEEP' | 'CEILING';
 
 const RUNG_BY_MODEL: Record<string, Rung> = {
-  'claude-haiku-4-5': 'QUICK',
-  'claude-sonnet-5': 'MID',
-  'claude-opus-5': 'DEEP',
-  'claude-fable-5': 'CEILING',
+  [TIER_DEFAULTS.quick.model]: 'QUICK',
+  [TIER_DEFAULTS.thoughtful.model]: 'MID',
+  [TIER_DEFAULTS.deep.model]: 'DEEP',
+  [CEILING_MODEL]: 'CEILING',
 };
 
-/** Anthropic ids verified 2026-09-21 (Fable 5.1 is the ceiling); others 2026-08-10. Re-verify before shipping — ids rot. */
+/**
+ * Non-Anthropic upstreams, verified 2026-08-10. Anthropic has no entry: the catalog id is the
+ * upstream id. OpenAI's 2026-10 lineup (GPT-5.6 / GPT-6 tiers) is not adopted here until its
+ * exact API ids are confirmed; BONSAI_MODEL_OPENAI_<RUNG> switches without a deploy.
+ */
 const DEFAULT_UPSTREAM: Record<string, Record<Rung, string>> = {
-  anthropic: {
-    QUICK: 'claude-haiku-4-5-20251001',
-    MID: 'claude-sonnet-5',
-    DEEP: 'claude-opus-5',
-    CEILING: 'claude-fable-5-1',
-  },
   openai: {
     QUICK: 'gpt-5.4-mini',
     MID: 'gpt-5.4',
@@ -79,10 +78,11 @@ const DEFAULT_UPSTREAM: Record<string, Record<Rung, string>> = {
 };
 
 /**
- * What each Anthropic upstream accepts. The 4.6+/5 rules (verified 2026-08-10):
- * sampling params 400 on Sonnet 5/Opus 5/Fable 5; output_config.effort exists there and NOT on
- * Haiku 4.5; thinking is adaptive-by-default (always-on for Fable) and max_tokens caps
- * thinking + text COMBINED, so effortful calls need far more headroom than the visible answer.
+ * What each Anthropic upstream accepts (verified 2026-10-10): non-default sampling params 400 on
+ * every current model, Haiku 5.5 included; output_config.effort exists there and NOT on Haiku
+ * 4.5; thinking is adaptive-by-default (cannot be disabled on Opus 5.5 / Fable 5.1) and
+ * max_tokens caps thinking + text COMBINED, so effortful calls need far more headroom than the
+ * visible answer. Haiku 5.5 and Opus 5.5 default to medium effort, so effort is always sent.
  */
 interface AnthropicCaps {
   sampling: boolean;
@@ -205,7 +205,7 @@ async function callAnthropic(upstream: string, params: ProviderParams): Promise<
     stop_reason?: string;
     usage?: { input_tokens?: number; output_tokens?: number };
   };
-  // Fable 5's safety classifiers can end a response with stop_reason "refusal" — degrade rather
+  // Safety classifiers on every current model can end a response with stop_reason "refusal" — degrade rather
   // than surface a half-answer as if it were complete.
   if (body.stop_reason === 'refusal') throw new Error(`anthropic refusal on ${upstream}`);
   return {

@@ -18,8 +18,8 @@ function node(over: Partial<TreeNode>): TreeNode {
     briefTokens: 60,
     prunedPct: 99.6,
     tier: 'quick',
-    model: 'claude-haiku-4-5',
-    modelLabel: 'Haiku 4.5',
+    model: 'claude-haiku-5-5',
+    modelLabel: 'Haiku 5.5',
     effort: 'low',
     status: 'open',
     insight: null,
@@ -40,7 +40,7 @@ describe('escapeHtml', () => {
 describe('nodeCardHtml', () => {
   it('renders model, economics, and the status glyph', () => {
     const html = nodeCardHtml(node({}));
-    expect(html).toContain('Haiku 4.5 · low');
+    expect(html).toContain('Haiku 5.5 · low');
     expect(html).toContain('~14000 tok available → 60 in the brief · 99.6% pruned');
     expect(html).toContain('○'); // open glyph
     expect(html).not.toContain('↳'); // no insight line when not merged

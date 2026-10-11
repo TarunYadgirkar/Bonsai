@@ -117,7 +117,7 @@ const { text, routing: finalRouting } = await completeWithEscalation(
 `complete` goes live when exactly one of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` is
 set — the key selects the provider (`src/provider.ts`; Anthropic wins if more than one is set).
 `BONSAI_MODEL_<PROVIDER>_<QUICK|MID|DEEP|CEILING>` overrides the upstream model id per rung
-(e.g. `BONSAI_MODEL_ANTHROPIC_DEEP=claude-opus-5`) — model names rot faster than deploys, and the
+(e.g. `BONSAI_MODEL_ANTHROPIC_DEEP=claude-opus-5-5`) — model names rot faster than deploys, and the
 fix should be an env var. Every live failure — dead key, wrong model id, rate limit, timeout —
 logs one server-side warn and degrades to the extractive mock; nothing throws.
 

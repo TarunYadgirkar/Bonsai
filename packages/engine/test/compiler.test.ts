@@ -105,7 +105,7 @@ describe('compileBrief', () => {
         inputTokens: 321,
         outputTokens: 87,
         estCostUsd: 0.000756,
-        model: 'claude-haiku-4-5',
+        model: 'claude-haiku-5-5',
         mock: false,
         servedBy: 'claude-haiku-4-5-20251001',
       }),
@@ -116,7 +116,7 @@ describe('compileBrief', () => {
       inputTokens: 321,
       outputTokens: 87,
       estCostUsd: 0.000756,
-      model: 'claude-haiku-4-5',
+      model: 'claude-haiku-5-5',
       mock: false,
       servedBy: 'claude-haiku-4-5-20251001',
     });

@@ -5,7 +5,7 @@ import type { RoutingDecision } from '../src/types';
 
 const routing: RoutingDecision = {
   tier: 'thoughtful',
-  model: 'claude-sonnet-5',
+  model: 'claude-sonnet-5-5',
   effortNote: 'test',
   contextTokens: 10,
   estCostUsd: 0,
@@ -18,7 +18,7 @@ const routing: RoutingDecision = {
 function fakeResult(text: string): CompleteResult {
   return {
     text,
-    model: 'claude-sonnet-5',
+    model: 'claude-sonnet-5-5',
     tier: 'thoughtful',
     inputTokens: 10,
     outputTokens: 5,

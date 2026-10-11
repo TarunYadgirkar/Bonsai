@@ -6,7 +6,7 @@ import type { Conversation, Message, RoutingDecision, Tier } from '../src/types'
 function routingFor(tier: Tier): RoutingDecision {
   return {
     tier,
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-5-5',
     effortNote: 'test',
     contextTokens: 0,
     estCostUsd: 0,

@@ -3,6 +3,9 @@ export { estimateTokens, messagesTokens, prunedPct } from './tokens';
 export {
   CEILING_MODEL,
   EFFORTS,
+  LEGACY_MODEL_IDS,
+  canonicalModelId,
+  modelLabelFor,
   INTERNAL_TIER,
   MODELS,
   MODEL_PRICING,

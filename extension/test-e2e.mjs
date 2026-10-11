@@ -45,7 +45,7 @@ const DRAFT_NODE = {
   briefTokens: 60,
   prunedPct: 94,
   tier: 'small',
-  model: 'claude-haiku-4-5-20251001',
+  model: 'claude-haiku-5-5',
   modelLabel: 'Haiku',
   effort: 'low',
   status: 'draft',

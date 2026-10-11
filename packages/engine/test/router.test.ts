@@ -58,7 +58,7 @@ describe('route — manual mode', () => {
       {
         question: 'Anything',
         contextTokens: 400,
-        mode: { mode: 'manual', model: 'claude-opus-5' },
+        mode: { mode: 'manual', model: 'claude-opus-5-5' },
       },
       { complete },
     );
@@ -66,14 +66,14 @@ describe('route — manual mode', () => {
     expect(d.overridden).toBe(true);
     expect(d.escalated).toBe(false);
     expect(d.tier).toBe('deep');
-    expect(d.model).toBe('claude-opus-5');
+    expect(d.model).toBe('claude-opus-5-5');
     expect(d.effort).toBe('high');
-    expect(d.modelLabel).toBe('Opus 5');
-    expect(d.label).toBe('Opus 5 · High effort');
+    expect(d.modelLabel).toBe('Opus 5.5');
+    expect(d.label).toBe('Opus 5.5 · High effort');
     expect(d.complexity).toBe(3);
-    expect(d.reason).toBe('You picked Opus 5 at High effort; classification skipped.');
+    expect(d.reason).toBe('You picked Opus 5.5 at High effort; classification skipped.');
     expect(d.contextTokens).toBe(400);
-    expect(d.estCostUsd).toBe(costForModel('claude-opus-5', 400, 750));
+    expect(d.estCostUsd).toBe(costForModel('claude-opus-5-5', 400, 750));
     expect(d.coveredByBrief).toBeUndefined();
   });
 
@@ -83,7 +83,7 @@ describe('route — manual mode', () => {
       {
         question: 'Anything',
         contextTokens: 100,
-        mode: { mode: 'manual', model: 'claude-haiku-4-5', effort: 'max' },
+        mode: { mode: 'manual', model: 'claude-haiku-5-5', effort: 'max' },
       },
       { complete },
     );
@@ -92,7 +92,7 @@ describe('route — manual mode', () => {
     expect(d.tier).toBe('quick');
     expect(d.effort).toBe('max');
     expect(d.complexity).toBe(1);
-    expect(d.estCostUsd).toBe(costForModel('claude-haiku-4-5', 100, 1500));
+    expect(d.estCostUsd).toBe(costForModel('claude-haiku-5-5', 100, 1500));
   });
 });
 
@@ -104,16 +104,16 @@ describe('route — pinned mode', () => {
         question: 'Anything',
         contextTokens: 400,
         pinnedTier: 'quick',
-        pinnedMode: { mode: 'manual', model: 'claude-sonnet-5', effort: 'high' },
+        pinnedMode: { mode: 'manual', model: 'claude-sonnet-5-5', effort: 'high' },
       },
       { complete },
     );
     expect(calls).toHaveLength(0);
     expect(d.overridden).toBe(true);
     expect(d.tier).toBe('thoughtful');
-    expect(d.model).toBe('claude-sonnet-5');
+    expect(d.model).toBe('claude-sonnet-5-5');
     expect(d.effort).toBe('high');
-    expect(d.reason).toBe('You picked Sonnet 5 at High effort; classification skipped.');
+    expect(d.reason).toBe('You picked Sonnet 5.5 at High effort; classification skipped.');
     expect(d.coveredByBrief).toBeUndefined();
   });
 
@@ -123,13 +123,13 @@ describe('route — pinned mode', () => {
       {
         question: 'Anything',
         contextTokens: 400,
-        mode: { mode: 'manual', model: 'claude-opus-5' },
-        pinnedMode: { mode: 'manual', model: 'claude-haiku-4-5', effort: 'low' },
+        mode: { mode: 'manual', model: 'claude-opus-5-5' },
+        pinnedMode: { mode: 'manual', model: 'claude-haiku-5-5', effort: 'low' },
       },
       { complete },
     );
     expect(calls).toHaveLength(0);
-    expect(d.model).toBe('claude-opus-5');
+    expect(d.model).toBe('claude-opus-5-5');
     expect(d.effort).toBe('high');
   });
 
@@ -148,7 +148,7 @@ describe('route — pinned mode', () => {
     expect(d.overridden).toBe(true);
     expect(d.tier).toBe('thoughtful');
     expect(d.reason).toBe(
-      'Branch pinned to Sonnet 5 · Medium effort by you; classification skipped.',
+      'Branch pinned to Sonnet 5.5 · Medium effort by you; classification skipped.',
     );
   });
 });
@@ -162,10 +162,10 @@ describe('route — pinned tier', () => {
     expect(calls).toHaveLength(0);
     expect(d.overridden).toBe(true);
     expect(d.tier).toBe('deep');
-    expect(d.model).toBe('claude-opus-5');
+    expect(d.model).toBe('claude-opus-5-5');
     expect(d.effort).toBe('high');
     expect(d.complexity).toBe(3);
-    expect(d.reason).toBe('Branch pinned to Opus 5 · High effort by you; classification skipped.');
+    expect(d.reason).toBe('Branch pinned to Opus 5.5 · High effort by you; classification skipped.');
     expect(d.coveredByBrief).toBeUndefined();
   });
 
@@ -204,7 +204,7 @@ describe('route — auto mode', () => {
     expect(calls[0].messages[1].content).toContain('Rank the clubs by opportunity cost.');
     expect(calls[0].messages[1].content).not.toContain('Brief facts:');
     expect(d.tier).toBe('deep');
-    expect(d.model).toBe('claude-opus-5');
+    expect(d.model).toBe('claude-opus-5-5');
     expect(d.effort).toBe('high');
     expect(d.overridden).toBe(false);
     expect(d.escalated).toBe(false);
@@ -214,7 +214,7 @@ describe('route — auto mode', () => {
     expect(d.kind).toBe('other');
     expect(d.confidence).toBe(1);
     expect(d.reason).toBe('weighs trade-offs. A other question, complexity 3/3, against a 400-token brief.');
-    expect(d.estCostUsd).toBe(costForModel('claude-opus-5', 400, 750));
+    expect(d.estCostUsd).toBe(costForModel('claude-opus-5-5', 400, 750));
     // Feedback must attribute to the classifier's own tier; unshifted, it equals the final tier.
     expect(d.classifiedTier).toBe('deep');
   });
@@ -282,7 +282,7 @@ describe('route — auto mode', () => {
     const { complete } = fakeComplete([llmResult('the model rambled with no json')]);
     const d = await route({ question: 'Anything', contextTokens: 400 }, { complete });
     expect(d.tier).toBe('thoughtful');
-    expect(d.model).toBe('claude-sonnet-5');
+    expect(d.model).toBe('claude-sonnet-5-5');
     expect(d.effort).toBe('medium');
     expect(d.complexity).toBe(2);
     expect(d.overridden).toBe(false);
@@ -331,7 +331,7 @@ describe('completeWithEscalation', () => {
     const widen = vi.fn(() => ({ userPrompt: 'WIDENED', addedTokens: 60 }));
     const { complete, calls } = fakeComplete([
       llmResult(GOOD, {
-        model: 'claude-sonnet-5',
+        model: 'claude-sonnet-5-5',
         tier: 'thoughtful',
         estCostUsd: 0.25,
         inputTokens: 111,
@@ -340,7 +340,7 @@ describe('completeWithEscalation', () => {
     ]);
     const out = await completeWithEscalation(
       {
-        routing: routingFor('thoughtful', 'claude-sonnet-5', 'medium', { coveredByBrief: true }),
+        routing: routingFor('thoughtful', 'claude-sonnet-5-5', 'medium', { coveredByBrief: true }),
         systemPrompt: 'sys',
         userPrompt: 'user q',
         widen,
@@ -350,7 +350,7 @@ describe('completeWithEscalation', () => {
     expect(calls).toHaveLength(1);
     expect(widen).not.toHaveBeenCalled();
     expect(calls[0].tier).toBe('thoughtful');
-    expect(calls[0].model).toBe('claude-sonnet-5');
+    expect(calls[0].model).toBe('claude-sonnet-5-5');
     expect(calls[0].effort).toBe('medium');
     expect(calls[0].purpose).toBe('chat');
     expect(calls[0].messages).toEqual([
@@ -374,7 +374,7 @@ describe('completeWithEscalation', () => {
     ]);
     const out = await completeWithEscalation(
       {
-        routing: routingFor('quick', 'claude-haiku-4-5', 'low', { coveredByBrief: false }),
+        routing: routingFor('quick', 'claude-haiku-5-5', 'low', { coveredByBrief: false }),
         systemPrompt: 'sys',
         userPrompt: 'user q',
         widen,
@@ -400,7 +400,7 @@ describe('completeWithEscalation', () => {
     ]);
     const out = await completeWithEscalation(
       {
-        routing: routingFor('quick', 'claude-haiku-4-5', 'low'),
+        routing: routingFor('quick', 'claude-haiku-5-5', 'low'),
         systemPrompt: 'sys',
         userPrompt: 'user q',
         widen,
@@ -429,7 +429,7 @@ describe('completeWithEscalation', () => {
       llmResult(PUNT, { estCostUsd: 0.2, inputTokens: 100, outputTokens: 20 }),
       llmResult(PUNT, { estCostUsd: 0.3, inputTokens: 120, outputTokens: 30 }),
       llmResult(GOOD, {
-        model: 'claude-sonnet-5',
+        model: 'claude-sonnet-5-5',
         tier: 'thoughtful',
         estCostUsd: 0.5,
         inputTokens: 200,
@@ -438,7 +438,7 @@ describe('completeWithEscalation', () => {
     ]);
     const out = await completeWithEscalation(
       {
-        routing: routingFor('quick', 'claude-haiku-4-5', 'low'),
+        routing: routingFor('quick', 'claude-haiku-5-5', 'low'),
         systemPrompt: 'sys',
         userPrompt: 'user q',
         widen,
@@ -448,16 +448,16 @@ describe('completeWithEscalation', () => {
     expect(widen).toHaveBeenCalledTimes(1);
     expect(calls).toHaveLength(3);
     expect(calls[2].tier).toBe('thoughtful');
-    expect(calls[2].model).toBe('claude-sonnet-5');
+    expect(calls[2].model).toBe('claude-sonnet-5-5');
     expect(calls[2].effort).toBe('medium');
     expect(calls[2].messages[1].content).toBe('WIDENED PROMPT');
     expect(calls.every((c) => c.purpose === 'chat')).toBe(true);
     expect(out.text).toBe(GOOD);
     expect(out.routing.escalated).toBe(true);
     expect(out.routing.widened).toBe(true);
-    expect(out.routing.model).toBe('claude-sonnet-5');
-    expect(out.routing.label).toBe('Sonnet 5 · Medium effort');
-    expect(out.routing.reason).toContain('Escalated to Sonnet 5 · Medium effort');
+    expect(out.routing.model).toBe('claude-sonnet-5-5');
+    expect(out.routing.label).toBe('Sonnet 5.5 · Medium effort');
+    expect(out.routing.reason).toContain('Escalated to Sonnet 5.5 · Medium effort');
     expect(out.routing.reason).toContain('failed the sanity check');
     expect(out.routing.estCostUsd).toBe(1);
     expect(out.inputTokens).toBe(420);
@@ -468,7 +468,7 @@ describe('completeWithEscalation', () => {
     const { complete, calls } = fakeComplete([
       llmResult(PUNT, { estCostUsd: 0.25, inputTokens: 100, outputTokens: 20 }),
       llmResult(GOOD, {
-        model: 'claude-sonnet-5',
+        model: 'claude-sonnet-5-5',
         tier: 'thoughtful',
         estCostUsd: 0.5,
         inputTokens: 120,
@@ -477,7 +477,7 @@ describe('completeWithEscalation', () => {
     ]);
     const out = await completeWithEscalation(
       {
-        routing: routingFor('quick', 'claude-haiku-4-5', 'low'),
+        routing: routingFor('quick', 'claude-haiku-5-5', 'low'),
         systemPrompt: 'sys',
         userPrompt: 'user q',
       },
@@ -485,14 +485,14 @@ describe('completeWithEscalation', () => {
     );
     expect(calls).toHaveLength(2);
     expect(calls[1].tier).toBe('thoughtful');
-    expect(calls[1].model).toBe('claude-sonnet-5');
+    expect(calls[1].model).toBe('claude-sonnet-5-5');
     expect(calls[1].effort).toBe('medium');
     expect(calls[1].messages).toEqual(calls[0].messages);
     expect(out.text).toBe(GOOD);
     expect(out.routing.escalated).toBe(true);
     expect(out.routing.widened).toBeUndefined();
     expect(out.routing.tier).toBe('thoughtful');
-    expect(out.routing.model).toBe('claude-sonnet-5');
+    expect(out.routing.model).toBe('claude-sonnet-5-5');
     expect(out.routing.estCostUsd).toBe(0.75);
     expect(out.inputTokens).toBe(220);
     expect(out.outputTokens).toBe(100);
@@ -500,12 +500,12 @@ describe('completeWithEscalation', () => {
 
   it('escalates a punting deep answer on a non-ceiling model onto the ceiling model', async () => {
     const { complete, calls } = fakeComplete([
-      llmResult(PUNT, { model: 'claude-opus-5', tier: 'deep' }),
+      llmResult(PUNT, { model: 'claude-opus-5-5', tier: 'deep' }),
       llmResult(GOOD, { model: CEILING_MODEL, tier: 'deep', estCostUsd: 0.5 }),
     ]);
     const out = await completeWithEscalation(
       {
-        routing: routingFor('deep', 'claude-opus-5', 'high'),
+        routing: routingFor('deep', 'claude-opus-5-5', 'high'),
         systemPrompt: 'sys',
         userPrompt: 'user q',
       },
@@ -518,7 +518,7 @@ describe('completeWithEscalation', () => {
     expect(out.text).toBe(GOOD);
     expect(out.routing.escalated).toBe(true);
     expect(out.routing.tier).toBe('deep');
-    expect(out.routing.model).toBe('claude-fable-5');
+    expect(out.routing.model).toBe('claude-fable-5-1');
     expect(out.routing.label).toBe('Fable 5.1 · High effort');
     expect(out.routing.estCostUsd).toBe(0.75);
   });
@@ -531,7 +531,7 @@ describe('completeWithEscalation', () => {
     ]);
     const out = await completeWithEscalation(
       {
-        routing: routingFor('quick', 'claude-haiku-4-5', 'low', { overridden: true }),
+        routing: routingFor('quick', 'claude-haiku-5-5', 'low', { overridden: true }),
         systemPrompt: 'sys',
         userPrompt: 'user q',
         widen,
@@ -540,12 +540,12 @@ describe('completeWithEscalation', () => {
     );
     expect(widen).toHaveBeenCalledTimes(1);
     expect(calls).toHaveLength(2);
-    expect(calls[0].model).toBe('claude-haiku-4-5');
-    expect(calls[1].model).toBe('claude-haiku-4-5');
+    expect(calls[0].model).toBe('claude-haiku-5-5');
+    expect(calls[1].model).toBe('claude-haiku-5-5');
     expect(out.text).toBe(PUNT);
     expect(out.routing.escalated).toBe(false);
     expect(out.routing.widened).toBe(true);
-    expect(out.routing.model).toBe('claude-haiku-4-5');
+    expect(out.routing.model).toBe('claude-haiku-5-5');
     expect(out.routing.estCostUsd).toBe(0.5);
     expect(out.inputTokens).toBe(220);
     expect(out.outputTokens).toBe(50);
@@ -557,7 +557,7 @@ describe('completeWithEscalation', () => {
     ]);
     const out = await completeWithEscalation(
       {
-        routing: routingFor('thoughtful', 'claude-sonnet-5', 'medium', { overridden: true }),
+        routing: routingFor('thoughtful', 'claude-sonnet-5-5', 'medium', { overridden: true }),
         systemPrompt: 'sys',
         userPrompt: 'user q',
       },
@@ -566,7 +566,7 @@ describe('completeWithEscalation', () => {
     expect(calls).toHaveLength(1);
     expect(out.text).toBe(PUNT);
     expect(out.routing.escalated).toBe(false);
-    expect(out.routing.model).toBe('claude-sonnet-5');
+    expect(out.routing.model).toBe('claude-sonnet-5-5');
   });
 
   it('returns the punting answer without a second call only at the ceiling model', async () => {

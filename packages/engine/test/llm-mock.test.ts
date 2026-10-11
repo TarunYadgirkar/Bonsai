@@ -64,14 +64,14 @@ describe('mock provider path', () => {
     expect(typeof parsed.reason).toBe('string');
     expect(result.mock).toBe(true);
     expect(result.servedBy).toBeUndefined();
-    expect(result.model).toBe('claude-haiku-4-5');
+    expect(result.model).toBe('claude-haiku-5-5');
     expect(result.tier).toBe('quick');
     expect(result.inputTokens).toBe(
       messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0),
     );
     expect(result.outputTokens).toBe(estimateTokens(result.text));
     expect(result.estCostUsd).toBe(
-      costForModel('claude-haiku-4-5', result.inputTokens, result.outputTokens),
+      costForModel('claude-haiku-5-5', result.inputTokens, result.outputTokens),
     );
     expect(result.estCostUsd).toBeGreaterThan(0);
   });

@@ -31019,17 +31019,17 @@ function prunedPct(available, kept) {
 // ../../packages/engine/src/models.ts
 var MODELS = [
   {
-    id: "claude-haiku-4-5",
-    label: "Haiku 4.5",
+    id: "claude-haiku-5-5",
+    label: "Haiku 5.5",
     tier: "quick",
-    input: 1,
-    output: 5,
-    cacheRead: 0.1,
+    input: 0.1,
+    output: 0.5,
+    cacheRead: 0.01,
     blurb: "Fastest and cheapest. Fact lookups answerable straight from the brief."
   },
   {
-    id: "claude-sonnet-5",
-    label: "Sonnet 5",
+    id: "claude-sonnet-5-5",
+    label: "Sonnet 5.5",
     tier: "thoughtful",
     input: 2,
     output: 10,
@@ -31037,16 +31037,16 @@ var MODELS = [
     blurb: "Balanced. Synthesis and explanation across a handful of facts."
   },
   {
-    id: "claude-opus-5",
-    label: "Opus 5",
+    id: "claude-opus-5-5",
+    label: "Opus 5.5",
     tier: "deep",
-    input: 5,
-    output: 25,
-    cacheRead: 0.5,
+    input: 4,
+    output: 20,
+    cacheRead: 0.2,
     blurb: "Deep reasoning. Multi-constraint ranking and weighing trade-offs."
   },
   {
-    id: "claude-fable-5",
+    id: "claude-fable-5-1",
     label: "Fable 5.1",
     tier: "deep",
     input: 10,
@@ -31055,6 +31055,17 @@ var MODELS = [
     blurb: "The ceiling. Where a deep answer goes when it still is not good enough."
   }
 ];
+var CEILING_MODEL = "claude-fable-5-1";
+var LEGACY_MODEL_IDS = {
+  "claude-haiku-4-5": { successor: "claude-haiku-5-5", label: "Haiku 4.5" },
+  "claude-sonnet-5": { successor: "claude-sonnet-5-5", label: "Sonnet 5" },
+  "claude-opus-5": { successor: "claude-opus-5-5", label: "Opus 5" },
+  "claude-fable-5": { successor: "claude-fable-5-1", label: "Fable 5" }
+};
+function canonicalModelId(id) {
+  if (MODELS.some((m) => m.id === id)) return id;
+  return LEGACY_MODEL_IDS[id]?.successor ?? id;
+}
 var EFFORTS = [
   { level: "low", label: "Low", maxTokens: 300, note: "single pass, no self-check" },
   { level: "medium", label: "Medium", maxTokens: 700, note: "one self-check" },
@@ -31062,9 +31073,9 @@ var EFFORTS = [
   { level: "max", label: "Max", maxTokens: 3e3, note: "exhaustive, weighs alternatives" }
 ];
 var TIER_DEFAULTS = {
-  quick: { model: "claude-haiku-4-5", effort: "low" },
-  thoughtful: { model: "claude-sonnet-5", effort: "medium" },
-  deep: { model: "claude-opus-5", effort: "high" }
+  quick: { model: "claude-haiku-5-5", effort: "low" },
+  thoughtful: { model: "claude-sonnet-5-5", effort: "medium" },
+  deep: { model: "claude-opus-5-5", effort: "high" }
 };
 var MODEL_TIERS = {
   quick: TIER_DEFAULTS.quick.model,
@@ -31072,7 +31083,8 @@ var MODEL_TIERS = {
   deep: TIER_DEFAULTS.deep.model
 };
 function modelSpec(id) {
-  return MODELS.find((m) => m.id === id) ?? MODELS[0];
+  const canonical = canonicalModelId(id);
+  return MODELS.find((m) => m.id === canonical) ?? MODELS[0];
 }
 function effortSpec(level) {
   return EFFORTS.find((e) => e.level === level) ?? EFFORTS[0];
@@ -31136,25 +31148,20 @@ function providerName() {
   return "mock";
 }
 function upstreamModel(bonsaiModelId) {
-  const rung = RUNG_BY_MODEL[bonsaiModelId] ?? "QUICK";
+  const model = canonicalModelId(bonsaiModelId);
+  const rung = RUNG_BY_MODEL[model] ?? "QUICK";
   const provider = providerName();
   const override = process.env[`BONSAI_MODEL_${provider.toUpperCase()}_${rung}`];
   if (override) return override;
-  return DEFAULT_UPSTREAM[provider]?.[rung] ?? bonsaiModelId;
+  return DEFAULT_UPSTREAM[provider]?.[rung] ?? model;
 }
 var RUNG_BY_MODEL = {
-  "claude-haiku-4-5": "QUICK",
-  "claude-sonnet-5": "MID",
-  "claude-opus-5": "DEEP",
-  "claude-fable-5": "CEILING"
+  [TIER_DEFAULTS.quick.model]: "QUICK",
+  [TIER_DEFAULTS.thoughtful.model]: "MID",
+  [TIER_DEFAULTS.deep.model]: "DEEP",
+  [CEILING_MODEL]: "CEILING"
 };
 var DEFAULT_UPSTREAM = {
-  anthropic: {
-    QUICK: "claude-haiku-4-5-20251001",
-    MID: "claude-sonnet-5",
-    DEEP: "claude-opus-5",
-    CEILING: "claude-fable-5-1"
-  },
   openai: {
     QUICK: "gpt-5.4-mini",
     MID: "gpt-5.4",

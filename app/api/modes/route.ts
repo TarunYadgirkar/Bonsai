@@ -5,7 +5,7 @@ import { EFFORTS, MODELS, providerName, TIER_DEFAULTS, TIER_LABEL } from 'bonsai
  * the UI never hardcodes a model name — lib/models.ts stays the single source of truth for names
  * and rates.
  *
- * Modes read as model + effort, the way Claude states it ("Opus 5 · High effort"). There are no
+ * Modes read as model + effort, the way Claude states it ("Opus 5.5 · High effort"). There are no
  * ⚡/🧠/🔬 tier names on the surface any more; `tier` survives inside the engine as the
  * classifier's 1-3 mapping and `autoPicks` is what Auto resolves each level to.
  */

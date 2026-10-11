@@ -100,7 +100,7 @@ try {
   );
   assert.match(quick.branchId, /^b_[0-9a-f]{6}$/);
   assert.equal(quick.tier, 'quick');
-  assert.equal(quick.model, 'claude-haiku-4-5');
+  assert.equal(quick.model, 'claude-haiku-5-5');
   assert.equal(quick.effort, 'low');
   assert.equal(quick.agentType, 'bonsai-branch-quick');
   assert.equal(quick.covered, true);
@@ -124,7 +124,7 @@ try {
     }),
   );
   assert.equal(deep.tier, 'deep');
-  assert.equal(deep.model, 'claude-opus-5');
+  assert.equal(deep.model, 'claude-opus-5-5');
   assert.equal(deep.effort, 'high');
   assert.equal(deep.agentType, 'bonsai-branch-deep');
   assert.equal(deep.covered, false);
@@ -139,11 +139,11 @@ try {
       selection: 'ML@B workload',
       question: 'Rank ML@B versus Blueprint on workload.',
       briefFacts: ['ML@B costs 12-14 hrs/week in the first semester; Blueprint fits the 8-10 hr cap.'],
-      pinned: { model: 'claude-sonnet-5' },
+      pinned: { model: 'claude-sonnet-5-5' },
     }),
   );
   assert.equal(pinned.tier, 'thoughtful');
-  assert.equal(pinned.model, 'claude-sonnet-5');
+  assert.equal(pinned.model, 'claude-sonnet-5-5');
   assert.equal(pinned.effort, 'medium');
   assert.equal(pinned.agentType, 'bonsai-branch-thoughtful');
   check('pinned model overrides the classifier (rank question stays on sonnet/thoughtful)');
@@ -152,7 +152,7 @@ try {
   assert.ok(treeBefore.startsWith('session'));
   assert.ok(treeBefore.includes('○ Free Ventures'));
   assert.ok(treeBefore.includes('○ club ranking'));
-  assert.ok(treeBefore.includes('[deep · claude-opus-5 · high]'));
+  assert.ok(treeBefore.includes('[deep · claude-opus-5-5 · high]'));
   assert.ok(treeBefore.includes('3 branches'));
   check('bonsai_tree renders root, glyphs, routing brackets, totals footer');
 
@@ -227,7 +227,7 @@ try {
         selection: 'Free Ventures',
         question: lookupQ,
         briefFacts: lookupFacts,
-        pinned: { model: 'claude-opus-5' },
+        pinned: { model: 'claude-opus-5-5' },
         cwd: LCWD,
       }),
     );

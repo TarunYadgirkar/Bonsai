@@ -1,6 +1,13 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/server';
-import { anchorCarriedThrough, route, type Effort } from 'bonsai-engine';
+import {
+  CEILING_MODEL,
+  TIER_DEFAULTS,
+  anchorCarriedThrough,
+  canonicalModelId,
+  route,
+  type Effort,
+} from 'bonsai-engine';
 import { RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { TREE_APP_HTML, TREE_UI_URI } from './tree-app';
 import { loadPopulationPrior } from '@/lib/store';
@@ -30,10 +37,10 @@ const TIER_BY_MODEL: Record<string, string> = {
 
 /** Engine model id → the connector's friendly name. */
 const FRIENDLY_BY_ENGINE_MODEL: Record<string, ForkModel> = {
-  'claude-haiku-4-5': 'haiku',
-  'claude-sonnet-5': 'sonnet',
-  'claude-opus-5': 'opus',
-  'claude-fable-5': 'fable',
+  [TIER_DEFAULTS.quick.model]: 'haiku',
+  [TIER_DEFAULTS.thoughtful.model]: 'sonnet',
+  [TIER_DEFAULTS.deep.model]: 'opus',
+  [CEILING_MODEL]: 'fable',
 };
 
 type ForkModel = 'haiku' | 'sonnet' | 'opus' | 'fable';
@@ -63,7 +70,7 @@ async function suggestRouting(
       population: population.prior ?? undefined,
     });
     return {
-      model: FRIENDLY_BY_ENGINE_MODEL[decision.model] ?? 'sonnet',
+      model: FRIENDLY_BY_ENGINE_MODEL[canonicalModelId(decision.model)] ?? 'sonnet',
       effort: decision.effort ?? 'medium',
       tier: decision.tier,
       populationInformed: Boolean(population.prior),
