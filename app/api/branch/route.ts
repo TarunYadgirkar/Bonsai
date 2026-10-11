@@ -5,7 +5,9 @@ import {
   curateBrief,
   completeWithEscalation,
   estimateTokens,
+  lateralInsights,
   profileFor,
+  recallInsights,
   route,
   widenedChatContext,
 } from 'bonsai-engine';
@@ -18,6 +20,7 @@ import {
   buildTree,
   commit,
   getConversation,
+  listConversations,
   loadPopulationPrior,
   loadProfile,
   loadWorkingSet,
@@ -52,6 +55,11 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
     byId,
     anchorMessageId: body.anchorMessageId,
   });
+  // Insights merged into other subtrees never reach this path; recall the ones that bear on it.
+  const recalled = recallInsights(
+    `${body.selection}\n${question}`,
+    lateralInsights(listConversations(ws), parent.id),
+  );
   const compiled = await compileBrief({
     briefId: newId('brief'),
     branchId,
@@ -62,6 +70,7 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
     availableTokens,
     anchorMessageId: body.anchorMessageId,
     anchorFact: path.anchorFact,
+    recalled,
   });
   // A curated fact list from the preview sheet replaces the compiler's — with the anchor
   // invariant re-enforced and the receipt recomputed. curated:true rides on the brief.

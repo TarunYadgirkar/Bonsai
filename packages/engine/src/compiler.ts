@@ -11,6 +11,7 @@
 import { complete as defaultComplete, type CompleteFn } from './llm';
 import { logger } from './logger';
 import { INTERNAL_TIER, MODEL_TIERS } from './models';
+import { renderRecall, type RecallHit } from './recall';
 import { estimateTokens, prunedPct } from './tokens';
 import type { ContextBrief, UserProfile } from './types';
 
@@ -36,6 +37,9 @@ export interface CompileParams {
   /** The inherited brief's full fact list. No-recompression invariant: any inherited fact the
    *  compiler keeps is carried through BYTE-IDENTICAL, never re-summarized. */
   inheritedFacts?: string[];
+  /** Lines recalled from elsewhere in the garden (recallInsights). Rendered under their own
+   *  heading with attribution, never mixed into the compiler's facts. */
+  recalled?: RecallHit[];
 }
 
 export interface EngineDeps {
@@ -85,10 +89,12 @@ export async function compileBrief(
   if (params.inheritedFacts?.length) {
     facts = facts.map((f) => reconcileVerbatim(f, params.inheritedFacts!));
   }
-  let markdown = renderBrief({ selection, question, facts, profile: params.profile });
+  const recalled = (params.recalled ?? []).map(({ text, source }) => ({ text, source }));
+  const render = () => renderBrief({ selection, question, facts, profile: params.profile, recalled });
+  let markdown = render();
   while (facts.length > 1 && estimateTokens(markdown) > budget) {
     facts = facts.slice(0, -1);
-    markdown = renderBrief({ selection, question, facts, profile: params.profile });
+    markdown = render();
   }
   const briefTokens = estimateTokens(markdown);
 
@@ -104,6 +110,7 @@ export async function compileBrief(
       briefTokens,
       prunedPct: prunedPct(availableTokens, briefTokens),
       ...(params.anchorMessageId ? { anchorMessageId: params.anchorMessageId } : {}),
+      ...(recalled.length ? { recalled } : {}),
     },
     usage,
   };
@@ -240,6 +247,7 @@ function renderBrief(params: {
   question: string;
   facts: string[];
   profile?: UserProfile;
+  recalled?: { text: string; source: string }[];
 }): string {
   const lines = [`# Branch brief — ${params.selection}`, ''];
 
@@ -248,6 +256,8 @@ function renderBrief(params: {
   }
 
   lines.push('## Relevant facts', ...params.facts.map((f) => `- ${f}`));
+  const recall = renderRecall(params.recalled ?? []);
+  if (recall.length) lines.push('', ...recall);
 
   lines.push('', `## Question`, params.question || params.selection);
   return lines.join('\n');
@@ -274,6 +284,7 @@ export function curateBrief(
     question: opts?.question ?? '',
     facts,
     profile: opts?.profile,
+    recalled: brief.recalled,
   });
   const briefTokens = estimateTokens(markdown);
   return {

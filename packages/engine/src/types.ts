@@ -77,6 +77,8 @@ export interface ContextBrief {
   anchorMessageId?: string;
   /** True when a human curated the fact list in the preview sheet before the fork shipped. */
   curated?: boolean;
+  /** Insights merged elsewhere in the garden that bear on this question, with their source branch. */
+  recalled?: { text: string; source: string }[];
 }
 
 export interface RoutingDecision {

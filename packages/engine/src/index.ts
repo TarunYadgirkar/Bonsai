@@ -71,6 +71,16 @@ export {
   type RouterDeps,
 } from './router';
 export {
+  RECALL_LIMIT,
+  RECALL_MIN_SCORE,
+  lateralInsights,
+  recallInsights,
+  renderRecall,
+  type RecallCandidate,
+  type RecallHit,
+  type RecallOptions,
+} from './recall';
+export {
   assemblePath,
   profileFor,
   renderChatContext,

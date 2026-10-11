@@ -433,6 +433,18 @@ That is what this branch's brief supports; anything beyond it would need more of
     error: (...args) => active.error(...args)
   };
 
+  // ../packages/engine/src/recall.ts
+  var STOPWORDS2 = new Set(
+    "the and for are but not you your yours with what when where which who whom why how this that these those there their them they then than was were been being have has had does did doing can could should would will shall may might must about into onto from over under after before also just only very more most much many some any each every other such own same too our ours out off again once here all both few nor its it\u2019s let lets".split(" ")
+  );
+  function renderRecall(hits) {
+    if (hits.length === 0) return [];
+    return [
+      "## Settled in earlier branches",
+      ...hits.map((h) => `- ${h.text} _(from "${h.source}")_`)
+    ];
+  }
+
   // ../packages/engine/src/compiler.ts
   var MAX_FACTS = 8;
   var DEFAULT_BRIEF_BUDGET_TOKENS = 800;
@@ -448,10 +460,12 @@ That is what this branch's brief supports; anything beyond it would need more of
     if (params.inheritedFacts?.length) {
       facts = facts.map((f) => reconcileVerbatim(f, params.inheritedFacts));
     }
-    let markdown = renderBrief({ selection, question, facts, profile: params.profile });
+    const recalled = (params.recalled ?? []).map(({ text, source }) => ({ text, source }));
+    const render = () => renderBrief({ selection, question, facts, profile: params.profile, recalled });
+    let markdown = render();
     while (facts.length > 1 && estimateTokens(markdown) > budget) {
       facts = facts.slice(0, -1);
-      markdown = renderBrief({ selection, question, facts, profile: params.profile });
+      markdown = render();
     }
     const briefTokens = estimateTokens(markdown);
     return {
@@ -465,7 +479,8 @@ That is what this branch's brief supports; anything beyond it would need more of
         availableTokens,
         briefTokens,
         prunedPct: prunedPct(availableTokens, briefTokens),
-        ...params.anchorMessageId ? { anchorMessageId: params.anchorMessageId } : {}
+        ...params.anchorMessageId ? { anchorMessageId: params.anchorMessageId } : {},
+        ...recalled.length ? { recalled } : {}
       },
       usage
     };
@@ -560,6 +575,8 @@ That is what this branch's brief supports; anything beyond it would need more of
       lines.push(`**User:** ${params.profile.name} \u2014 ${params.profile.context}`, "");
     }
     lines.push("## Relevant facts", ...params.facts.map((f) => `- ${f}`));
+    const recall = renderRecall(params.recalled ?? []);
+    if (recall.length) lines.push("", ...recall);
     lines.push("", `## Question`, params.question || params.selection);
     return lines.join("\n");
   }

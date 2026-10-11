@@ -5,8 +5,11 @@ import {
   TIER_DEFAULTS,
   anchorCarriedThrough,
   canonicalModelId,
+  recallInsights,
+  renderRecall,
   route,
   type Effort,
+  type RecallHit,
 } from 'bonsai-engine';
 import { RESOURCE_MIME_TYPE } from '@modelcontextprotocol/ext-apps/server';
 import { TREE_APP_HTML, TREE_UI_URI } from './tree-app';
@@ -117,6 +120,8 @@ const forkOutput = z.object({
   }),
   /** True when the server pinned the parent brief's anchor fact the caller dropped. */
   anchorPinned: z.boolean(),
+  /** Insights merged in other chats or subtrees that bear on this question, appended to the brief. */
+  recalled: z.array(z.object({ text: z.string(), source: z.string(), score: z.number() })),
   /** Bonsai's own router pick (population-prior-informed). Present when routing succeeded. */
   suggestedRouting: z
     .object({
@@ -167,6 +172,35 @@ function oneLine(text: string): string {
   // Control chars only (incl. newlines/tabs/DEL) collapse to a space; hyphens etc. survive.
   const stripped = Array.from(text, (ch) => (ch.codePointAt(0)! < 0x20 || ch === '\u007f' ? ' ' : ch)).join('');
   return stripped.replace(/\s{2,}/g, ' ').trim();
+}
+
+/**
+ * Merged insights from elsewhere in this key's garden (other claude.ai chats, other subtrees)
+ * that bear on the question. Branches merged into the fork's own chain are skipped: their
+ * insight is already in the conversation the caller compiled the brief from.
+ */
+async function recallForFork(
+  userKey: string,
+  parentId: string | null,
+  query: string,
+): Promise<RecallHit[]> {
+  const nodes = await listNodes(userKey);
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const chain = new Set<string>();
+  for (let id = parentId; id; id = byId.get(id)?.parentId ?? null) {
+    if (chain.has(id)) break;
+    chain.add(id);
+  }
+  const candidates = nodes
+    .filter((n) => n.status === 'merged' && n.insight && !chain.has(n.id))
+    .filter((n) => !(n.parentId && chain.has(n.parentId)))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .map((n) => ({
+      id: n.id,
+      text: oneLine(n.insight ?? ''),
+      source: oneLine(n.title ?? 'an earlier branch'),
+    }));
+  return recallInsights(query, candidates);
 }
 
 function storageNote(): string {
@@ -323,6 +357,9 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         }
       }
 
+      const recalled = await recallForFork(userKey, parentId ?? null, `${question}\n${briefText}`);
+      if (recalled.length) briefText = `${briefText}\n\n${renderRecall(recalled).join('\n')}`;
+
       const briefTokens = Math.ceil(briefText.length / 4);
       const prunedPct = availableTokensEstimate
         ? Math.max(0, Math.round((1 - briefTokens / availableTokensEstimate) * 1000) / 10)
@@ -374,6 +411,9 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
         ...(anchorPinned
           ? [`Note: the parent brief's anchor fact was missing and has been pinned as fact 1.`]
           : []),
+        ...(recalled.length
+          ? [`Recalled ${recalled.length} insight${recalled.length === 1 ? '' : 's'} from earlier branches into the brief.`]
+          : []),
         '',
         'Paste everything between the rules into a NEW claude.ai chat:',
         '─'.repeat(40),
@@ -396,6 +436,7 @@ export function registerBonsaiTools(server: McpServer, userKey: string): void {
             prunedPct,
           },
           anchorPinned,
+          recalled: recalled.map(({ text, source, score }) => ({ text, source, score })),
           pasteBlock: paste,
         },
       };
