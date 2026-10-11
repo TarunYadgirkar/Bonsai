@@ -135,3 +135,4 @@ export {
   type TokenFigure,
 } from './stats';
 export { setEngineLogger, silenceEngine, type EngineLogger } from './logger';
+export { parseTurnCommand, type TurnCommand } from './commands';
