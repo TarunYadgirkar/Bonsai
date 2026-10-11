@@ -115,7 +115,7 @@ export function MergeFlight({ flight, onDone }: { flight: Flight; onDone: () => 
         }}
       >
         <div
-          className="max-w-sm rounded-full border border-moss/25 bg-moss-wash px-4 py-2 text-center text-xs leading-snug text-ink"
+          className="max-w-sm rounded-full bg-moss-wash shadow-lift px-4 py-2 text-center text-xs leading-snug text-ink"
           style={{
             boxShadow: '0 4px 16px -8px color-mix(in oklab, var(--ink) 40%, transparent)',
           }}

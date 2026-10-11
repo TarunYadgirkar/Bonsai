@@ -2,7 +2,17 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
-import type { Conversation, Insight, Message, ModeSelection } from '@/lib/types';
+import {
+  Archive,
+  ArrowBendLeftUp,
+  ArrowUp,
+  GitFork,
+  GitMerge,
+  Sparkle,
+} from '@phosphor-icons/react';
+import { parseTurnCommand, type TurnCommand } from 'bonsai-engine';
+import type { ContextBrief, Conversation, Insight, Message, ModeSelection } from '@/lib/types';
+import { CutStrip, plainFact } from './CutStrip';
 import { RoutingChip } from './RoutingChip';
 import { conversationTokens, formatTokens } from './tokens';
 
@@ -10,7 +20,7 @@ type Selection = { text: string; x: number; y: number };
 
 /** Assistant-markdown styling, shared by settled bubbles and the streaming one. */
 const MARKDOWN_CLASSES =
-  '[&>*+*]:mt-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:text-moss [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-rule [&_blockquote]:pl-3 [&_blockquote]:text-ink-soft [&_:is(h1,h2,h3,h4)]:font-display [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-ink [&_code]:rounded [&_code]:bg-paper-sunk [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-ink [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:border [&_pre]:border-rule [&_pre]:bg-paper-sunk [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0';
+  '[&>*+*]:mt-2.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:text-accent [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-rule-strong [&_blockquote]:pl-3 [&_blockquote]:text-ink-muted [&_:is(h1,h2,h3,h4)]:font-display [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-ink [&_code]:rounded [&_code]:bg-surface-sunk [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-ink [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-surface-sunk [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0';
 
 /**
  * Memoized so composer keystrokes and selection updates don't re-parse every assistant
@@ -45,10 +55,10 @@ const MessageBubble = memo(function MessageBubble({
       className={`group ${message.role === 'user' ? 'flex flex-col items-end' : 'flex flex-col items-start'}`}
     >
       <div
-        className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm leading-relaxed text-ink ${
+        className={`max-w-[min(85%,68ch)] rounded-[var(--radius-bud)] px-4 py-3 text-[15px] leading-relaxed text-ink ${
           message.role === 'user'
-            ? 'whitespace-pre-wrap bg-moss-wash'
-            : 'border border-rule bg-paper-raised'
+            ? 'whitespace-pre-wrap bg-accent-wash'
+            : 'bg-surface-raised shadow-bud'
         }`}
       >
         {message.role === 'user' ? (
@@ -61,20 +71,20 @@ const MessageBubble = memo(function MessageBubble({
           </div>
         )}
         {message.routing && (
-          <span className="mt-2 flex items-center gap-2 border-t border-rule pt-2">
+          <span className="mt-3 flex items-center gap-2 pt-2 shadow-[inset_0_1px_0_var(--rule)]">
             <RoutingChip routing={message.routing} mode={mode} onSelectMode={onSelectMode} />
           </span>
         )}
       </div>
-      <div className="mt-1 flex gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-        <button onClick={copy} className="text-[10px] text-bark hover:text-ink-soft">
+      <div className="mt-1 flex gap-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+        <button onClick={copy} className="text-[11px] text-ink-faint hover:text-ink">
           {copied ? 'Copied' : 'Copy'}
         </button>
         {onStartEdit && (
           <button
             onClick={onStartEdit}
             disabled={busy}
-            className="text-[10px] text-bark hover:text-ink-soft disabled:opacity-40"
+            className="text-[11px] text-ink-faint hover:text-ink disabled:opacity-40"
           >
             Edit
           </button>
@@ -83,7 +93,7 @@ const MessageBubble = memo(function MessageBubble({
           <button
             onClick={onRegenerate}
             disabled={busy}
-            className="text-[10px] text-bark hover:text-ink-soft disabled:opacity-40"
+            className="text-[11px] text-ink-faint hover:text-ink disabled:opacity-40"
           >
             Regenerate
           </button>
@@ -110,36 +120,91 @@ function InsightChip({
   onOpenBranch: (id: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const long = insight.text.length > 110;
+  const long = insight.text.length > 140;
   return (
-    <div className="flex justify-center">
-      <div
-        className={`max-w-[85%] rounded-full border px-4 py-1.5 text-xs leading-relaxed transition-all duration-700 ${
-          highlighted
-            ? 'border-moss/60 bg-moss-wash ring-2 ring-moss/40'
-            : 'border-moss/25 bg-moss-wash/50'
-        } ${expanded ? 'rounded-2xl' : ''}`}
-      >
+    <div
+      className={`flex max-w-[68ch] items-start gap-3 self-center rounded-[var(--radius-bud)] px-4 py-3 text-sm leading-relaxed transition-shadow duration-700 ${
+        highlighted ? 'bg-accent-wash ring-2 ring-accent/50' : 'bg-accent-wash/70'
+      }`}
+    >
+      <ArrowBendLeftUp weight="bold" className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden />
+      <div className="min-w-0">
+        <p className="text-xs font-medium text-accent">Merged from {branchTitle}</p>
         <button
           onClick={() => setExpanded((e) => !e)}
-          className="text-left text-ink"
-          title={long && !expanded ? 'Expand the full insight' : undefined}
+          disabled={!long}
+          className="mt-0.5 text-left text-ink disabled:cursor-text"
+          aria-expanded={long ? expanded : undefined}
         >
-          <span className="mr-1.5 text-moss">⤴</span>
-          <span className="text-[10px] uppercase tracking-wide text-moss">
-            merged · {branchTitle}
-          </span>{' '}
-          <span className="text-ink">
-            {expanded || !long ? insight.text : `${insight.text.slice(0, 110).trimEnd()}…`}
-          </span>
+          {expanded || !long ? insight.text : `${insight.text.slice(0, 140).trimEnd()}…`}
         </button>
         <button
           onClick={() => onOpenBranch(insight.branchId)}
-          className="ml-2 whitespace-nowrap text-[10px] text-moss underline hover:text-moss-bright"
+          className="mt-1 block text-xs text-accent underline underline-offset-2 hover:text-accent-bright"
         >
-          open branch →
+          Open the branch
         </button>
       </div>
+    </div>
+  );
+}
+
+/** The compiled brief a branch was born with: its facts, recalled lines, and what it left out. */
+function BriefPanel({ brief }: { brief: ContextBrief }) {
+  return (
+    <details open className="group rounded-[var(--radius-bud)] bg-surface-sunk/70 px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-xs font-medium text-ink-muted">
+        <span className="transition-transform group-open:rotate-90" aria-hidden>
+          ›
+        </span>
+        Brief this branch was given
+        <span className="tnum ml-auto font-normal text-ink-faint">
+          {brief.facts.length} facts · {brief.briefTokens.toLocaleString()} tokens
+        </span>
+      </summary>
+      <ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5 text-[13px] leading-relaxed text-ink marker:text-ink-faint">
+        {brief.facts.map((fact) => (
+          <li key={fact}>{plainFact(fact)}</li>
+        ))}
+      </ol>
+      {brief.recalled && brief.recalled.length > 0 && (
+        <div className="mt-3">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-accent">
+            <Sparkle weight="fill" className="h-3.5 w-3.5" aria-hidden />
+            Recalled from other branches
+          </p>
+          <ul className="mt-1.5 flex flex-col gap-1 text-[13px] leading-relaxed text-ink">
+            {brief.recalled.map((r) => (
+              <li key={r.text}>
+                {r.text} <span className="text-ink-faint">({r.source})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      <p className="mt-3 text-xs leading-relaxed text-ink-faint">{brief.excludedNote}</p>
+    </details>
+  );
+}
+
+/** The per-fork receipt: the parent context at full width, the brief at true scale. */
+function CutReceipt({ brief }: { brief: ContextBrief }) {
+  const avoided = Math.max(0, brief.availableTokens - brief.briefTokens);
+  return (
+    <div className="mt-3 flex flex-col gap-2">
+      <CutStrip available={brief.availableTokens} kept={brief.briefTokens} size="lg" />
+      <p className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-ink-muted">
+        <span>
+          <span className="tnum font-medium text-ink">{brief.briefTokens.toLocaleString()}</span> tokens
+          sent
+        </span>
+        <span>
+          <span className="tnum">{avoided.toLocaleString()}</span> left on the parent
+        </span>
+        <span className="font-display text-base font-semibold text-accent">
+          <span className="tnum">{brief.prunedPct.toFixed(1)}%</span> pruned
+        </span>
+      </p>
     </div>
   );
 }
@@ -166,6 +231,8 @@ export function ChatPane({
   onDraftRestored,
   onLoadDemo,
   onStartTour,
+  onCommand,
+  demoMode,
 }: {
   conversation: Conversation;
   /** Resolves false when the send failed, so the composer can restore the draft. */
@@ -200,6 +267,13 @@ export function ChatPane({
   onLoadDemo?: () => Promise<void>;
   /** The guided 60-second loop: load the demo, then walk branch → merge → ledger. */
   onStartTour?: () => Promise<void>;
+  /**
+   * A typed tree command ("side question: …", "merge that", "never mind"). Resolves true when
+   * it was handled; false sends the text as an ordinary message instead.
+   */
+  onCommand?: (command: TurnCommand, origin: { x: number; y: number }) => Promise<boolean>;
+  /** No provider key: answers come from the extractive mock, and the composer says so. */
+  demoMode?: boolean;
 }) {
   // Seed from a recovered failed-send draft: ChatPane remounts per branch, so a plain local
   // restore is lost if the user switched branches mid-send. The parent hands it back here.
@@ -209,6 +283,7 @@ export function ChatPane({
   const [renaming, setRenaming] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (initialDraft) onDraftRestored?.();
@@ -314,6 +389,15 @@ export function ChatPane({
   const submit = async () => {
     const content = draft.trim();
     if (!content || sending) return;
+    const command = onCommand ? parseTurnCommand(content) : null;
+    if (command && onCommand) {
+      const rect = composerRef.current?.getBoundingClientRect();
+      const origin = rect
+        ? { x: rect.left + rect.width / 2, y: rect.top }
+        : { x: window.innerWidth / 2, y: window.innerHeight - 80 };
+      setDraft('');
+      if (await onCommand(command, origin)) return;
+    }
     setDraft('');
     const sent = await onSend(content);
     // Failed send: put the text back rather than destroy it — unless the user already
@@ -321,97 +405,109 @@ export function ChatPane({
     if (!sent) setDraft((current) => current || content);
   };
 
-  return (
-    <section className="relative flex min-w-0 flex-1 flex-col bg-paper">
-      <header className="flex items-center gap-3 border-b border-rule px-6 py-3">
-        <div className="min-w-0">
-          {renaming !== null ? (
-            <input
-              autoFocus
-              value={renaming}
-              onChange={(e) => setRenaming(e.target.value)}
-              onKeyDown={async (e) => {
-                if (e.key === 'Enter') {
-                  const title = renaming.trim();
-                  if (title && title !== conversation.title) await onRename(title);
-                  setRenaming(null);
-                }
-                if (e.key === 'Escape') setRenaming(null);
-              }}
-              onBlur={() => setRenaming(null)}
-              className="w-full rounded border border-rule bg-paper-raised px-1.5 py-0.5 font-display text-base text-ink focus:border-moss focus:outline-none"
-            />
-          ) : (
-            <h2
-              onDoubleClick={() => setRenaming(conversation.title)}
-              title="Double-click to rename"
-              className="cursor-text truncate font-display text-base text-ink"
-            >
-              {conversation.title}
-            </h2>
-          )}
-          {brief ? (
-            // The per-fork receipt: the concrete sent/avoided pair, not just a percentage.
-            <p className="truncate text-[11px] text-bark">
-              <span className="tnum text-ink-soft">{brief.briefTokens.toLocaleString()}</span>{' '}
-              sent <span className="text-bark">·</span>{' '}
-              <span className="tnum text-moss">
-                {Math.max(0, brief.availableTokens - brief.briefTokens).toLocaleString()}
-              </span>{' '}
-              avoided <span className="text-bark">·</span>{' '}
-              <span className="tnum text-moss">{brief.prunedPct.toFixed(1)}%</span> pruned
-            </p>
-          ) : (
-            <p className="text-[11px] text-bark">
-              Root conversation · select any text to branch
-            </p>
-          )}
-        </div>
+  const isBranch = Boolean(conversation.parentId);
+  const lastRouting = [...messages].reverse().find((m) => m.routing)?.routing ?? null;
+  const startDemo = (run?: () => Promise<void>) => async () => {
+    if (!run) return;
+    setDemoLoading(true);
+    try {
+      await run();
+    } finally {
+      setDemoLoading(false);
+    }
+  };
 
-        <div className="ml-auto flex shrink-0 items-center gap-4">
-          {/* Merge insight — only branches have a parent to merge into. */}
-          {conversation.parentId && conversation.archived && onArchive && (
-            <button
-              onClick={() => onArchive(false)}
-              className="rounded-full border border-rule px-2.5 py-1 text-[11px] text-bark transition-colors hover:border-rule-strong hover:text-ink-soft"
-            >
-              Unarchive
-            </button>
-          )}
-          {conversation.parentId && !conversation.archived && onArchive && (
-            <button
-              onClick={() => onArchive(true)}
-              title="Set the branch aside without merging"
-              className="rounded-full border border-rule px-2.5 py-1 text-[11px] text-bark transition-colors hover:border-rule-strong hover:text-ink-soft"
-            >
-              Archive
-            </button>
-          )}
-          {conversation.parentId &&
-            (conversation.archived ? (
-              <span className="rounded-full border border-moss/30 bg-moss-wash px-2.5 py-1 text-[11px] text-moss">
-                Archived
-              </span>
+  return (
+    <section className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-surface-raised">
+      <header className="px-4 pb-3 pt-3 shadow-[inset_0_-1px_0_var(--rule)] sm:px-8 sm:pb-4 sm:pt-5">
+        <div className="mx-auto flex max-w-3xl flex-wrap items-start gap-x-4 gap-y-2">
+          <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
+            <p className="truncate text-xs text-ink-faint">
+              {isBranch ? 'Branch' : 'Trunk'}
+              {isBranch && lastRouting?.label && (
+                <span className="text-ink-muted"> · answered by {lastRouting.label}</span>
+              )}
+            </p>
+            {renaming !== null ? (
+              <input
+                autoFocus
+                aria-label="Branch title"
+                value={renaming}
+                onChange={(e) => setRenaming(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === 'Enter') {
+                    const title = renaming.trim();
+                    if (title && title !== conversation.title) await onRename(title);
+                    setRenaming(null);
+                  }
+                  if (e.key === 'Escape') setRenaming(null);
+                }}
+                onBlur={() => setRenaming(null)}
+                className="mt-0.5 w-full rounded-md bg-surface px-1.5 py-0.5 font-display text-2xl font-semibold text-ink ring-1 ring-rule-strong focus:outline-none focus:ring-2 focus:ring-accent"
+              />
             ) : (
+              <h2
+                onDoubleClick={() => setRenaming(conversation.title)}
+                title="Double-click to rename"
+                className="mt-0.5 cursor-text truncate font-display text-xl font-semibold leading-tight text-ink sm:text-2xl"
+              >
+                {conversation.title}
+              </h2>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            {isBranch && conversation.archived && onArchive && (
+              <button
+                onClick={() => onArchive(false)}
+                className="rounded-[var(--radius-control)] px-3 py-1.5 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
+              >
+                Unarchive
+              </button>
+            )}
+            {isBranch && !conversation.archived && onArchive && (
+              <button
+                onClick={() => onArchive(true)}
+                title="Set the branch aside without merging anything back"
+                className="inline-flex items-center gap-1.5 rounded-[var(--radius-control)] px-3 py-1.5 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
+              >
+                <Archive className="h-4 w-4" aria-hidden />
+                <span className="sr-only sm:not-sr-only">Archive</span>
+              </button>
+            )}
+            {isBranch && !conversation.archived && (
               <button
                 onClick={(e) => {
                   const rect = e.currentTarget.getBoundingClientRect();
                   onMerge({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
                 }}
                 disabled={merging || conversation.messages.length === 0}
-                className="rounded-full border border-moss/40 bg-moss-wash px-3 py-1.5 text-xs font-medium text-moss transition-colors hover:bg-moss/15 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-[var(--radius-control)] bg-accent px-3.5 py-2 text-xs font-semibold text-white shadow-bud transition-colors hover:bg-accent-bright disabled:opacity-40"
               >
-                {merging ? 'Distilling…' : 'Merge insight'}
+                <GitMerge weight="bold" className="h-4 w-4" aria-hidden />
+                {merging ? 'Distilling…' : (
+                  <span>
+                    Merge<span className="hidden sm:inline"> one line back</span>
+                  </span>
+                )}
               </button>
-            ))}
-
-          <div className="text-right">
-            <div className="tnum text-lg leading-none text-ink">
-              {formatTokens(tokens)}
-            </div>
-            <div className="eyebrow mt-0.5">context tokens</div>
+            )}
+            {isBranch && conversation.archived && (
+              <span className="rounded-full bg-surface-sunk px-2.5 py-1 text-xs text-ink-muted">Archived</span>
+            )}
+            {!isBranch && (
+              <p className="text-right text-xs text-ink-faint">
+                <span className="tnum block text-lg leading-none text-ink">{formatTokens(tokens)}</span>
+                tokens of context
+              </p>
+            )}
           </div>
         </div>
+        {brief && (
+          <div className="mx-auto max-w-3xl">
+            <CutReceipt brief={brief} />
+          </div>
+        )}
       </header>
 
       <div
@@ -421,93 +517,64 @@ export function ChatPane({
         // button never appears on phones.
         onTouchEnd={() => setTimeout(captureSelection, 120)}
         onScroll={captureSelection}
-        className="flex-1 overflow-y-auto px-6 py-4"
+        className="flex-1 overflow-y-auto px-4 py-5 sm:px-8"
       >
-        <div className="mx-auto flex max-w-3xl flex-col gap-4">
-          {brief && (
-            <details className="rounded-lg border border-rule bg-paper-sunk px-3 py-2">
-              <summary className="cursor-pointer eyebrow">
-                compiled context brief · {brief.facts.length} facts
-              </summary>
-              <ul className="mt-2 flex flex-col gap-1">
-                {brief.facts.map((fact) => (
-                  <li key={fact} className="text-[11px] leading-relaxed text-ink-soft">
-                    · {fact}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-2 border-t border-rule pt-2 text-[11px] leading-relaxed text-bark">
-                {brief.excludedNote}
-              </p>
-            </details>
-          )}
+        <div className="mx-auto flex max-w-3xl flex-col gap-5">
+          {brief && <BriefPanel brief={brief} />}
 
-          {/* Fresh root: the loop is invisible until there is text to select — explain it. */}
+          {/* Fresh root: the loop is invisible until there is text to select, so explain it. */}
           {conversation.messages.length === 0 && !conversation.parentId && !branching && (
-            <div className="mx-auto mt-12 max-w-sm text-center">
-              <p className="eyebrow">how bonsai works</p>
-              <ol className="mt-3 flex flex-col gap-2 text-left text-xs leading-relaxed text-ink-soft">
+            <div className="mx-auto mt-10 flex max-w-md flex-col gap-5">
+              <h3 className="font-display text-xl font-semibold text-ink">Start a trunk, then branch off it</h3>
+              <ol className="flex list-decimal flex-col gap-2 pl-5 text-sm leading-relaxed text-ink-muted marker:text-ink-faint">
                 <li>
-                  <span className="text-ink">1 · Ask anything below.</span> The router picks a
-                  model and effort per question.
+                  <span className="text-ink">Ask anything below.</span> The router picks a model
+                  and effort for each question.
                 </li>
                 <li>
-                  <span className="text-ink">2 · Select text in an answer → Branch.</span> The
-                  side question forks off with a compiled minimal brief instead of the whole
+                  <span className="text-ink">Select text in an answer and press Branch,</span> or
+                  type “side question:” first. The branch gets a compiled brief, not the whole
                   history.
                 </li>
                 <li>
-                  <span className="text-ink">3 · Merge insight.</span> One distilled line returns
-                  to the trunk — the rest of the branch stays pruned.
+                  <span className="text-ink">Merge one line back.</span> The branch distills to a
+                  single sentence that joins the trunk&apos;s context.
                 </li>
               </ol>
-              <div className="mt-5 flex flex-col items-center gap-2">
+              <div className="flex flex-wrap gap-2">
                 {onStartTour && (
                   <button
-                    onClick={async () => {
-                      setDemoLoading(true);
-                      try {
-                        await onStartTour();
-                      } finally {
-                        setDemoLoading(false);
-                      }
-                    }}
+                    onClick={startDemo(onStartTour)}
                     disabled={demoLoading}
-                    className="rounded-md bg-moss px-4 py-2 text-xs font-semibold text-paper transition-colors hover:bg-moss-bright disabled:opacity-40"
+                    className="rounded-[var(--radius-control)] bg-accent px-4 py-2 text-sm font-semibold text-white shadow-bud transition-colors hover:bg-accent-bright disabled:opacity-40"
                   >
-                    {demoLoading ? 'Growing…' : 'See the whole loop in 60 seconds'}
+                    {demoLoading ? 'Growing…' : 'Walk through the loop'}
                   </button>
                 )}
                 {onLoadDemo && (
                   <button
-                    onClick={async () => {
-                      setDemoLoading(true);
-                      try {
-                        await onLoadDemo();
-                      } finally {
-                        setDemoLoading(false);
-                      }
-                    }}
+                    onClick={startDemo(onLoadDemo)}
                     disabled={demoLoading}
-                    className="rounded-md border border-moss px-4 py-1.5 text-xs font-medium text-moss transition-colors hover:bg-moss-wash disabled:opacity-40"
+                    className="rounded-[var(--radius-control)] bg-surface px-4 py-2 text-sm font-medium text-ink shadow-bud transition-colors hover:bg-accent-wash disabled:opacity-40"
                   >
-                    {demoLoading ? 'Growing…' : 'Just load the example tree'}
+                    {demoLoading ? 'Growing…' : 'Load the example tree'}
                   </button>
                 )}
               </div>
-              <p className="mt-4 text-[10px] text-bark">
+              <p className="text-xs text-ink-faint">
                 <a
                   href="https://github.com/TarunYadgirkar/Bonsai"
                   target="_blank"
                   rel="noreferrer"
-                  className="underline hover:text-ink-soft"
+                  className="underline underline-offset-2 hover:text-ink"
                 >
-                  How it works, honestly — the repo
+                  Read the source on GitHub
                 </a>
-                {' · '}
-                <a href="/connect" className="underline hover:text-ink-soft">
-                  use it inside claude.ai
+                {' or '}
+                <a href="/connect" className="underline underline-offset-2 hover:text-ink">
+                  use Bonsai inside claude.ai
                 </a>
+                .
               </p>
             </div>
           )}
@@ -525,6 +592,7 @@ export function ChatPane({
               <div key={item.m.id} className="flex flex-col items-end gap-1.5">
                 <textarea
                   autoFocus
+                  aria-label="Edit your message"
                   value={editing.text}
                   onChange={(e) => setEditing({ id: item.m.id, text: e.target.value })}
                   onKeyDown={(e) => {
@@ -535,21 +603,21 @@ export function ChatPane({
                     if (e.key === 'Escape') setEditing(null);
                   }}
                   rows={Math.min(8, Math.max(2, editing.text.split('\n').length))}
-                  className="w-[80%] resize-none rounded-lg border border-moss bg-moss-wash px-4 py-2.5 text-sm leading-relaxed text-ink focus:outline-none"
+                  className="w-[85%] resize-none rounded-[var(--radius-bud)] bg-accent-wash px-4 py-3 text-[15px] leading-relaxed text-ink ring-2 ring-accent focus:outline-none"
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button
                     onClick={() => setEditing(null)}
-                    className="text-[10px] text-bark hover:text-ink-soft"
+                    className="text-xs text-ink-faint hover:text-ink"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={submitEdit}
                     disabled={sending || !editing.text.trim()}
-                    className="text-[10px] font-medium text-moss hover:text-moss-bright disabled:opacity-40"
+                    className="text-xs font-semibold text-accent hover:text-accent-bright disabled:opacity-40"
                   >
-                    {sending ? 'Rerunning…' : 'Save & rerun'}
+                    {sending ? 'Rerunning…' : 'Save and rerun'}
                   </button>
                 </div>
               </div>
@@ -574,20 +642,18 @@ export function ChatPane({
             ),
           )}
 
-          {branching && (
-            <div className="text-xs text-moss">Compiling branch context…</div>
-          )}
+          {branching && <p className="text-sm text-accent">Compiling the branch brief…</p>}
           {streamingText !== null && streamingText.length > 0 && (
             <div className="flex justify-start">
-              <div className="max-w-[80%] rounded-lg border border-rule bg-paper-raised px-4 py-2.5 text-sm leading-relaxed text-ink">
+              <div className="max-w-[min(85%,68ch)] rounded-[var(--radius-bud)] bg-surface-raised px-4 py-3 text-[15px] leading-relaxed text-ink shadow-bud">
                 <div className={MARKDOWN_CLASSES}>
                   <ReactMarkdown>{streamingText}</ReactMarkdown>
                 </div>
-                <span className="mt-1 inline-block h-3 w-1.5 animate-pulse rounded-sm bg-moss align-text-bottom" />
+                <span className="mt-1 inline-block h-3 w-1.5 animate-pulse rounded-sm bg-accent align-text-bottom" />
               </div>
             </div>
           )}
-          {sending && !streamingText && <div className="text-xs text-bark">Thinking…</div>}
+          {sending && !streamingText && <p className="text-sm text-ink-faint">Thinking…</p>}
         </div>
       </div>
 
@@ -600,28 +666,18 @@ export function ChatPane({
             window.getSelection()?.removeAllRanges();
           }}
           style={{ left: selection.x, top: selection.y - 10 }}
-          className="fixed z-40 inline-flex -translate-x-1/2 -translate-y-full items-center gap-1.5 rounded-full border border-moss-bright bg-moss px-3 py-1.5 text-xs font-semibold text-paper shadow-sm transition-colors hover:bg-moss-bright"
+          className="fixed z-40 inline-flex -translate-x-1/2 -translate-y-full items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-lift transition-colors hover:bg-accent-bright"
         >
-          <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-3.5 w-3.5"
-            aria-hidden
-          >
-            <path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
-            <path d="M2 21c0-3 1.85-5.36 5.08-6" />
-          </svg>
-          Branch
+          <GitFork weight="bold" className="h-3.5 w-3.5" aria-hidden />
+          Branch from here
         </button>
       )}
 
-      <footer className="border-t border-rule px-6 py-3">
+      <footer className="px-4 pb-3 pt-3 shadow-[inset_0_1px_0_var(--rule)] sm:px-8">
         <div className="mx-auto flex max-w-3xl items-end gap-2">
           <textarea
+            ref={composerRef}
+            aria-label={isBranch ? 'Message this branch' : 'Message the trunk'}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -631,22 +687,30 @@ export function ChatPane({
               }
             }}
             rows={1}
-            placeholder="Ask something…"
-            className="max-h-40 min-h-[38px] flex-1 resize-none rounded-lg border border-rule bg-paper-raised px-3 py-2 text-sm text-ink placeholder:text-bark focus:border-moss focus:outline-none"
+            placeholder={
+              isBranch
+                ? 'Ask a follow-up, or type “merge that”'
+                : 'Ask anything, or start with “side question:”'
+            }
+            className="max-h-40 min-h-[44px] flex-1 resize-none rounded-[var(--radius-control)] bg-surface px-3.5 py-2.5 text-[15px] text-ink ring-1 ring-rule-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent"
           />
           <button
             onClick={submit}
             disabled={sending || !draft.trim()}
-            className="h-[38px] shrink-0 rounded-lg bg-moss px-4 text-sm font-medium text-paper transition-colors hover:bg-moss-bright disabled:opacity-30"
+            aria-label="Send"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-[var(--radius-control)] bg-accent text-white shadow-bud transition-colors hover:bg-accent-bright disabled:opacity-30"
           >
-            Send
+            <ArrowUp weight="bold" className="h-5 w-5" aria-hidden />
           </button>
         </div>
-        {mode?.mode === 'manual' && (
-          <p className="mx-auto mt-1.5 max-w-3xl text-[10px] text-bark">
-            Branch pinned — classification skipped on every message here.
-          </p>
-        )}
+        <p className="mx-auto mt-2 max-w-3xl text-[11px] leading-snug text-ink-faint">
+          {mode?.mode === 'manual'
+            ? 'This branch is pinned to one model, so classification is skipped here. '
+            : ''}
+          {demoMode
+            ? 'Demo mode: answers come from an extractive mock. Briefs, routing, and pruning are computed for real.'
+            : ''}
+        </p>
       </footer>
     </section>
   );

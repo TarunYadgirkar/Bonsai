@@ -39,7 +39,7 @@ export function TourBanner({
 }) {
   const copy = COPY[step];
   return (
-    <div className="pointer-events-auto fixed bottom-20 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-xl border border-moss/40 bg-paper-raised p-4 shadow-lg">
+    <div className="pointer-events-auto fixed bottom-20 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-2xl bg-paper-raised p-4 shadow-lift ring-1 ring-moss/25">
       <div className="flex items-baseline gap-2">
         <span className="eyebrow">the 60-second loop · {copy.step}</span>
         <button

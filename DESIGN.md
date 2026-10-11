@@ -1,66 +1,70 @@
-# Bonsai — design system
+# Bonsai design system
 
-The brief: Bonsai is the art of pruning a conversation to its essential living wood. The interface
-should feel like a cultivated thing, not a SaaS dashboard. Every choice below is derived from that
-subject, and deliberately avoids the current AI-generated defaults (indigo→purple gradients, Inter,
-shadcn `rounded-2xl shadow-lg` cards, the colored left-border strip, cards-in-cards, and the
-near-black + acid-accent look).
+**Subject:** a conversation tree where side questions branch off with a compiled brief instead of
+the whole history. **Audience:** people who already use chat assistants and are seeing the idea
+for the first time (portfolio visitors, Claude power users). **Single job:** make it obvious, in
+one glance, that a branch carries about 2% of its parent's context, ran on its own model, and
+merges one line back. **Treatment:** a utilitarian tool with one signature element.
 
-## Thesis
+## The signature: the cut strip
 
-Sumi-e ink on rice paper. A living tree is the hero and the signature — rendered with organic
-branch curves, not an indented file list — and each branch edge shows its *cut* (how much context
-was pruned). The economics use a horticultural season scale, not a cost-purple ramp.
+Every branch is drawn with a strip at true scale: the parent's available context at full width,
+the brief it actually sent as a solid sliver, and the pruned remainder hatched like removed wood.
+It appears large in the branch header (with the sent, left-on-parent and pruned figures) and in
+miniature on every node in the tree and in the brief sheet's footer. The argument for compiled
+briefs is that number, so the number gets a shape. Everything else stays quiet.
 
-## Color (committed light theme — the original was a committed dark theme; this is its inverse)
+## Color
+
+A nursery bench under cool daylight. Neutrals are tinted toward the accent green, never cream.
 
 | Token | Hex | Role |
 |---|---|---|
-| `--paper` | `#EEECE3` | background — cool-warm rice paper, pushed off the cream cliché |
-| `--paper-raised` | `#F6F4EC` | raised surfaces (cards, panes) |
-| `--ink` | `#20241E` | primary text — sumi black with a green undertone |
-| `--ink-soft` | `#5A5F52` | secondary text |
-| `--bark` | `#8A7F6A` | tertiary / captions / structure |
-| `--rule` | `#D8D4C6` | hairlines |
-| `--moss` | `#3E6B47` | the living accent — the active path, primary actions |
-| `--moss-bright` | `#5E8C55` | fresh-cut highlight, focus |
-| Season scale (cost) | `#7FA05B` → `#C8A24A` → `#B65A2E` | young growth → summer → ember; cheap→expensive |
+| `--surface` | `#ECEEEA` | page and garden canvas (lichen grey) |
+| `--surface-raised` | `#F8FAF6` | chat pane, node cards, dialogs |
+| `--surface-sunk` | `#E1E6DE` | brief panel, badges, code |
+| `--ink` | `#15201A` | primary text (evergreen black) |
+| `--ink-muted` | `#4F5C54` | secondary text |
+| `--ink-faint` | `#5E6A62` | captions, 4.5:1 on surface |
+| `--accent` | `#245C43` | cambium green: primary actions, active path, the kept segment |
+| `--accent-wash` | `#DBE7DF` | active node, user turns, merged insights |
+| `--danger` | `#9A4A24` | errors and the reset confirmation |
+| Season scale | `#7FA05B` → `#C8A24A` → `#B65A2E` | effort as data: edge strokes and badge dots only, never text |
 
-No gradients as surfaces. The only gradient permitted is the season *scale* on the economics bar,
-because it encodes real data (spend). Accent is used with restraint — most of the page is paper,
-ink, and rule.
+Older components read the legacy names (`--paper`, `--moss`, `--bark`, `--ember`); they alias the
+semantic tokens in `app/globals.css`.
 
 ## Type
 
-- Display: **Fraunces** (variable, optical size) — a hand-cut, botanical serif. Hero + section
-  headers only, with restraint. Justified by the craft/cultivation brief; not a neutral default.
-- Body/UI: **Instrument Sans** — humanist, characterful, deliberately not Inter.
-- Data: **IBM Plex Mono** — token counts, costs, percentages read as instrument readouts.
+- **Bricolage Grotesque** (display): the wordmark, conversation titles, dialog headings and the
+  pruned-% figure. Used sparingly, always semibold or bold.
+- **Instrument Sans** (body and UI): calm and humanist, deliberately not Inter.
+- **IBM Plex Mono** (numbers only): token counts, costs, percentages, tabular.
 
-Type scale (rem): 0.6875 · 0.8125 · 0.9375 · 1.0625 · 1.375 · 2 · 3.25. Display uses tight tracking
-and high optical size; data uses tabular figures.
+Body text in chat is 15px with relaxed leading, capped near 68 characters. Headings use
+`text-wrap: balance`.
+
+## Surfaces and shape
+
+No colored borders on rounded elements. Nodes and bubbles are fills with a soft `--shadow-bud`;
+selection is a ring (`ring-accent`), dialogs float on `--shadow-lift`. Regions are separated by
+1px inset shadows rather than bordered boxes. Radii: 10px for buds and bubbles, 8px for controls.
 
 ## Structure
 
-- No numbered `01/02/03` markers (the content isn't a sequence).
-- Eyebrows are lowercase, letter-spaced, in bark — they label real regions (garden, brief, spend).
-- Hairline rules (`--rule`), zero-to-small radius on structural frames; radius is reserved for the
-  organic node cards so they read as pruned buds, not shadcn boxes.
-
-## Signature
-
-The **garden**: the branch tree drawn as an actual cultivated bonsai — a trunk, boughs that curve
-out to buds (branch nodes), each edge inscribed with its pruned-% as a thin "cut" mark, the active
-path inked in moss. Hovering a bud reveals its brief economics. This is the one memorable element;
-everything else stays quiet.
+- Labels are sentence case and say something true: "Brief this branch was given", "Edge: effort,
+  low to high". No tracked-out eyebrows, no decorative numbering.
+- The garden legend explains the two encodings (edge color, cut strip) in the sidebar footer.
+- Icons are Phosphor (`@phosphor-icons/react`); no emoji or glyph icons.
 
 ## Motion
 
-Restrained. A branch buds in with a short spring on creation; the merge insight travels the bough
-back to the trunk (keep the existing MergeFlight idea, restyled). Respect `prefers-reduced-motion`.
-Nothing ambient or decorative.
+One orchestrated moment: the merge flight, where the distilled line travels from the branch to
+its parent node and lands as a highlighted insight. Everything else is a short color or shadow
+transition. `prefers-reduced-motion` collapses all of it.
 
 ## Quality floor
 
-Responsive to mobile (the garden collapses to a stacked list), visible keyboard focus in moss,
-reduced-motion honored, real empty/error copy in the interface's voice.
+Works at 375px with no horizontal page scroll (the tree canvas measures its container), visible
+accent focus rings, real loading, empty and error copy, and a first screen that shows a real tree:
+an empty garden on first visit is seeded with the Berkeley example and opens on a branch.

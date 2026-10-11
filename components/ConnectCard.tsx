@@ -28,7 +28,7 @@ function RevokeControl() {
       </button>
       {typeof state === 'number' && (
         <span className="ml-2 text-[11px] text-moss">
-          {state} OAuth {state === 1 ? 'grant' : 'grants'} revoked — reconnect in claude.ai to
+          {state} OAuth {state === 1 ? 'grant' : 'grants'} revoked. Reconnect in claude.ai to
           reauthorize.
         </span>
       )}
@@ -66,12 +66,12 @@ export function ConnectCard() {
   };
 
   return (
-    <div className="mt-6 rounded-xl border border-rule bg-paper-raised p-5">
+    <div className="mt-6 rounded-2xl bg-paper-raised p-5 shadow-bud">
       {result ? (
         <div>
-          <p className="eyebrow">your connector link</p>
+          <p className="eyebrow">Your connector link</p>
           <div className="mt-2 flex items-center gap-2">
-            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-lg border border-rule bg-paper-sunk px-3 py-2 font-mono text-[12px] text-ink">
+            <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap rounded-[var(--radius-control)] bg-paper-sunk px-3 py-2 font-mono text-[12px] text-ink">
               {result.url}
             </code>
             <button
@@ -83,12 +83,12 @@ export function ConnectCard() {
           </div>
           {result.mode === 'memory' && (
             <p className="mt-2 text-[11px] text-ember">
-              This deployment has no database — the link uses the shared dev key and the garden
+              This deployment has no database, so the link uses the shared dev key and the garden
               will not persist. Fine for trying it out, not for keeps.
             </p>
           )}
           <p className="mt-2 text-[11px] text-bark">
-            Same browser, same link — coming back here returns this key rather than minting
+            Same browser, same link: coming back here returns this key instead of minting
             another.
           </p>
           <RevokeControl />
@@ -103,7 +103,7 @@ export function ConnectCard() {
             {busy ? 'Growing your key…' : 'Create my connector link'}
           </button>
           <p className="text-[11px] text-bark">
-            Free, no account — the link itself is the credential.
+            Free, no account. The link itself is the credential.
           </p>
           {error && <p className="text-[11px] text-ember">{error}</p>}
         </div>

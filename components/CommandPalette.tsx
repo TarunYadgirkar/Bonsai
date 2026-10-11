@@ -103,7 +103,7 @@ export function CommandPalette({
         role="dialog"
         aria-label="Command palette"
         onMouseDown={(e) => e.stopPropagation()}
-        className="w-full max-w-lg overflow-hidden rounded-xl border border-rule bg-paper shadow-lg"
+        className="w-full max-w-lg overflow-hidden rounded-2xl bg-paper-raised shadow-lift"
       >
         <input
           autoFocus
@@ -123,7 +123,7 @@ export function CommandPalette({
             }
           }}
           placeholder="Search branches, messages, insights…"
-          className="w-full border-b border-rule bg-paper px-4 py-3 text-sm text-ink placeholder:text-bark focus:outline-none"
+          className="w-full bg-paper-raised px-4 shadow-[inset_0_-1px_0_var(--rule)] py-3 text-sm text-ink placeholder:text-bark focus:outline-none"
         />
         <div ref={listRef} className="max-h-[46vh] overflow-y-auto py-1">
           {actions.map((action, i) => (
@@ -137,7 +137,7 @@ export function CommandPalette({
               }`}
             >
               <span>{action.label}</span>
-              {action.hint && <span className="text-[10px] text-bark">{action.hint}</span>}
+              {action.hint && <span className="text-[11px] text-bark">{action.hint}</span>}
             </button>
           ))}
           {hits.map((hit, i) => {
@@ -170,7 +170,7 @@ export function CommandPalette({
             </p>
           )}
           {!query.trim() && (
-            <p className="border-t border-rule px-4 py-2 text-[10px] text-bark">
+            <p className="border-t border-rule px-4 py-2 text-[11px] text-bark">
               type to search · ↑↓ to move · Enter to open · Esc to close
             </p>
           )}

@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Anchor, Sparkle } from '@phosphor-icons/react';
 import type { BranchPreviewResponse, ContextBrief } from '@/lib/types';
+import { CutStrip, plainFact } from './CutStrip';
 
 /**
  * The brief made visible: before a fork ships, the compiled facts render as chips the user can
@@ -72,7 +74,7 @@ export function BriefSheet({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/30 p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 p-3 sm:items-center sm:p-6"
       onMouseDown={onClose}
       role="presentation"
     >
@@ -80,18 +82,23 @@ export function BriefSheet({
         role="dialog"
         aria-label="Compiled brief preview"
         onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[86vh] w-full max-w-lg flex-col overflow-hidden rounded-xl border border-rule bg-paper shadow-lg"
+        className="flex max-h-[88dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-surface-raised shadow-lift"
       >
-        <header className="border-b border-rule bg-paper-raised px-5 py-3">
-          <p className="eyebrow">the compiled brief — prune before it ships</p>
-          <p className="mt-1 truncate text-sm text-ink">“{selection}”</p>
+        <header className="px-5 pb-3 pt-4 shadow-[inset_0_-1px_0_var(--rule)]">
+          <h2 className="font-display text-lg font-semibold text-ink">Check the brief before it ships</h2>
+          <p className="mt-1 line-clamp-2 text-sm text-ink-muted">Branching from “{selection}”</p>
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {error && <p className="text-xs text-ember">{error}</p>}
-          {!brief && !error && <p className="text-xs text-bark">Compiling the brief…</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          {!brief && !error && (
+            <p className="text-sm text-ink-muted" role="status">
+              Compiling the brief…
+            </p>
+          )}
           {brief && (
             <>
+              <p className="mb-2 text-xs text-ink-faint">Click a fact to leave it out.</p>
               <div className="flex flex-col gap-1.5">
                 {brief.facts.map((fact, i) => {
                   const isAnchor = anchorFact !== null && fact === anchorFact;
@@ -102,61 +109,86 @@ export function BriefSheet({
                       onClick={() => toggle(i)}
                       title={
                         isAnchor
-                          ? 'The anchor fact — the referent this chain depends on. It stays.'
+                          ? 'The anchor fact: the name this chain of branches depends on. It stays.'
                           : isRemoved
-                            ? 'Removed — click to restore'
+                            ? 'Left out. Click to restore'
                             : 'Click to drop from the brief'
                       }
-                      className={`rounded-lg border px-3 py-1.5 text-left text-xs leading-relaxed transition-colors ${
+                      aria-pressed={!isRemoved}
+                      className={`rounded-[var(--radius-control)] px-3 py-2 text-left text-[13px] leading-relaxed transition-colors ${
                         isAnchor
-                          ? 'border-moss bg-moss-wash text-ink'
+                          ? 'bg-accent-wash text-ink'
                           : isRemoved
-                            ? 'border-rule text-bark line-through opacity-60'
-                            : 'border-rule bg-paper-raised text-ink hover:border-rule-strong'
+                            ? 'bg-transparent text-ink-faint line-through ring-1 ring-rule'
+                            : 'bg-surface text-ink hover:bg-surface-sunk'
                       }`}
                     >
-                      {isAnchor && <span className="mr-1.5 text-[10px] text-moss">⚓ anchor</span>}
-                      {fact}
+                      {isAnchor && (
+                        <span className="mr-1.5 inline-flex items-center gap-1 text-xs font-medium text-accent">
+                          <Anchor weight="bold" className="h-3.5 w-3.5" aria-hidden />
+                          Anchor
+                        </span>
+                      )}
+                      {plainFact(fact)}
                     </button>
                   );
                 })}
               </div>
-              <p className="mt-3 border-t border-rule pt-2 text-[11px] leading-relaxed text-bark">
-                {brief.excludedNote}
-              </p>
-              <label className="mt-4 block text-[11px] text-ink-soft">
+              {brief.recalled && brief.recalled.length > 0 && (
+                <div className="mt-4">
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-accent">
+                    <Sparkle weight="fill" className="h-3.5 w-3.5" aria-hidden />
+                    Recalled from other branches
+                  </p>
+                  <ul className="mt-1.5 flex flex-col gap-1 text-[13px] leading-relaxed text-ink">
+                    {brief.recalled.map((r) => (
+                      <li key={r.text}>
+                        {r.text} <span className="text-ink-faint">({r.source})</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p className="mt-4 text-xs leading-relaxed text-ink-faint">{brief.excludedNote}</p>
+              <label htmlFor="branch-question" className="mt-4 block text-xs font-medium text-ink-muted">
                 First question for the branch (optional)
               </label>
               <textarea
+                id="branch-question"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 rows={2}
                 placeholder="Leave empty to just open the branch…"
-                className="mt-1 w-full resize-none rounded-lg border border-rule bg-paper-raised px-3 py-2 text-sm text-ink placeholder:text-bark focus:border-moss focus:outline-none"
+                className="mt-1.5 w-full resize-none rounded-[var(--radius-control)] bg-surface px-3 py-2 text-sm text-ink ring-1 ring-rule-strong placeholder:text-ink-faint focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </>
           )}
         </div>
 
-        <footer className="flex items-center gap-3 border-t border-rule bg-paper-raised px-5 py-3">
+        <footer className="flex flex-col gap-3 px-5 py-3 shadow-[inset_0_1px_0_var(--rule)]">
           {brief && (
-            <p className="tnum text-[11px] text-bark">
-              ~{keptTokens.toLocaleString()} sent ·{' '}
-              <span className="text-moss">~{avoided.toLocaleString()} avoided</span>
-              {removed.size > 0 && ` · ${removed.size} fact${removed.size === 1 ? '' : 's'} pruned by you`}
-            </p>
+            <div className="flex flex-col gap-1.5">
+              <CutStrip available={brief.availableTokens} kept={keptTokens} />
+              <p className="text-xs text-ink-muted">
+                About <span className="tnum text-ink">{keptTokens.toLocaleString()}</span> tokens
+                sent, <span className="tnum">{avoided.toLocaleString()}</span> left on the parent
+                {removed.size > 0 &&
+                  `. You left out ${removed.size} fact${removed.size === 1 ? '' : 's'}`}
+                .
+              </p>
+            </div>
           )}
-          <div className="ml-auto flex gap-2">
+          <div className="flex justify-end gap-2">
             <button
               onClick={onClose}
-              className="rounded-lg border border-rule-strong px-3 py-1.5 text-xs text-ink-soft transition-colors hover:bg-paper-sunk"
+              className="rounded-[var(--radius-control)] px-3 py-2 text-sm text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
             >
               Cancel
             </button>
             <button
               onClick={() => brief && onGrow(kept, question.trim())}
               disabled={!brief || growing || kept.length === 0}
-              className="rounded-lg bg-moss px-4 py-1.5 text-xs font-medium text-paper transition-colors hover:bg-moss-bright disabled:opacity-40"
+              className="rounded-[var(--radius-control)] bg-accent px-4 py-2 text-sm font-semibold text-white shadow-bud transition-colors hover:bg-accent-bright disabled:opacity-40"
             >
               {growing ? 'Growing…' : 'Grow branch'}
             </button>

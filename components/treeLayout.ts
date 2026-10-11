@@ -10,32 +10,31 @@ import type { BranchNode, Tier } from '@/lib/types';
  * stubs always meet a card's vertical centre.
  */
 
-/** Left inset of the root card. Each depth level steps right from here. */
+/** Left inset of the root card, and the margin every card keeps from the right edge. */
 const GUTTER = 20;
-const INDENT = 44;
-/** Every card ends flush at this x, so deeper nodes are narrower rather than clipped. */
-const RIGHT_EDGE = 360;
+const INDENT = 36;
 /** Narrowest a card may get, whatever the depth. */
-const MIN_WIDTH = 148;
-const TOP = 36;
-const GAP = 22;
+const MIN_WIDTH = 168;
+const TOP = 20;
+const GAP = 14;
 /** A parent's vertical spine, measured right from its own left edge. */
-const SPINE_OFFSET = 24;
+const SPINE_OFFSET = 18;
 /** Corner radius where a child's edge peels off its parent's spine. */
 const ELBOW = 9;
 /** Breathing room under the last card so the scroll doesn't end flush against it. */
 const BOTTOM_PAD = 24;
 
-export const CANVAS_WIDTH = 400;
+/** Desktop canvas width. Narrower viewports pass their measured width to layoutTree. */
+export const CANVAS_WIDTH = 420;
 
 /*
  * Card heights. These must match what the card actually renders — see NODE_HEIGHT
  * usage in TreeSidebar, which sets them as an explicit style.
  */
-const HEIGHT: Record<CardVariant, number> = {
-  root: 56,
-  branch: 76,
-  archived: 50,
+export const HEIGHT: Record<CardVariant, number> = {
+  root: 60,
+  branch: 82,
+  archived: 46,
 };
 
 export type CardVariant = 'root' | 'branch' | 'archived';
@@ -84,7 +83,9 @@ function variantOf(node: BranchNode): CardVariant {
  * Depth-first from each root, so a node's children sit directly beneath it — the same
  * walk the indented list used, and what puts a branch's subtree above its next sibling.
  */
-export function layoutTree(nodes: BranchNode[]): TreeLayout {
+export function layoutTree(nodes: BranchNode[], canvasWidth = CANVAS_WIDTH): TreeLayout {
+  // Every card ends flush at the right edge, so deeper nodes are narrower rather than clipped.
+  const rightEdge = canvasWidth - GUTTER;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const placed: PlacedNode[] = [];
   const seen = new Set<string>();
@@ -103,7 +104,7 @@ export function layoutTree(nodes: BranchNode[]): TreeLayout {
       variant,
       x,
       y: cursorY,
-      width: Math.max(RIGHT_EDGE - x, MIN_WIDTH),
+      width: Math.max(rightEdge - x, MIN_WIDTH),
       height,
     });
     cursorY += height + GAP;

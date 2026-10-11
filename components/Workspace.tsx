@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { TurnCommand } from 'bonsai-engine';
 import type {
   BranchResponse,
   ChatResponse,
@@ -102,12 +103,41 @@ function writeBranchToUrl(id: string, mode: 'push' | 'replace'): void {
 function titleFromSelection(selection: string): string {
   const clean = selection.replace(/[*_`#>]/g, '').replace(/\s+/g, ' ').trim();
   if (!clean) return 'Branch';
-  return clean.length > 42 ? `${clean.slice(0, 42).trimEnd()}…` : clean;
+  const title = clean[0].toUpperCase() + clean.slice(1);
+  return title.length > 42 ? `${title.slice(0, 42).trimEnd()}…` : title;
+}
+
+/** Set once a visitor's empty garden has been seeded, so Reset garden really does mean empty. */
+const SEEDED_KEY = 'bonsai:seeded';
+
+function isFreshGarden(data: StateResponse): boolean {
+  return data.conversations.length === 1 && data.conversations[0].messages.length === 0;
+}
+
+function shouldAutoSeed(data: StateResponse): boolean {
+  if (!isFreshGarden(data) || branchFromUrl()) return false;
+  try {
+    return localStorage.getItem(SEEDED_KEY) === null;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Person A territory (AGENTS.md): this consumes the API routes and nothing else.
- * No lib/ engine code is imported here — only the frozen types from lib/types.ts.
+ * Where a first-time visitor lands: the deepest answered branch with a child under it, so the
+ * first screen shows a brief, its cut, and the tree around it. Falls back to the root.
+ */
+function showcaseBranch(data: StateResponse): string {
+  const answered = data.tree.filter(
+    (n) => n.parentId !== null && !n.archived && n.messageCount > 0,
+  );
+  const withChild = answered.find((n) => n.childIds.length > 0);
+  return (withChild ?? answered[0])?.id ?? data.rootId;
+}
+
+/**
+ * Person A territory (AGENTS.md): this consumes the API routes and nothing else. The one
+ * engine import is the typed-command grammar, a pure function with no runtime dependencies.
  */
 export function Workspace() {
   const [state, setState] = useState<StateResponse | null>(null);
@@ -137,7 +167,11 @@ export function Workspace() {
   /** The guided first-session loop. Null = not touring. Persisted off in localStorage on finish. */
   const [tourStep, setTourStep] = useState<TourStep | null>(null);
   /** Selection awaiting the brief-preview sheet; the fork ships from there. */
-  const [briefSheet, setBriefSheet] = useState<{ parentId: string; selection: string } | null>(null);
+  const [briefSheet, setBriefSheet] = useState<{
+    parentId: string;
+    selection: string;
+    question?: string;
+  } | null>(null);
   const [demoMode, setDemoMode] = useState(false);
 
   // Honesty ribbon: without a provider key the answers come from the extractive mock. Say so —
@@ -229,7 +263,14 @@ export function Workspace() {
   useEffect(() => {
     let cancelled = false;
     fetchState().then(
-      (data) => !cancelled && applyState(data),
+      (data) => {
+        if (cancelled) return;
+        if (shouldAutoSeed(data)) {
+          void loadDemoRef.current({ landOn: 'showcase' });
+          return;
+        }
+        applyState(data);
+      },
       (err) => !cancelled && setError(describe(err)),
     );
     fetchEconomics().then((logs) => !cancelled && logs && setEconomics(logs));
@@ -561,22 +602,57 @@ export function Workspace() {
   };
 
   /** Pull the Berkeley Clubs example into this session, replacing whatever is here. */
-  const loadDemo = async () => {
+  const loadDemo = async (opts?: { landOn: 'root' | 'showcase' }) => {
     try {
       const res = await fetch('/api/demo', { method: 'POST' });
       if (!res.ok) throw await httpError(res, 'POST /api/demo');
       const data: StateResponse = await res.json();
+      try {
+        localStorage.setItem(SEEDED_KEY, '1');
+      } catch {}
       setState(data);
       setPendingModes({});
       setFlight(null);
       setMerged(null);
-      setActiveId(data.rootId);
+      setActiveId(opts?.landOn === 'showcase' ? showcaseBranch(data) : data.rootId);
       setError(null);
       const logs = await fetchEconomics();
       setEconomics(logs);
     } catch (err) {
       setError(describe(err));
     }
+  };
+
+  // The first-load effect is declared above loadDemo; a ref hands it the latest closure.
+  const loadDemoRef = useRef(loadDemo);
+  useEffect(() => {
+    loadDemoRef.current = loadDemo;
+  });
+
+  /**
+   * Typed tree commands from the composer. Fork opens the brief sheet with the question
+   * prefilled; merge and abandon only mean something on a branch, so on a trunk they fall
+   * through and send as ordinary text.
+   */
+  const runCommand = async (
+    command: TurnCommand,
+    origin: { x: number; y: number },
+  ): Promise<boolean> => {
+    const current = state?.conversations.find((c) => c.id === activeId);
+    if (!current) return false;
+    if (command.kind === 'fork') {
+      setBriefSheet({ parentId: current.id, selection: command.question, question: command.question });
+      return true;
+    }
+    if (!current.parentId || current.archived) return false;
+    if (command.kind === 'merge') {
+      if (current.messages.length === 0) return false;
+      await merge(origin);
+      return true;
+    }
+    await nodeAction({ id: current.id, op: 'archive' });
+    setNotice('Branch archived. Nothing was merged back.');
+    return true;
   };
 
   /** A second tree, not a branch: no parent, no inherited transcript. */
@@ -632,18 +708,17 @@ export function Workspace() {
 
   if (error && !state) {
     return (
-      <main className="flex flex-1 items-center justify-center bg-paper p-8">
-        <div className="max-w-md text-center">
-          <p className="eyebrow">the garden</p>
-          <h1 className="font-display text-4xl text-ink">Bonsai</h1>
-          <p className="mt-3 text-sm text-ink-soft">
-            The garden is here, but the roots aren&apos;t drawing water yet — the engine didn&apos;t
-            answer.
+      <main className="flex flex-1 items-center justify-center bg-surface p-8">
+        <div className="max-w-md">
+          <h1 className="font-display text-4xl font-bold text-ink">Bonsai</h1>
+          <p className="mt-3 text-sm text-ink-muted">
+            The garden couldn&apos;t load because the server didn&apos;t answer. Check your
+            connection, then try again.
           </p>
-          <p className="tnum mt-2 text-xs text-bark">{error}</p>
+          <p className="mt-2 text-xs text-ink-faint">{error}</p>
           <button
             onClick={loadState}
-            className="mt-5 rounded-md border border-moss px-4 py-1.5 text-xs font-medium text-moss transition-colors hover:bg-moss-wash"
+            className="mt-5 rounded-[var(--radius-control)] bg-accent px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-accent-bright"
           >
             Try again
           </button>
@@ -654,11 +729,10 @@ export function Workspace() {
 
   if (!state) {
     return (
-      <main className="flex flex-1 items-center justify-center bg-paper">
-        <p className="text-sm text-ink-soft">
-          <span className="font-display text-lg text-ink">Bonsai</span>
-          <span className="mx-2 text-bark">·</span>
-          unfurling the garden…
+      <main className="flex flex-1 items-center justify-center bg-surface">
+        <p className="text-sm text-ink-muted" role="status">
+          <span className="mr-2 font-display text-lg font-bold text-ink">Bonsai</span>
+          Loading the garden…
         </p>
       </main>
     );
@@ -714,12 +788,12 @@ export function Workspace() {
       {notice && (
         <div
           role="status"
-          className="absolute left-1/2 top-4 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg border border-moss/40 bg-paper-raised px-4 py-2.5 shadow-sm"
+          className="absolute left-1/2 top-4 z-50 flex w-[min(36rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 rounded-[var(--radius-bud)] bg-surface-raised px-4 py-2.5 shadow-lift ring-1 ring-accent/30"
         >
-          <p className="text-xs leading-snug text-moss">{notice}</p>
+          <p className="text-sm leading-snug text-ink">{notice}</p>
           <button
             onClick={() => setNotice(null)}
-            className="shrink-0 rounded border border-rule-strong px-2 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
+            className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
           >
             Dismiss
           </button>
@@ -728,12 +802,12 @@ export function Workspace() {
       {error && (
         <div
           role="alert"
-          className="absolute left-1/2 top-4 z-50 flex max-w-xl -translate-x-1/2 items-center gap-3 rounded-lg border border-[color:var(--ember)]/40 bg-paper-raised px-4 py-2.5 shadow-sm"
+          className="absolute left-1/2 top-4 z-50 flex w-[min(36rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 rounded-[var(--radius-bud)] bg-surface-raised px-4 py-2.5 shadow-lift ring-1 ring-danger/40"
         >
-          <p className="text-xs leading-snug text-ember">{error}</p>
+          <p className="text-sm leading-snug text-danger">{error}</p>
           <button
             onClick={() => setError(null)}
-            className="shrink-0 rounded border border-rule-strong px-2 py-0.5 text-[11px] text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
+            className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
           >
             Dismiss
           </button>
@@ -746,7 +820,7 @@ export function Workspace() {
         onOpenEconomics={() => setEconomicsOpen(true)}
         onReset={reset}
         onNewChat={newChat}
-        onLoadDemo={loadDemo}
+        onLoadDemo={() => loadDemo()}
         flashId={merged?.parentId ?? null}
         stats={nodeStats}
         session={
@@ -789,19 +863,15 @@ export function Workspace() {
           }
           initialDraft={failedDraft?.branchId === active.id ? failedDraft.content : undefined}
           onDraftRestored={() => setFailedDraft(null)}
-          onLoadDemo={loadDemo}
+          onLoadDemo={() => loadDemo()}
           onStartTour={startTour}
+          onCommand={runCommand}
+          demoMode={demoMode}
         />
       ) : (
-        <section className="flex flex-1 items-center justify-center bg-paper">
-          <p className="text-sm text-ink-soft">Pick a branch from the garden.</p>
+        <section className="flex flex-1 items-center justify-center bg-surface-raised">
+          <p className="text-sm text-ink-muted">Pick a branch from the garden.</p>
         </section>
-      )}
-
-      {demoMode && (
-        <p className="pointer-events-none absolute bottom-3 left-1/2 z-40 max-w-[92vw] -translate-x-1/2 rounded-full border border-rule bg-paper-raised px-3 py-1 text-center text-[10px] text-bark shadow-sm">
-          demo mode · answers are an extractive mock — briefs, routing, and pruning are real
-        </p>
       )}
 
       {flight && (
@@ -822,9 +892,10 @@ export function Workspace() {
           parentId={briefSheet.parentId}
           selection={briefSheet.selection}
           defaultQuestion={
-            tourStep === 'branch'
+            briefSheet.question ??
+            (tourStep === 'branch'
               ? 'What is the single most important thing to know about this?'
-              : undefined
+              : undefined)
           }
           onGrow={growBranch}
           onClose={() => {

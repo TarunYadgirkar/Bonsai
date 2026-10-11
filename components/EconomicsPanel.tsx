@@ -180,23 +180,22 @@ export function EconomicsPanel({
         aria-modal="true"
         aria-label="Session economics"
         onClick={(e) => e.stopPropagation()}
-        className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg border border-rule bg-paper-raised outline-none"
+        className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-paper-raised shadow-lift outline-none"
         style={{ boxShadow: '0 18px 60px -24px color-mix(in oklab, var(--ink) 34%, transparent)' }}
       >
         <header className="flex items-start gap-4 border-b border-rule px-8 py-6">
           <div>
-            <div className="eyebrow">spend</div>
-            <h2 className="mt-1 font-display text-[1.375rem] leading-tight text-ink">
-              Session economics
+            <h2 className="mt-1 font-display text-[1.375rem] font-semibold leading-tight text-ink">
+              What this session spent
             </h2>
             <p className="mt-1 text-[0.8125rem] text-ink-soft">
-              Live from this session&apos;s inference log — every call Bonsai made.
+              Every call Bonsai made in this session, priced from the inference log.
             </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="ml-auto rounded-md border border-rule px-3 py-1.5 text-xs text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
+            className="ml-auto rounded-[var(--radius-control)] px-3 py-1.5 text-xs text-ink-soft transition-colors hover:bg-paper-sunk hover:text-ink"
           >
             Close
           </button>
@@ -204,7 +203,7 @@ export function EconomicsPanel({
 
         <div className="min-h-0 flex-1 overflow-y-auto px-8 py-6">
           {error && (
-            <p className="border border-rule bg-paper-sunk p-4 text-xs text-ember">
+            <p className="rounded-[var(--radius-control)] bg-paper-sunk p-4 text-sm text-ember">
               <span className="tnum">{error}</span>
             </p>
           )}
@@ -215,7 +214,7 @@ export function EconomicsPanel({
             <>
               <section className="grid gap-x-10 gap-y-7 sm:grid-cols-2">
                 <SeasonBar
-                  label="input tokens"
+                  label="Input tokens"
                   savedPct={data.baseline.tokensSavedPct}
                   sharePct={share(data.totals.inputTokens, data.baseline.inputTokens)}
                   actual={data.totals.inputTokens.toLocaleString()}
@@ -225,7 +224,7 @@ export function EconomicsPanel({
                   baselineCaption={`vs sending the full parent history every turn (baseline modeled; actuals ${basisWord})`}
                 />
                 <SeasonBar
-                  label="spend"
+                  label="Spend"
                   savedPct={data.baseline.costSavedPct}
                   sharePct={share(data.totals.costUsd, data.baseline.costUsd)}
                   actual={formatUsd(data.totals.costUsd)}
@@ -283,7 +282,7 @@ export function EconomicsPanel({
 
               {data.stats.byPurpose.length > 0 && (
                 <section className="mt-7">
-                  <div className="eyebrow mb-2.5">spend by purpose</div>
+                  <h3 className="eyebrow mb-2.5">Spend by purpose</h3>
                   {data.stats.byPurpose.map((p) => (
                     <div
                       key={p.purpose}
@@ -303,33 +302,33 @@ export function EconomicsPanel({
               )}
 
               <section className="mt-7">
-                <div className="eyebrow mb-2.5">per-inference log</div>
+                <h3 className="eyebrow mb-2.5">Every call</h3>
                 {data.logs.length === 0 ? (
                   <p className="border-t border-rule pt-6 text-center text-xs text-ink-soft">
-                    No inferences logged yet. Branch off the conversation and ask something —
-                    every call lands here.
+                    No calls logged yet. Branch off the conversation and ask something; every
+                    call lands here.
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[800px] border-collapse text-left text-xs">
                       <thead>
                         <tr className="border-b border-rule-strong">
-                          <th className="eyebrow px-3 py-2 text-left font-medium">time</th>
-                          <th className="eyebrow px-3 py-2 text-left font-medium">branch</th>
-                          <th className="eyebrow px-3 py-2 text-left font-medium">purpose</th>
-                          <th className="eyebrow px-3 py-2 text-left font-medium">effort</th>
-                          <th className="eyebrow px-3 py-2 text-left font-medium">model</th>
-                          <th className="eyebrow px-3 py-2 text-right font-medium">context in</th>
-                          <th className="eyebrow px-3 py-2 text-right font-medium">out</th>
-                          <th className="eyebrow px-3 py-2 text-right font-medium">cost</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">Time</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">Branch</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">Purpose</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">Effort</th>
+                          <th className="eyebrow px-3 py-2 text-left font-medium">Model</th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">Context in</th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">Out</th>
+                          <th className="eyebrow px-3 py-2 text-right font-medium">Cost</th>
                           <th className="eyebrow px-3 py-2 text-right font-medium">
-                            baseline (modeled)
+                            Baseline (modeled)
                           </th>
                           <th className="eyebrow px-3 py-2 text-right font-medium">
-                            ceiling (modeled)
+                            Ceiling (modeled)
                           </th>
                           <th className="eyebrow px-3 py-2 text-right font-medium">
-                            warm fork (modeled)
+                            Warm fork (modeled)
                           </th>
                         </tr>
                       </thead>
@@ -343,10 +342,10 @@ export function EconomicsPanel({
                             <td className="px-3 py-2 text-ink-soft">
                               {PURPOSE_LABEL[log.purpose] ?? log.purpose}
                               {log.escalated && (
-                                <span className="ml-1.5 text-[10px] text-ember">escalated</span>
+                                <span className="ml-1.5 text-[11px] text-ember">escalated</span>
                               )}
                               {log.overridden && (
-                                <span className="ml-1.5 text-[10px] text-bark">pinned</span>
+                                <span className="ml-1.5 text-[11px] text-bark">pinned</span>
                               )}
                             </td>
                             <td className="px-3 py-2 text-ink-soft">
@@ -394,7 +393,7 @@ export function EconomicsPanel({
                     {' '}
                     <span className="text-ember">
                       {data.unpricedCount} call{data.unpricedCount === 1 ? '' : 's'} ran on an
-                      upstream the price catalog cannot truthfully price — excluded from every
+                      upstream the price catalog cannot price, so they are left out of every
                       dollar figure above.
                     </span>
                   </>

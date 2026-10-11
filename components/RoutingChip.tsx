@@ -77,22 +77,22 @@ export function RoutingChip({
           size="sm"
         />
         {routing.escalated && (
-          <span className="text-[10px] text-ember">escalated</span>
+          <span className="text-[11px] text-ember">escalated</span>
         )}
         {routing.overridden && (
-          <span className="text-[10px] text-bark">pinned</span>
+          <span className="text-[11px] text-bark">pinned</span>
         )}
         {/* servedBy is set only by a live provider — its absence means the extractive mock
             answered, and that must be visible on the message, not buried in a hover card. */}
         {!routing.servedBy && (
-          <span className="rounded-full border border-rule bg-paper-sunk px-1.5 py-0.5 text-[10px] text-bark">
+          <span className="rounded-full bg-paper-sunk px-1.5 py-0.5 text-[11px] text-bark">
             demo answer
           </span>
         )}
 
         {/* Hover card — "Why did Bonsai choose this?" A paper note, not a dark tooltip. */}
         {!menuOpen && (
-          <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-72 flex-col gap-1.5 rounded-lg border border-rule bg-paper-raised p-3 text-left shadow-sm group-hover:flex group-focus-within:flex">
+          <span className="pointer-events-none absolute bottom-full left-0 z-20 mb-2 hidden w-72 flex-col gap-1.5 rounded-[var(--radius-bud)] bg-paper-raised p-3 text-left shadow-lift group-hover:flex group-focus-within:flex">
             <span className="flex items-center justify-between">
               <span className="text-xs font-medium text-ink">{label}</span>
               <span className="tnum text-xs text-ink">
@@ -144,23 +144,23 @@ export function RoutingChip({
             {(routing.coveredByBrief === false || routing.widened || routing.learned) && (
               <span className="flex flex-wrap gap-1">
                 {routing.learned && (
-                  <span className="rounded-full border border-moss/30 bg-moss-wash px-1.5 py-0.5 text-[10px] text-moss">
+                  <span className="rounded-full bg-moss-wash px-1.5 py-0.5 text-[11px] text-moss">
                     learned from your history
                   </span>
                 )}
                 {routing.coveredByBrief === false && (
-                  <span className="rounded-full border border-rule bg-paper-sunk px-1.5 py-0.5 text-[10px] text-ember">
+                  <span className="rounded-full bg-paper-sunk px-1.5 py-0.5 text-[11px] text-ember">
                     brief flagged insufficient
                   </span>
                 )}
                 {routing.widened && (
-                  <span className="rounded-full border border-moss/30 bg-moss-wash px-1.5 py-0.5 text-[10px] text-moss">
+                  <span className="rounded-full bg-moss-wash px-1.5 py-0.5 text-[11px] text-moss">
                     widened with parent turns
                   </span>
                 )}
               </span>
             )}
-            <span className="text-[10px] text-bark">Click to override</span>
+            <span className="text-[11px] text-bark">Click to override</span>
           </span>
         )}
       </button>
@@ -175,7 +175,7 @@ export function RoutingChip({
           />
           <span
             role="menu"
-            className="absolute bottom-full left-0 z-30 mb-2 flex w-60 flex-col rounded-lg border border-rule bg-paper-raised p-1 shadow-sm"
+            className="absolute bottom-full left-0 z-30 mb-2 flex w-60 flex-col rounded-[var(--radius-bud)] bg-paper-raised p-1 shadow-lift"
           >
             <button
               role="menuitem"
@@ -188,8 +188,8 @@ export function RoutingChip({
               }`}
             >
               Auto
-              <span className="text-[10px] text-bark">router decides</span>
-              {isAuto && <span className="ml-auto text-[10px] text-moss">active</span>}
+              <span className="text-[11px] text-bark">router decides</span>
+              {isAuto && <span className="ml-auto text-[11px] text-moss">active</span>}
             </button>
 
             <span className="mt-1 border-t border-rule px-2 pt-1.5 eyebrow">
@@ -199,7 +199,7 @@ export function RoutingChip({
             {catalog ? (
               catalog.models.map((model) => (
                 <span key={model.id} className="px-1 py-0.5">
-                  <span className="px-1 text-[10px] text-bark">{model.label}</span>
+                  <span className="px-1 text-[11px] text-bark">{model.label}</span>
                   <span className="mt-0.5 flex gap-1">
                     {catalog.efforts.map((effort) => {
                       const picked =
@@ -219,10 +219,10 @@ export function RoutingChip({
                             });
                             setMenuOpen(false);
                           }}
-                          className={`flex-1 rounded border px-1 py-1 text-[10px] transition-colors ${
+                          className={`flex-1 rounded px-1 py-1 text-[11px] transition-colors ${
                             picked
-                              ? 'border-moss bg-moss-wash text-moss'
-                              : 'border-rule text-ink-soft hover:bg-paper-sunk hover:text-ink'
+                              ? 'bg-moss-wash text-moss ring-1 ring-moss/40'
+                              : 'bg-paper-sunk/60 text-ink-soft hover:bg-paper-sunk hover:text-ink'
                           }`}
                         >
                           {EFFORT_LABEL[effort.level]}
