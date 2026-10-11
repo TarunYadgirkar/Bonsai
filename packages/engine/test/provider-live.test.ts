@@ -170,3 +170,23 @@ describe('providerComplete — openai', () => {
     expect(body).not.toHaveProperty('max_tokens');
   });
 });
+
+describe('upstream id resolution', () => {
+  const ok = { ok: true, json: { content: [{ type: 'text', text: 'Hi.' }], usage: { input_tokens: 1, output_tokens: 1 } } };
+  const sentModel = (fetchFn: ReturnType<typeof stubFetch>) =>
+    JSON.parse(String(fetchFn.mock.calls[0][1].body)).model as string;
+
+  it('calls a legacy pin on its successor', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test';
+    const fetchFn = stubFetch(ok);
+    await providerComplete({ model: 'claude-opus-5', messages: MESSAGES, maxTokens: 100 });
+    expect(sentModel(fetchFn)).toBe('claude-opus-5-5');
+  });
+
+  it('never forwards an id the catalog does not know', async () => {
+    process.env.ANTHROPIC_API_KEY = 'test';
+    const fetchFn = stubFetch(ok);
+    await providerComplete({ model: 'toString', messages: MESSAGES, maxTokens: 100 });
+    expect(sentModel(fetchFn)).toBe('claude-haiku-5-5');
+  });
+});

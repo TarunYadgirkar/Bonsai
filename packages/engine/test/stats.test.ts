@@ -229,6 +229,10 @@ describe('sessionStats', () => {
     expect(savings.warmCostSavedPct).toBeLessThan(savings.costSavedPct);
   });
 
+  it('prefers the warm baseline priced when the row was logged', () => {
+    expect(warmBaselineOf(log({ warmBaselineCostUsd: 0.5 }))).toBe(0.5);
+  });
+
   it('derives a single row warm baseline from its stored token counts', () => {
     // 1000 cached tokens on Opus 5.5 ($0.20/M) + 50 output ($20/M).
     expect(warmBaselineOf(log())).toBe(0.0012);

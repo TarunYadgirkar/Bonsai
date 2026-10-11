@@ -191,6 +191,9 @@ export interface InferenceLog {
   baselineInputTokens: number;
   /** Cost of the same request on the deep-tier model with full history. */
   baselineCostUsd: number;
+  /** The same counterfactual with the history read from a warm cache, priced when logged so a
+   *  later rate change never mixes epochs. Absent on rows logged before 2026-10. */
+  warmBaselineCostUsd?: number;
   /** True when the serving upstream is unknown to the price catalog — estCostUsd is fiction and
    *  the row is excluded from spend/savings totals. */
   unpriced?: boolean;

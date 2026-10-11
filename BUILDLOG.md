@@ -17,7 +17,8 @@ Code 2.1.273 docs/changelog and the platform pricing page:
 Landed:
 - **Engine**: `ModelSpec.cacheRead`; Sonnet 5 rate fixed (was $3/$15); ceiling label Fable 5.1,
   upstream id `claude-fable-5-1` (catalog id `claude-fable-5` kept — it is persisted in
-  inference_logs rows). New `warmBaselineCostUsd` / `warmCeilingCostUsd` / `warmBaselineOf`: the
+  inference_logs rows; superseded 2026-10: the catalog id is now `claude-fable-5-1` and stored
+  legacy ids resolve through `LEGACY_MODEL_IDS`). New `warmBaselineCostUsd` / `warmCeilingCostUsd` / `warmBaselineOf`: the
   full-copy counterfactual with the ENTIRE history priced at the cache-hit rate (deliberately
   generous to the baseline). `SessionSavings` and `savingsCurve` carry warm figures; derived from
   stored token counts, so legacy rows need no migration. PRICES_AS_OF 2026-09-21.

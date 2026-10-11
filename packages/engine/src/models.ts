@@ -80,24 +80,47 @@ export const CEILING_MODEL = 'claude-fable-5-1';
 /**
  * Catalog ids before the 2026-10 refresh, mapped to their successors. Stored trees, extension
  * pins and plugin pins still carry these; they resolve to the successor rather than silently
- * landing on the first catalog entry. Historical rows keep their own label (`legacyLabel`).
+ * landing on the first catalog entry. Historical rows keep their own `label`, and anything a
+ * legacy model actually served is priced at its own published rate, not the successor's.
  */
-export const LEGACY_MODEL_IDS: Record<string, { successor: string; label: string }> = {
-  'claude-haiku-4-5': { successor: 'claude-haiku-5-5', label: 'Haiku 4.5' },
-  'claude-sonnet-5': { successor: 'claude-sonnet-5-5', label: 'Sonnet 5' },
-  'claude-opus-5': { successor: 'claude-opus-5-5', label: 'Opus 5' },
-  'claude-fable-5': { successor: 'claude-fable-5-1', label: 'Fable 5' },
+export const LEGACY_MODEL_IDS: Record<
+  string,
+  { successor: string; label: string; input: number; output: number; cacheRead: number }
+> = {
+  'claude-haiku-4-5': { successor: 'claude-haiku-5-5', label: 'Haiku 4.5', input: 1, output: 5, cacheRead: 0.1 },
+  'claude-sonnet-5': { successor: 'claude-sonnet-5-5', label: 'Sonnet 5', input: 2, output: 10, cacheRead: 0.2 },
+  'claude-opus-5': { successor: 'claude-opus-5-5', label: 'Opus 5', input: 5, output: 25, cacheRead: 0.5 },
+  'claude-fable-5': { successor: 'claude-fable-5-1', label: 'Fable 5', input: 10, output: 50, cacheRead: 1 },
 };
+
+const legacyEntry = (id: string) =>
+  Object.hasOwn(LEGACY_MODEL_IDS, id) ? LEGACY_MODEL_IDS[id] : undefined;
 
 /** Catalog id for any id the app has ever stored: current ids pass through, legacy ids map forward. */
 export function canonicalModelId(id: string): string {
   if (MODELS.some((m) => m.id === id)) return id;
-  return LEGACY_MODEL_IDS[id]?.successor ?? id;
+  return legacyEntry(id)?.successor ?? id;
 }
 
 /** Display label for a stored id, without relabelling history as the successor. */
 export function modelLabelFor(id: string): string {
-  return MODELS.find((m) => m.id === id)?.label ?? LEGACY_MODEL_IDS[id]?.label ?? id;
+  return MODELS.find((m) => m.id === id)?.label ?? legacyEntry(id)?.label ?? id;
+}
+
+/**
+ * The published rate of whichever Claude model an id names: current or legacy, bare or
+ * date-suffixed (longest prefix wins, so `claude-opus-5-5` never matches `claude-opus-5`).
+ */
+function claudeRateFor(id: string): { input: number; output: number } | undefined {
+  const candidates: [string, { input: number; output: number }][] = [
+    ...MODELS.map((m): [string, ModelSpec] => [m.id, m]),
+    ...Object.entries(LEGACY_MODEL_IDS),
+  ];
+  let best: [string, { input: number; output: number }] | undefined;
+  for (const candidate of candidates) {
+    if (id.startsWith(candidate[0]) && candidate[0].length > (best?.[0].length ?? 0)) best = candidate;
+  }
+  return best?.[1];
 }
 
 export interface EffortSpec {
@@ -150,7 +173,7 @@ export function estimateCostUsd(tier: Tier, inputTokens: number, outputTokens: n
 }
 
 export function costForModel(modelId: string, inputTokens: number, outputTokens: number): number {
-  const rate = modelSpec(modelId);
+  const rate = legacyEntry(modelId) ?? modelSpec(modelId);
   const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1_000_000;
   return Math.round(usd * 1e6) / 1e6;
 }
@@ -182,9 +205,8 @@ const UPSTREAM_RATES: Record<string, { input: number; output: number }> = {
  */
 export function isPricedServedBy(servedBy: string | undefined): boolean {
   if (!servedBy) return true;
-  if (UPSTREAM_RATES[servedBy]) return true;
-  const known = [...MODELS.map((m) => m.id), ...Object.keys(LEGACY_MODEL_IDS)];
-  return known.some((id) => servedBy.startsWith(id));
+  if (Object.hasOwn(UPSTREAM_RATES, servedBy)) return true;
+  return claudeRateFor(servedBy) !== undefined;
 }
 
 /** Cost at the rate of whichever model actually answered; Bonsai-catalog rate otherwise. */
@@ -194,7 +216,11 @@ export function costForServedBy(
   inputTokens: number,
   outputTokens: number,
 ): number {
-  const rate = servedBy ? UPSTREAM_RATES[servedBy] : undefined;
+  const rate = !servedBy
+    ? undefined
+    : Object.hasOwn(UPSTREAM_RATES, servedBy)
+      ? UPSTREAM_RATES[servedBy]
+      : claudeRateFor(servedBy);
   if (!rate) return costForModel(bonsaiModelId, inputTokens, outputTokens);
   const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1_000_000;
   return Math.round(usd * 1e6) / 1e6;

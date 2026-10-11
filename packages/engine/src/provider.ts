@@ -40,12 +40,15 @@ export function isLiveProvider(): boolean {
  * the mock rather than breaking the demo, and the fix is an env var rather than a deploy.
  */
 function upstreamModel(bonsaiModelId: string): string {
-  const model = canonicalModelId(bonsaiModelId);
-  const rung = RUNG_BY_MODEL[model] ?? 'QUICK';
+  const canonical = canonicalModelId(bonsaiModelId);
+  // An id the catalog has never heard of (a hand-edited pin, a bad request) runs on the quick
+  // default rather than being forwarded upstream verbatim.
+  const model = MODELS.some((m) => m.id === canonical) ? canonical : TIER_DEFAULTS.quick.model;
+  const rung = Object.hasOwn(RUNG_BY_MODEL, model) ? RUNG_BY_MODEL[model] : 'QUICK';
   const provider = providerName();
   const override = process.env[`BONSAI_MODEL_${provider.toUpperCase()}_${rung}`];
   if (override) return override;
-  return DEFAULT_UPSTREAM[provider]?.[rung] ?? model;
+  return Object.hasOwn(DEFAULT_UPSTREAM, provider) ? DEFAULT_UPSTREAM[provider][rung] : model;
 }
 
 type Rung = 'QUICK' | 'MID' | 'DEEP' | 'CEILING';

@@ -108,9 +108,9 @@ const pctSaved = (baseline: number, actual: number): number =>
 
 const rowBasis = (log: StatsLog): TokenBasis => (log.measured ? 'measured' : 'estimated');
 
-/** Rows store the list-rate baseline; the warm one derives from the same token counts, so
- *  legacy rows get it for free and the two never disagree about what was sent. */
+/** Rows priced their warm baseline when logged; older rows derive it from their token counts. */
 export const warmBaselineOf = (log: StatsLog): number =>
+  log.warmBaselineCostUsd ??
   warmBaselineCostUsd(MODEL_TIERS.deep, log.baselineInputTokens, log.outputTokens);
 
 function totalsOf(rows: readonly StatsLog[]): GroupTotals {

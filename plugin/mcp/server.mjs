@@ -15,6 +15,7 @@ import { z } from 'zod';
  * TS engine, which is why the smoke exercises dist/server.mjs.
  */
 import {
+  canonicalModelId,
   emptyProfile,
   estimateTokens,
   prunedPct,
@@ -64,7 +65,8 @@ async function route(question, pinned, briefFacts, profile) {
   const tier = (pinned?.model && tierForModel(pinned.model)) || decision.tier;
   return {
     tier,
-    model: pinned?.model ?? TIER_DEFAULTS[tier].model,
+    // A pin saved before the 2026-10 catalog refresh names its successor.
+    model: pinned?.model ? canonicalModelId(pinned.model) : TIER_DEFAULTS[tier].model,
     effort: pinned?.effort ?? TIER_DEFAULTS[tier].effort,
     agentType: AGENT_TYPES[tier],
     covered: briefFacts.length ? decision.coveredByBrief !== false : true,

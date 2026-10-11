@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   LEGACY_MODEL_IDS,
+  costForServedBy,
   canonicalModelId,
   isPricedServedBy,
   modelLabelFor,
@@ -162,6 +163,21 @@ describe('legacy model ids', () => {
     expect(modelLabelFor('claude-haiku-4-5')).toBe('Haiku 4.5');
     expect(modelLabelFor('claude-haiku-5-5')).toBe('Haiku 5.5');
     expect(modelLabelFor('gpt-5.5')).toBe('gpt-5.5');
+  });
+
+  it('prices what a legacy model served at its own rate, not the successor', () => {
+    // Haiku 4.5 is $1/$5; Haiku 5.5 would have made this 10x cheaper.
+    expect(costForServedBy('claude-haiku-4-5-20251001', 'claude-haiku-5-5', 1_000_000, 0)).toBe(1);
+    expect(costForServedBy('claude-opus-5', 'claude-opus-5-5', 0, 1_000_000)).toBe(25);
+    // The longest prefix wins: a current id is never priced as its legacy namesake.
+    expect(costForServedBy('claude-opus-5-5', 'claude-opus-5-5', 0, 1_000_000)).toBe(20);
+    expect(costForModel('claude-fable-5', 1_000_000, 0)).toBe(10);
+  });
+
+  it('ignores prototype keys when resolving ids', () => {
+    expect(canonicalModelId('toString')).toBe('toString');
+    expect(modelLabelFor('constructor')).toBe('constructor');
+    expect(isPricedServedBy('hasOwnProperty')).toBe(false);
   });
 
   it('still prices historical servedBy ids', () => {

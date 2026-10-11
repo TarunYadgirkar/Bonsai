@@ -9,6 +9,7 @@ import {
   estimateCostUsd,
   isPricedServedBy,
   tokenizerFactor,
+  warmBaselineCostUsd,
   type Effort,
   type InferenceLog,
   type InferencePurpose,
@@ -64,6 +65,7 @@ export function buildLog(params: {
     overridden: params.overridden ?? false,
     baselineInputTokens,
     baselineCostUsd: estimateCostUsd('deep', baselineInputTokens, outputTokens),
+    warmBaselineCostUsd: warmBaselineCostUsd(MODEL_TIERS.deep, baselineInputTokens, outputTokens),
     measured: params.measured,
     ...(isPricedServedBy(params.servedBy) ? {} : { unpriced: true }),
   };
