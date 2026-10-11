@@ -56,10 +56,8 @@ export const POST = apiRoute(BranchRequestSchema, async (body, request) => {
     anchorMessageId: body.anchorMessageId,
   });
   // Insights merged into other subtrees never reach this path; recall the ones that bear on it.
-  const recalled = recallInsights(
-    `${body.selection}\n${question}`,
-    lateralInsights(listConversations(ws), parent.id),
-  );
+  // Keyed on the selection alone, exactly like the preview, so the sheet shows what ships.
+  const recalled = recallInsights(body.selection, lateralInsights(listConversations(ws), parent.id));
   const compiled = await compileBrief({
     briefId: newId('brief'),
     branchId,

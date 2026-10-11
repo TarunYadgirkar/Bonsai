@@ -73,6 +73,8 @@ export {
 export {
   RECALL_LIMIT,
   RECALL_MIN_SCORE,
+  flattenLine,
+  recallSafe,
   lateralInsights,
   recallInsights,
   renderRecall,

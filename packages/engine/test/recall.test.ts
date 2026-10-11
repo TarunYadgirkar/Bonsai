@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compileBrief, curateBrief } from '../src/compiler';
-import { contentTerms, lateralInsights, recallInsights, renderRecall } from '../src/recall';
+import { contentTerms, flattenLine, lateralInsights, recallInsights, renderRecall } from '../src/recall';
 import type { Conversation, Insight } from '../src/types';
 import { fakeComplete, llmResult } from './helpers';
 
@@ -88,6 +88,14 @@ describe('recall sanitizing', () => {
   });
 });
 
+describe('flattenLine', () => {
+  it('turns every control and format character into a space', () => {
+    const tag = String.fromCodePoint(0xe0041); // Unicode tag "A", invisible in most renderers
+    const raw = `a\u00adb\u2060c\ufff9d${tag}e\u202ef\u200bg\u2028h\u0085i\tj`;
+    expect(flattenLine(raw)).toBe('a b c d e f g h i j');
+  });
+});
+
 describe('lateralInsights', () => {
   // root ─┬─ a (merged x into root)
   //       └─ b ─── c (merged y into b)
@@ -144,6 +152,15 @@ describe('recall in the brief', () => {
     const curated = curateBrief(brief, ['One.']);
     expect(curated.markdown).toContain('Settled in earlier branches');
     expect(curated.recalled).toEqual(brief.recalled);
+  });
+
+  it('drops recalled lines once the facts are trimmed and the brief is still over budget', async () => {
+    const { complete } = fakeComplete([llmResult(JSON.stringify({ facts: ['One.'], excludedNote: 'Rest.' }))]);
+    const long = Array.from({ length: 3 }, (_, i) => ({ id: `r${i}`, text: 'word '.repeat(45), source: 'S', score: 1 }));
+    const { brief } = await compileBrief({ ...params, recalled: long, budgetTokens: 120 }, { complete });
+    expect(brief.facts).toEqual(['One.']);
+    expect((brief.recalled ?? []).length).toBeLessThan(3);
+    expect(brief.briefTokens).toBeLessThanOrEqual(120);
   });
 
   it('adds nothing when there is nothing to recall', async () => {

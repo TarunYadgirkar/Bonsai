@@ -52,10 +52,7 @@ export const POST = apiRoute(BranchPreviewRequestSchema, async (body, request) =
     anchorMessageId: body.anchorMessageId,
     anchorFact: path.anchorFact,
     inheritedFacts: path.inheritedFacts,
-    recalled: recallInsights(
-      `${body.selection}\n${body.question ?? ''}`,
-      lateralInsights(listConversations(ws), parent.id),
-    ),
+    recalled: recallInsights(body.selection, lateralInsights(listConversations(ws), parent.id)),
   });
 
   logInference(

@@ -49,14 +49,26 @@
     }
   ];
   var LEGACY_MODEL_IDS = {
-    "claude-haiku-4-5": { successor: "claude-haiku-5-5", label: "Haiku 4.5" },
-    "claude-sonnet-5": { successor: "claude-sonnet-5-5", label: "Sonnet 5" },
-    "claude-opus-5": { successor: "claude-opus-5-5", label: "Opus 5" },
-    "claude-fable-5": { successor: "claude-fable-5-1", label: "Fable 5" }
+    "claude-haiku-4-5": { successor: "claude-haiku-5-5", label: "Haiku 4.5", input: 1, output: 5, cacheRead: 0.1 },
+    "claude-sonnet-5": { successor: "claude-sonnet-5-5", label: "Sonnet 5", input: 2, output: 10, cacheRead: 0.2 },
+    "claude-opus-5": { successor: "claude-opus-5-5", label: "Opus 5", input: 5, output: 25, cacheRead: 0.5 },
+    "claude-fable-5": { successor: "claude-fable-5-1", label: "Fable 5", input: 10, output: 50, cacheRead: 1 }
   };
+  var legacyEntry = (id) => Object.hasOwn(LEGACY_MODEL_IDS, id) ? LEGACY_MODEL_IDS[id] : void 0;
   function canonicalModelId(id) {
     if (MODELS.some((m) => m.id === id)) return id;
-    return LEGACY_MODEL_IDS[id]?.successor ?? id;
+    return legacyEntry(id)?.successor ?? id;
+  }
+  function claudeRateFor(id) {
+    const candidates = [
+      ...MODELS.map((m) => [m.id, m]),
+      ...Object.entries(LEGACY_MODEL_IDS)
+    ];
+    let best;
+    for (const candidate of candidates) {
+      if (id.startsWith(candidate[0]) && candidate[0].length > (best?.[0].length ?? 0)) best = candidate;
+    }
+    return best?.[1];
   }
   var EFFORTS = [
     { level: "low", label: "Low", maxTokens: 300, note: "single pass, no self-check" },
@@ -83,7 +95,7 @@
   }
   var INTERNAL_TIER = "quick";
   function costForModel(modelId, inputTokens, outputTokens) {
-    const rate = modelSpec(modelId);
+    const rate = legacyEntry(modelId) ?? modelSpec(modelId);
     const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
     return Math.round(usd * 1e6) / 1e6;
   }
@@ -95,7 +107,7 @@
     "grok-4.5": { input: 2, output: 6 }
   };
   function costForServedBy(servedBy, bonsaiModelId, inputTokens, outputTokens) {
-    const rate = servedBy ? UPSTREAM_RATES[servedBy] : void 0;
+    const rate = !servedBy ? void 0 : Object.hasOwn(UPSTREAM_RATES, servedBy) ? UPSTREAM_RATES[servedBy] : claudeRateFor(servedBy);
     if (!rate) return costForModel(bonsaiModelId, inputTokens, outputTokens);
     const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
     return Math.round(usd * 1e6) / 1e6;
@@ -436,8 +448,11 @@ That is what this branch's brief supports; anything beyond it would need more of
   // ../packages/engine/src/recall.ts
   var MAX_RECALL_CHARS = 240;
   var MAX_SOURCE_CHARS = 60;
+  function flattenLine(text) {
+    return text.replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, " ").replace(/\s{2,}/g, " ").trim();
+  }
   function recallSafe(text, max = MAX_RECALL_CHARS) {
-    const flat = text.replace(/[\u0000-\u001f\u007f\u0085\u2028\u2029]/g, " ").replace(/[\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "").replace(/\s{2,}/g, " ").trim();
+    const flat = flattenLine(text);
     return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}\u2026` : flat;
   }
   var STOPWORDS2 = new Set(
@@ -468,11 +483,12 @@ That is what this branch's brief supports; anything beyond it would need more of
     if (params.inheritedFacts?.length) {
       facts = facts.map((f) => reconcileVerbatim(f, params.inheritedFacts));
     }
-    const recalled = (params.recalled ?? []).map(({ text, source }) => ({ text, source }));
+    let recalled = (params.recalled ?? []).map(({ text, source }) => ({ text, source }));
     const render = () => renderBrief({ selection, question, facts, profile: params.profile, recalled });
     let markdown = render();
-    while (facts.length > 1 && estimateTokens(markdown) > budget) {
-      facts = facts.slice(0, -1);
+    while (estimateTokens(markdown) > budget && (facts.length > 1 || recalled.length > 0)) {
+      if (facts.length > 1) facts = facts.slice(0, -1);
+      else recalled = recalled.slice(0, -1);
       markdown = render();
     }
     const briefTokens = estimateTokens(markdown);

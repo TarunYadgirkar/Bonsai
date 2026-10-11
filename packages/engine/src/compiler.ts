@@ -89,11 +89,13 @@ export async function compileBrief(
   if (params.inheritedFacts?.length) {
     facts = facts.map((f) => reconcileVerbatim(f, params.inheritedFacts!));
   }
-  const recalled = (params.recalled ?? []).map(({ text, source }) => ({ text, source }));
+  let recalled = (params.recalled ?? []).map(({ text, source }) => ({ text, source }));
   const render = () => renderBrief({ selection, question, facts, profile: params.profile, recalled });
   let markdown = render();
-  while (facts.length > 1 && estimateTokens(markdown) > budget) {
-    facts = facts.slice(0, -1);
+  // Over budget: the compiler's own facts go first (lowest-ranked last), then recalled lines.
+  while (estimateTokens(markdown) > budget && (facts.length > 1 || recalled.length > 0)) {
+    if (facts.length > 1) facts = facts.slice(0, -1);
+    else recalled = recalled.slice(0, -1);
     markdown = render();
   }
   const briefTokens = estimateTokens(markdown);

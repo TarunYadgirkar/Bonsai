@@ -31057,14 +31057,26 @@ var MODELS = [
 ];
 var CEILING_MODEL = "claude-fable-5-1";
 var LEGACY_MODEL_IDS = {
-  "claude-haiku-4-5": { successor: "claude-haiku-5-5", label: "Haiku 4.5" },
-  "claude-sonnet-5": { successor: "claude-sonnet-5-5", label: "Sonnet 5" },
-  "claude-opus-5": { successor: "claude-opus-5-5", label: "Opus 5" },
-  "claude-fable-5": { successor: "claude-fable-5-1", label: "Fable 5" }
+  "claude-haiku-4-5": { successor: "claude-haiku-5-5", label: "Haiku 4.5", input: 1, output: 5, cacheRead: 0.1 },
+  "claude-sonnet-5": { successor: "claude-sonnet-5-5", label: "Sonnet 5", input: 2, output: 10, cacheRead: 0.2 },
+  "claude-opus-5": { successor: "claude-opus-5-5", label: "Opus 5", input: 5, output: 25, cacheRead: 0.5 },
+  "claude-fable-5": { successor: "claude-fable-5-1", label: "Fable 5", input: 10, output: 50, cacheRead: 1 }
 };
+var legacyEntry = (id) => Object.hasOwn(LEGACY_MODEL_IDS, id) ? LEGACY_MODEL_IDS[id] : void 0;
 function canonicalModelId(id) {
   if (MODELS.some((m) => m.id === id)) return id;
-  return LEGACY_MODEL_IDS[id]?.successor ?? id;
+  return legacyEntry(id)?.successor ?? id;
+}
+function claudeRateFor(id) {
+  const candidates = [
+    ...MODELS.map((m) => [m.id, m]),
+    ...Object.entries(LEGACY_MODEL_IDS)
+  ];
+  let best;
+  for (const candidate of candidates) {
+    if (id.startsWith(candidate[0]) && candidate[0].length > (best?.[0].length ?? 0)) best = candidate;
+  }
+  return best?.[1];
 }
 var EFFORTS = [
   { level: "low", label: "Low", maxTokens: 300, note: "single pass, no self-check" },
@@ -31091,7 +31103,7 @@ function effortSpec(level) {
 }
 var INTERNAL_TIER = "quick";
 function costForModel(modelId, inputTokens, outputTokens) {
-  const rate = modelSpec(modelId);
+  const rate = legacyEntry(modelId) ?? modelSpec(modelId);
   const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
   return Math.round(usd * 1e6) / 1e6;
 }
@@ -31103,7 +31115,7 @@ var UPSTREAM_RATES = {
   "grok-4.5": { input: 2, output: 6 }
 };
 function costForServedBy(servedBy, bonsaiModelId, inputTokens, outputTokens) {
-  const rate = servedBy ? UPSTREAM_RATES[servedBy] : void 0;
+  const rate = !servedBy ? void 0 : Object.hasOwn(UPSTREAM_RATES, servedBy) ? UPSTREAM_RATES[servedBy] : claudeRateFor(servedBy);
   if (!rate) return costForModel(bonsaiModelId, inputTokens, outputTokens);
   const usd = (inputTokens * rate.input + outputTokens * rate.output) / 1e6;
   return Math.round(usd * 1e6) / 1e6;
@@ -31148,12 +31160,13 @@ function providerName() {
   return "mock";
 }
 function upstreamModel(bonsaiModelId) {
-  const model = canonicalModelId(bonsaiModelId);
-  const rung = RUNG_BY_MODEL[model] ?? "QUICK";
+  const canonical = canonicalModelId(bonsaiModelId);
+  const model = MODELS.some((m) => m.id === canonical) ? canonical : TIER_DEFAULTS.quick.model;
+  const rung = Object.hasOwn(RUNG_BY_MODEL, model) ? RUNG_BY_MODEL[model] : "QUICK";
   const provider = providerName();
   const override = process.env[`BONSAI_MODEL_${provider.toUpperCase()}_${rung}`];
   if (override) return override;
-  return DEFAULT_UPSTREAM[provider]?.[rung] ?? model;
+  return Object.hasOwn(DEFAULT_UPSTREAM, provider) ? DEFAULT_UPSTREAM[provider][rung] : model;
 }
 var RUNG_BY_MODEL = {
   [TIER_DEFAULTS.quick.model]: "QUICK",
@@ -31970,7 +31983,8 @@ async function route2(question, pinned, briefFacts, profile) {
   const tier = pinned?.model && tierForModel(pinned.model) || decision2.tier;
   return {
     tier,
-    model: pinned?.model ?? TIER_DEFAULTS[tier].model,
+    // A pin saved before the 2026-10 catalog refresh names its successor.
+    model: pinned?.model ? canonicalModelId(pinned.model) : TIER_DEFAULTS[tier].model,
     effort: pinned?.effort ?? TIER_DEFAULTS[tier].effort,
     agentType: AGENT_TYPES[tier],
     covered: briefFacts.length ? decision2.coveredByBrief !== false : true,
