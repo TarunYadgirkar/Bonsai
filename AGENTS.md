@@ -43,7 +43,7 @@ submission lives in the private `TarunYadgirkar/bonsai-hackathon` repo, sponsor 
 - The Claude Code plugin lives in `plugin/` (skills + tier agents + bundled stdio MCP tree
   server); repo root carries the marketplace manifest.
 
-There is deliberately **no durable-memory layer** right now. The hackathon one was a sponsor integration and was removed; whether cross-conversation memory is needed at all, and what should provide it, is an open question. Do not add one back without deciding that first.
+There is deliberately **no separate durable-memory layer**. Decided 2026-10 (Mahogany fold-in): cross-conversation memory is *recall over insights Bonsai already stores* (`packages/engine/src/recall.ts`, IDF-weighted lexical match, wired into `/api/branch`, `/api/branch/preview` and the connector's `bonsai_fork`). No vector store, no new tables. Revisit only if lexical recall measurably misses.
 
 ### Neon — one database branch per git branch
 

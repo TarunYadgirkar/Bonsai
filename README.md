@@ -1,7 +1,6 @@
-# 🌱 Bonsai
+# Bonsai
 
 [![ci](https://github.com/TarunYadgirkar/Bonsai/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/TarunYadgirkar/Bonsai/actions/workflows/ci.yml)
-[![npm](https://img.shields.io/npm/v/bonsai-engine)](https://www.npmjs.com/package/bonsai-engine)
 [![license: MIT](https://img.shields.io/badge/license-MIT-3E6B47)](LICENSE)
 
 **Prune the conversation to its living wood.** Bonsai turns AI chat from a growing scroll into a
@@ -17,7 +16,7 @@ your own claude.ai at **[/connect](https://bonsai-connector.vercel.app/connect)*
 your private connector link, then say *"fork this side question with Bonsai"* in any chat and
 *"show my bonsai tree"* to see your garden render inline.
 
-![The whole loop in 60 seconds — fork with a compiled brief, prune a fact, merge one insight back, read the ledger](assets/generated/bonsai-loop.gif)
+![The loop: type a side question, check the compiled brief, grow the branch, merge one line back to the trunk](assets/generated/bonsai-loop.gif)
 
 **[Live demo](https://bonsai-connector.vercel.app)** · **[Interactive garden](https://claude.ai/code/artifact/b1b44d60-59a7-4237-8b56-26ae5c1b06ce)** · [The design system](DESIGN.md) · [The moat](MOAT.md)
 
@@ -43,6 +42,10 @@ Bonsai is the loop those products don't have:
    the model. Manual picks are never silently overridden.
 4. **Merge one insight back.** A branch returns a single distilled sentence to its parent — which
    then genuinely enters the parent's context and every future sibling's brief.
+5. **Recall across the garden.** A new fork also pulls in insights merged in *other* subtrees (or,
+   through the connector, other claude.ai chats) when they bear on its question, attributed to the
+   branch they came from. There is no vector store; recall is IDF-weighted overlap over insights
+   Bonsai already keeps.
 
 ## The technically interesting bits
 
@@ -57,6 +60,9 @@ Bonsai is the loop those products don't have:
   and two baselines: the list-rate full copy and the **cache-warm** full copy (what a native
   cache-shared fork actually pays, with the entire history priced as a cache hit). The savings
   figure that survives the "but it's cached" objection is the one the ledger leads with.
+- **Typed tree commands** (`commands.ts`): "side question: …" forks, "merge that" merges, "never
+  mind" archives, straight from the composer. A zero-cost regex grammar, anchored so ordinary
+  questions never trigger it.
 - **A referent-resolution benchmark** ([`evals/`](BENCHMARK.md)) — `npm run eval` *executes* the
   correctness claim that makes compiled briefs safe (referent resolution at depth 2, salience over
   keyword noise). Differential and provider-agnostic. Runs in CI.
@@ -83,9 +89,9 @@ Install the plugin:
 (The repo must be public for marketplace installs — the manifest lives on `main`.)
 
 The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
-consume, and publishable on its own (`cd packages/engine && pnpm publish` builds a typed `dist` via
-`prepublishOnly`). Tree model, path assembly, salience compiler, learning router, honest pricing.
-237 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
+consume. It is not on npm yet; it is built to publish on its own (`cd packages/engine && pnpm
+publish` builds a typed `dist` via `prepublishOnly`). Tree model, path assembly, salience compiler,
+learning router, recall, honest pricing. 279 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
 
 ## Run it
 
@@ -110,5 +116,18 @@ to a working local path when its key is absent.
 | `evals/` | BriefBench — the brief-fidelity benchmark, with the Save-As baseline arm. |
 | `PRODUCT.md` · `MOAT.md` · `DESIGN.md` | The idea, the defensibility, the design system. |
 | `AGENTS.md` · `CONTRIBUTING.md` | Rules for agents; how to contribute. |
+
+## History
+
+Bonsai absorbed two earlier variants of the same fork/merge idea:
+
+- **Mahogany** (MongoDB.local Build Fest, Aug 2026; [demo video](https://youtu.be/N793iZgPPkI)):
+  a voice agent whose conversations were trees. "Hold on, side question" forked, "merge that" wrote
+  one line to MongoDB long-term memory that later conversations recalled. Its recall became
+  Bonsai's garden-wide recall (without the vector store) and its voice grammar became the typed
+  tree commands.
+- **Espalier**: a Gemini-based variant with a per-call cost ledger. Bonsai's ledger already
+  covered it (list-rate and cache-warm baselines, per-purpose and per-model spend), so nothing was
+  ported.
 
 MIT licensed. Built by [Tarun Yadgirkar](https://tarunyadgirkar.com).
