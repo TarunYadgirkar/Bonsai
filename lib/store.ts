@@ -554,8 +554,11 @@ async function replaceSession(sessionId: string, state: SessionState): Promise<S
   if (dbEnabled()) {
     await clearSessionInDb(sessionId);
     await writeSessionToDb(sessionId, state);
+  } else {
+    // Only the memory backend keeps gardens here; with a database this map would grow by one
+    // full demo per visitor and never be read.
+    memoryMap().set(sessionId, toMemory(state));
   }
-  memoryMap().set(sessionId, toMemory(state));
   const ws = await loadWorkingSet(sessionId);
   return { rootId: ws.rootId, tree: buildTree(ws), conversations: listConversations(ws) };
 }
@@ -565,9 +568,34 @@ export async function resetStore(sessionId: string): Promise<StateResponse> {
   return replaceSession(sessionId, emptyState(sessionId));
 }
 
-/** Seed the Berkeley demo into this session (replacing whatever was there). */
-export async function seedDemo(sessionId: string): Promise<StateResponse> {
-  return replaceSession(sessionId, buildDemoState());
+function stateOf(ws: WorkingSet): StateResponse {
+  return { rootId: ws.rootId, tree: buildTree(ws), conversations: listConversations(ws) };
+}
+
+/** A garden nobody has written to yet: a single root with no messages. */
+export function isEmptyGarden(state: Pick<StateResponse, 'conversations'>): boolean {
+  return state.conversations.length === 1 && state.conversations[0].messages.length === 0;
+}
+
+/** The session's garden as it stands, without writing anything. */
+export async function currentState(sessionId: string): Promise<StateResponse> {
+  return stateOf(await loadWorkingSet(sessionId));
+}
+
+/**
+ * Seed the Berkeley demo into this session. Idempotent by default: a garden that already holds
+ * anything comes back untouched (a second tab's auto-seed must not wipe the first tab's work).
+ * `replace` is the explicit "load the example tree" action, which clears and rewrites.
+ */
+export async function seedDemo(
+  sessionId: string,
+  opts: { replace?: boolean } = {},
+): Promise<{ state: StateResponse; seeded: boolean }> {
+  if (!opts.replace) {
+    const existing = await currentState(sessionId);
+    if (!isEmptyGarden(existing)) return { state: existing, seeded: false };
+  }
+  return { state: await replaceSession(sessionId, buildDemoState()), seeded: true };
 }
 
 /* ---------- learned routing profile (per session) ---------- */

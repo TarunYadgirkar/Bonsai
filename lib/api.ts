@@ -40,6 +40,11 @@ export const MergeRequestSchema = z.object({
   archive: z.boolean().optional(),
 });
 
+/** replace:true is the explicit "load the example tree"; omitted, seeding only fills an empty garden. */
+export const DemoRequestSchema = z.object({
+  replace: z.boolean().optional(),
+});
+
 export const NewConversationRequestSchema = z.object({
   title: z.string().max(200).optional(),
 });
