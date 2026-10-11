@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { ConnectCard } from '@/components/ConnectCard';
 
 export const metadata: Metadata = {
@@ -65,9 +66,9 @@ export default function ConnectPage() {
           Honesty notes: your branches and insights are stored against your key so the tree
           survives across chats; the key is high-entropy and unlisted, but anyone holding the
           full link can read that garden, and regenerating a key is not self-serve yet. The{' '}
-          <a href="/" className="underline hover:text-ink-soft">
+          <Link href="/" className="underline hover:text-ink-soft">
             web demo
-          </a>{' '}
+          </Link>{' '}
           is a separate playground and does not share data with your connector garden.
         </p>
       </div>

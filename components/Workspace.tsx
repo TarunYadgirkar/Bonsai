@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TurnCommand } from 'bonsai-engine';
+import type { CommandOutcome } from './ChatPane';
 import type {
   BranchResponse,
   ChatResponse,
@@ -107,6 +108,9 @@ function titleFromSelection(selection: string): string {
   return title.length > 42 ? `${title.slice(0, 42).trimEnd()}…` : title;
 }
 
+/** Fork commands carry their question as the branch selection; the API caps selections here. */
+const MAX_SELECTION_CHARS = 2000;
+
 /** Set once a visitor's empty garden has been seeded, so Reset garden really does mean empty. */
 const SEEDED_KEY = 'bonsai:seeded';
 
@@ -124,7 +128,7 @@ function shouldAutoSeed(data: StateResponse): boolean {
 }
 
 /**
- * Where a first-time visitor lands: the deepest answered branch with a child under it, so the
+ * Where a first-time visitor lands: the first answered branch that has a child under it, so the
  * first screen shows a brief, its cut, and the tree around it. Falls back to the root.
  */
 function showcaseBranch(data: StateResponse): string {
@@ -144,8 +148,19 @@ export function Workspace() {
   const [economics, setEconomics] = useState<EconomicsResponse | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** Informational banner (moss, not ember) — e.g. merge-staleness disclosure. Auto-dismisses. */
-  const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * Informational banner (accent, not danger), e.g. merge-staleness disclosure or a typed
+   * command's confirmation. Auto-dismisses. An optional action offers an undo.
+   */
+  const [notice, setNoticeState] = useState<{
+    text: string;
+    action?: { label: string; run: () => void };
+  } | null>(null);
+  const setNotice = useCallback(
+    (text: string | null, action?: { label: string; run: () => void }) =>
+      setNoticeState(text === null ? null : { text, action }),
+    [],
+  );
   const [sending, setSending] = useState(false);
   const [branching, setBranching] = useState(false);
   /*
@@ -211,7 +226,7 @@ export function Workspace() {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 9000);
     return () => clearTimeout(timer);
-  }, [notice]);
+  }, [notice, setNotice]);
 
   const applyState = useCallback((data: StateResponse) => {
     setState(data);
@@ -266,7 +281,10 @@ export function Workspace() {
       (data) => {
         if (cancelled) return;
         if (shouldAutoSeed(data)) {
-          void loadDemoRef.current({ landOn: 'showcase' });
+          // A refused or failed seed (rate limit, database) still leaves a usable empty garden.
+          void loadDemoRef.current({ landOn: 'showcase', replace: false }).then(
+            (seeded) => !seeded && !cancelled && applyState(data),
+          );
           return;
         }
         applyState(data);
@@ -445,8 +463,8 @@ export function Workspace() {
   };
 
   /** Distil the branch into one line, fly it to the parent, archive the branch. */
-  const merge = async (origin: { x: number; y: number }) => {
-    if (!activeId || merging) return;
+  const merge = async (origin: { x: number; y: number }): Promise<boolean> => {
+    if (!activeId || merging) return false;
     setMerging(true);
     try {
       const res = await fetch('/api/merge', {
@@ -471,8 +489,10 @@ export function Workspace() {
         to: nodeCenter(data.parentId) ?? origin,
       });
       await loadState();
+      return true;
     } catch (err) {
       setError(describe(err));
+      return false;
     } finally {
       setMerging(false);
     }
@@ -542,8 +562,8 @@ export function Workspace() {
     id: string;
     op: 'rename' | 'archive' | 'unarchive';
     title?: string;
-  }): Promise<void> => {
-    if (nodeActionInFlight.current) return;
+  }): Promise<boolean> => {
+    if (nodeActionInFlight.current) return false;
     nodeActionInFlight.current = true;
     try {
       const res = await fetch('/api/node', {
@@ -553,8 +573,10 @@ export function Workspace() {
       });
       if (!res.ok) throw await httpError(res, 'POST /api/node');
       await loadState();
+      return true;
     } catch (err) {
       setError(describe(err));
+      return false;
     } finally {
       nodeActionInFlight.current = false;
     }
@@ -575,8 +597,7 @@ export function Workspace() {
   };
 
   const startTour = async () => {
-    await loadDemo();
-    setTourStep('branch');
+    if (await loadDemo()) setTourStep('branch');
   };
 
   const endTour = () => {
@@ -601,10 +622,20 @@ export function Workspace() {
     }
   };
 
-  /** Pull the Berkeley Clubs example into this session, replacing whatever is here. */
-  const loadDemo = async (opts?: { landOn: 'root' | 'showcase' }) => {
+  /**
+   * Pull the Berkeley Clubs example into this session. The explicit buttons replace whatever is
+   * here; the first-visit auto-seed only fills an empty garden and stays quiet when refused.
+   * Resolves whether the example tree is now loaded.
+   */
+  const loadDemo = async (
+    opts: { landOn: 'root' | 'showcase'; replace: boolean } = { landOn: 'root', replace: true },
+  ): Promise<boolean> => {
     try {
-      const res = await fetch('/api/demo', { method: 'POST' });
+      const res = await fetch('/api/demo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ replace: opts.replace }),
+      });
       if (!res.ok) throw await httpError(res, 'POST /api/demo');
       const data: StateResponse = await res.json();
       try {
@@ -614,12 +645,14 @@ export function Workspace() {
       setPendingModes({});
       setFlight(null);
       setMerged(null);
-      setActiveId(opts?.landOn === 'showcase' ? showcaseBranch(data) : data.rootId);
+      setActiveId(opts.landOn === 'showcase' ? showcaseBranch(data) : data.rootId);
       setError(null);
       const logs = await fetchEconomics();
       setEconomics(logs);
+      return true;
     } catch (err) {
-      setError(describe(err));
+      if (opts.replace) setError(describe(err));
+      return false;
     }
   };
 
@@ -637,22 +670,38 @@ export function Workspace() {
   const runCommand = async (
     command: TurnCommand,
     origin: { x: number; y: number },
-  ): Promise<boolean> => {
+  ): Promise<CommandOutcome> => {
     const current = state?.conversations.find((c) => c.id === activeId);
-    if (!current) return false;
+    if (!current) return 'unhandled';
     if (command.kind === 'fork') {
-      setBriefSheet({ parentId: current.id, selection: command.question, question: command.question });
-      return true;
+      setBriefSheet({
+        parentId: current.id,
+        selection: command.question.slice(0, MAX_SELECTION_CHARS),
+        question: command.question,
+      });
+      return 'done';
     }
-    if (!current.parentId || current.archived) return false;
+    if (!current.parentId || current.archived) return 'unhandled';
     if (command.kind === 'merge') {
-      if (current.messages.length === 0) return false;
-      await merge(origin);
-      return true;
+      if (current.messages.length === 0) return 'unhandled';
+      return (await merge(origin)) ? 'done' : 'failed';
     }
-    await nodeAction({ id: current.id, op: 'archive' });
-    setNotice('Branch archived. Nothing was merged back.');
-    return true;
+    if (command.kind === 'abandon') {
+      const archived = await nodeAction({ id: current.id, op: 'archive' });
+      if (archived) {
+        const id = current.id;
+        setNotice('Branch archived. Nothing was merged back.', {
+          label: 'Undo',
+          run: () => {
+            setNotice(null);
+            void nodeAction({ id, op: 'unarchive' });
+          },
+        });
+      }
+      return archived ? 'done' : 'failed';
+    }
+    const exhaustive: never = command;
+    return exhaustive;
   };
 
   /** A second tree, not a branch: no parent, no inherited transcript. */
@@ -785,34 +834,45 @@ export function Workspace() {
         than a swap: the workspace stays interactive underneath, nothing blanks. A later
         successful refetch clears it via applyState; the button clears it by hand.
       */}
-      {notice && (
-        <div
-          role="status"
-          className="absolute left-1/2 top-4 z-50 flex w-[min(36rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 rounded-[var(--radius-bud)] bg-surface-raised px-4 py-2.5 shadow-lift ring-1 ring-accent/30"
-        >
-          <p className="text-sm leading-snug text-ink">{notice}</p>
-          <button
-            onClick={() => setNotice(null)}
-            className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
+      {/* Notice and error share one stack so they never overlap. */}
+      <div className="pointer-events-none absolute left-1/2 top-4 z-50 flex w-[min(36rem,calc(100%-2rem))] -translate-x-1/2 flex-col gap-2">
+        {notice && (
+          <div
+            role="status"
+            className="pointer-events-auto flex items-center gap-3 rounded-[var(--radius-bud)] bg-surface-raised px-4 py-2.5 shadow-lift ring-1 ring-accent/30"
           >
-            Dismiss
-          </button>
-        </div>
-      )}
-      {error && (
-        <div
-          role="alert"
-          className="absolute left-1/2 top-4 z-50 flex w-[min(36rem,calc(100%-2rem))] -translate-x-1/2 items-center gap-3 rounded-[var(--radius-bud)] bg-surface-raised px-4 py-2.5 shadow-lift ring-1 ring-danger/40"
-        >
-          <p className="text-sm leading-snug text-danger">{error}</p>
-          <button
-            onClick={() => setError(null)}
-            className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
+            <p className="text-sm leading-snug text-ink">{notice.text}</p>
+            {notice.action && (
+              <button
+                onClick={notice.action.run}
+                className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-accent transition-colors hover:bg-accent-wash"
+              >
+                {notice.action.label}
+              </button>
+            )}
+            <button
+              onClick={() => setNotice(null)}
+              className={`${notice.action ? '' : 'ml-auto '}shrink-0 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink`}
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+        {error && (
+          <div
+            role="alert"
+            className="pointer-events-auto flex items-center gap-3 rounded-[var(--radius-bud)] bg-surface-raised px-4 py-2.5 shadow-lift ring-1 ring-danger/40"
           >
-            Dismiss
-          </button>
-        </div>
-      )}
+            <p className="text-sm leading-snug text-danger">{error}</p>
+            <button
+              onClick={() => setError(null)}
+              className="ml-auto shrink-0 rounded-md px-2 py-1 text-xs text-ink-muted transition-colors hover:bg-surface-sunk hover:text-ink"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+      </div>
       <TreeSidebar
         nodes={state.tree}
         activeId={active?.id ?? null}
@@ -820,7 +880,9 @@ export function Workspace() {
         onOpenEconomics={() => setEconomicsOpen(true)}
         onReset={reset}
         onNewChat={newChat}
-        onLoadDemo={() => loadDemo()}
+        onLoadDemo={async () => {
+          await loadDemo();
+        }}
         flashId={merged?.parentId ?? null}
         stats={nodeStats}
         session={
@@ -844,13 +906,16 @@ export function Workspace() {
           onMerge={merge}
           onRegenerate={regenerate}
           onEditMessage={editMessage}
-          onRename={(title) => nodeAction({ id: active.id, op: 'rename', title })}
+          onRename={async (title) => {
+            await nodeAction({ id: active.id, op: 'rename', title });
+          }}
           onOpenBranch={select}
           branchTitles={branchTitles}
           onArchive={
             active.parentId
-              ? (archived) =>
-                  nodeAction({ id: active.id, op: archived ? 'archive' : 'unarchive' })
+              ? async (archived) => {
+                  await nodeAction({ id: active.id, op: archived ? 'archive' : 'unarchive' });
+                }
               : undefined
           }
           mode={modeFor(active)}
@@ -863,7 +928,9 @@ export function Workspace() {
           }
           initialDraft={failedDraft?.branchId === active.id ? failedDraft.content : undefined}
           onDraftRestored={() => setFailedDraft(null)}
-          onLoadDemo={() => loadDemo()}
+          onLoadDemo={async () => {
+          await loadDemo();
+        }}
           onStartTour={startTour}
           onCommand={runCommand}
           demoMode={demoMode}
@@ -889,6 +956,7 @@ export function Workspace() {
 
       {briefSheet && (
         <BriefSheet
+          key={`${briefSheet.parentId}:${briefSheet.selection}`}
           parentId={briefSheet.parentId}
           selection={briefSheet.selection}
           defaultQuestion={

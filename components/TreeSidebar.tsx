@@ -66,14 +66,23 @@ function BranchFigures({ node, stats }: { node: BranchNode; stats: NodeStats | u
   );
 }
 
+/** What a screen reader hears before the card's own text: its place in the tree. */
+function treePosition(node: BranchNode, parentTitle: string | undefined): string {
+  if (node.parentId === null) return 'Trunk.';
+  const kind = node.archived ? 'Archived branch' : 'Branch';
+  return `${kind}, level ${node.depth}${parentTitle ? `, from ${parentTitle}` : ''}.`;
+}
+
 function NodeCard({
   placed,
+  parentTitle,
   stats,
   isActive,
   isFlashing,
   onSelect,
 }: {
   placed: PlacedNode;
+  parentTitle: string | undefined;
   stats: NodeStats | undefined;
   isActive: boolean;
   isFlashing: boolean;
@@ -98,6 +107,7 @@ function NodeCard({
       style={{ left: x, top: y, width, height }}
       className={`absolute flex flex-col justify-center gap-1.5 overflow-hidden rounded-[var(--radius-bud)] px-3 text-left transition-[top,left,width,box-shadow,background-color] duration-300 ${shell} ${flash}`}
     >
+      <span className="sr-only">{treePosition(node, parentTitle)}</span>
       <span className="flex min-w-0 items-center gap-2">
         <span
           className={`truncate ${
@@ -195,6 +205,7 @@ export function TreeSidebar({
 }) {
   const [canvasRef, canvasWidth] = useCanvasWidth();
   const layout = layoutTree(nodes, canvasWidth);
+  const titles = new Map(nodes.map((n) => [n.id, n.title]));
   const [confirming, setConfirming] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -255,6 +266,7 @@ export function TreeSidebar({
 
       <div
         ref={canvasRef}
+        role="region"
         className="relative min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
         aria-label="Conversation tree"
       >
@@ -300,6 +312,7 @@ export function TreeSidebar({
             <NodeCard
               key={placed.node.id}
               placed={placed}
+              parentTitle={placed.node.parentId ? titles.get(placed.node.parentId) : undefined}
               stats={stats[placed.node.id]}
               isActive={placed.node.id === activeId}
               isFlashing={placed.node.id === flashId}
@@ -361,6 +374,7 @@ export function TreeSidebar({
           className={`${FOOTER_ROW} ${confirming ? 'bg-danger/10 text-danger hover:bg-danger/15' : 'text-ink-muted'}`}
         >
           <ArrowCounterClockwise className="h-4 w-4" aria-hidden />
+          <span aria-live="polite">
           {resetting ? (
             'Clearing…'
           ) : confirming ? (
@@ -370,6 +384,7 @@ export function TreeSidebar({
               Reset<span className="hidden md:inline"> garden</span>
             </span>
           )}
+          </span>
         </button>
       </nav>
     </aside>

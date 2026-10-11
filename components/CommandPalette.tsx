@@ -76,8 +76,6 @@ export function CommandPalette({
   const rowCount = actions.length + hits.length;
   const clampedCursor = Math.min(cursor, Math.max(0, rowCount - 1));
 
-  useEffect(() => setCursor(0), [query]);
-
   useEffect(() => {
     listRef.current
       ?.querySelector(`[data-row="${clampedCursor}"]`)
@@ -108,7 +106,10 @@ export function CommandPalette({
         <input
           autoFocus
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setCursor(0);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') onClose();
             else if (e.key === 'ArrowDown') {

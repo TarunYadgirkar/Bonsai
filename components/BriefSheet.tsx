@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Anchor, Sparkle } from '@phosphor-icons/react';
 import type { BranchPreviewResponse, ContextBrief } from '@/lib/types';
 import { CutStrip, plainFact } from './CutStrip';
@@ -57,8 +57,12 @@ export function BriefSheet({
   const kept = brief ? brief.facts.filter((_, i) => !removed.has(i)) : [];
   // Client-side approximation of the receipt (chars/4, same basis the engine estimates with);
   // the server recomputes exactly on grow.
+  const recalledChars = (brief?.recalled ?? []).reduce(
+    (sum, r) => sum + r.text.length + r.source.length + 12,
+    0,
+  );
   const keptTokens = brief
-    ? Math.ceil((kept.join(' ').length + selection.length + question.length + 60) / 4)
+    ? Math.ceil((kept.join(' ').length + recalledChars + selection.length + question.length + 60) / 4)
     : 0;
   const avoided = brief ? Math.max(0, brief.availableTokens - keptTokens) : 0;
 
@@ -72,20 +76,36 @@ export function BriefSheet({
     });
   };
 
+  // A native modal dialog: the browser traps focus, makes the page inert and turns Escape into
+  // a cancel event. The dialog unmounts rather than closing, so focus is handed back by hand.
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (dialog && !dialog.open) dialog.showModal();
+    return () => {
+      dialog?.close();
+      opener?.focus();
+    };
+  }, []);
+
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 p-3 sm:items-center sm:p-6"
-      onMouseDown={onClose}
-      role="presentation"
+    <dialog
+      ref={dialogRef}
+      aria-labelledby="brief-sheet-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
+      // A click whose target is the dialog itself landed on the backdrop, not the panel.
+      onClick={(e) => e.target === dialogRef.current && onClose()}
+      className="m-auto max-h-[88dvh] w-[calc(100%-1.5rem)] max-w-xl overflow-hidden rounded-2xl bg-surface-raised p-0 text-ink shadow-lift backdrop:bg-ink/30"
     >
-      <div
-        role="dialog"
-        aria-label="Compiled brief preview"
-        onMouseDown={(e) => e.stopPropagation()}
-        className="flex max-h-[88dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-surface-raised shadow-lift"
-      >
+      <div className="flex max-h-[88dvh] flex-col">
         <header className="px-5 pb-3 pt-4 shadow-[inset_0_-1px_0_var(--rule)]">
-          <h2 className="font-display text-lg font-semibold text-ink">Check the brief before it ships</h2>
+          <h2 id="brief-sheet-title" className="font-display text-lg font-semibold text-ink">
+            Check the brief before it ships
+          </h2>
           <p className="mt-1 line-clamp-2 text-sm text-ink-muted">Branching from “{selection}”</p>
         </header>
 
@@ -114,7 +134,8 @@ export function BriefSheet({
                             ? 'Left out. Click to restore'
                             : 'Click to drop from the brief'
                       }
-                      aria-pressed={!isRemoved}
+                      aria-pressed={isAnchor ? undefined : !isRemoved}
+                      aria-disabled={isAnchor || undefined}
                       className={`rounded-[var(--radius-control)] px-3 py-2 text-left text-[13px] leading-relaxed transition-colors ${
                         isAnchor
                           ? 'bg-accent-wash text-ink'
@@ -141,8 +162,8 @@ export function BriefSheet({
                     Recalled from other branches
                   </p>
                   <ul className="mt-1.5 flex flex-col gap-1 text-[13px] leading-relaxed text-ink">
-                    {brief.recalled.map((r) => (
-                      <li key={r.text}>
+                    {brief.recalled.map((r, i) => (
+                      <li key={i}>
                         {r.text} <span className="text-ink-faint">({r.source})</span>
                       </li>
                     ))}
@@ -195,6 +216,6 @@ export function BriefSheet({
           </div>
         </footer>
       </div>
-    </div>
+    </dialog>
   );
 }

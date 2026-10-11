@@ -18,6 +18,12 @@ import { conversationTokens, formatTokens } from './tokens';
 
 type Selection = { text: string; x: number; y: number };
 
+/** Half the floating Branch button's width plus a margin, for clamping it to the viewport. */
+const BRANCH_BUTTON_HALF = 84;
+
+/** done: the command ran. failed: it ran and failed, keep the draft. unhandled: send it as text. */
+export type CommandOutcome = 'done' | 'failed' | 'unhandled';
+
 /** Assistant-markdown styling, shared by settled bubbles and the streaming one. */
 const MARKDOWN_CLASSES =
   '[&>*+*]:mt-2.5 [&_ol]:list-decimal [&_ol]:pl-5 [&_ul]:list-disc [&_ul]:pl-5 [&_li+li]:mt-1 [&_strong]:font-semibold [&_strong]:text-ink [&_a]:text-accent [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-rule-strong [&_blockquote]:pl-3 [&_blockquote]:text-ink-muted [&_:is(h1,h2,h3,h4)]:font-display [&_:is(h1,h2,h3,h4)]:font-semibold [&_:is(h1,h2,h3,h4)]:text-ink [&_code]:rounded [&_code]:bg-surface-sunk [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.85em] [&_code]:text-ink [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-surface-sunk [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0';
@@ -76,7 +82,7 @@ const MessageBubble = memo(function MessageBubble({
           </span>
         )}
       </div>
-      <div className="mt-1 flex gap-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+      <div className="mt-1 flex gap-3 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">
         <button onClick={copy} className="text-[11px] text-ink-faint hover:text-ink">
           {copied ? 'Copied' : 'Copy'}
         </button>
@@ -163,8 +169,8 @@ function BriefPanel({ brief }: { brief: ContextBrief }) {
         </span>
       </summary>
       <ol className="mt-3 flex list-decimal flex-col gap-1.5 pl-5 text-[13px] leading-relaxed text-ink marker:text-ink-faint">
-        {brief.facts.map((fact) => (
-          <li key={fact}>{plainFact(fact)}</li>
+        {brief.facts.map((fact, i) => (
+          <li key={i}>{plainFact(fact)}</li>
         ))}
       </ol>
       {brief.recalled && brief.recalled.length > 0 && (
@@ -174,8 +180,8 @@ function BriefPanel({ brief }: { brief: ContextBrief }) {
             Recalled from other branches
           </p>
           <ul className="mt-1.5 flex flex-col gap-1 text-[13px] leading-relaxed text-ink">
-            {brief.recalled.map((r) => (
-              <li key={r.text}>
+            {brief.recalled.map((r, i) => (
+              <li key={i}>
                 {r.text} <span className="text-ink-faint">({r.source})</span>
               </li>
             ))}
@@ -268,10 +274,10 @@ export function ChatPane({
   /** The guided 60-second loop: load the demo, then walk branch → merge → ledger. */
   onStartTour?: () => Promise<void>;
   /**
-   * A typed tree command ("side question: …", "merge that", "never mind"). Resolves true when
-   * it was handled; false sends the text as an ordinary message instead.
+   * A typed tree command ("side question: …", "merge that", "never mind"). An unhandled
+   * command is sent as an ordinary message instead.
    */
-  onCommand?: (command: TurnCommand, origin: { x: number; y: number }) => Promise<boolean>;
+  onCommand?: (command: TurnCommand, origin: { x: number; y: number }) => Promise<CommandOutcome>;
   /** No provider key: answers come from the extractive mock, and the composer says so. */
   demoMode?: boolean;
 }) {
@@ -396,7 +402,12 @@ export function ChatPane({
         ? { x: rect.left + rect.width / 2, y: rect.top }
         : { x: window.innerWidth / 2, y: window.innerHeight - 80 };
       setDraft('');
-      if (await onCommand(command, origin)) return;
+      const outcome = await onCommand(command, origin);
+      if (outcome === 'done') return;
+      if (outcome === 'failed') {
+        setDraft((current) => current || content);
+        return;
+      }
     }
     setDraft('');
     const sent = await onSend(content);
@@ -665,7 +676,11 @@ export function ChatPane({
             setSelection(null);
             window.getSelection()?.removeAllRanges();
           }}
-          style={{ left: selection.x, top: selection.y - 10 }}
+          // Clamped so a selection near either edge of a phone screen keeps the button on it.
+          style={{
+            left: Math.min(Math.max(selection.x, BRANCH_BUTTON_HALF), window.innerWidth - BRANCH_BUTTON_HALF),
+            top: selection.y - 10,
+          }}
           className="fixed z-40 inline-flex -translate-x-1/2 -translate-y-full items-center gap-1.5 rounded-full bg-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-lift transition-colors hover:bg-accent-bright"
         >
           <GitFork weight="bold" className="h-3.5 w-3.5" aria-hidden />

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Effort, ModeSelection, RoutingDecision } from '@/lib/types';
+import { canonicalModelId } from 'bonsai-engine';
 import { EFFORT_LABEL, ModeBadge } from './ModeBadge';
 import { formatTokens } from './tokens';
 
@@ -204,7 +205,7 @@ export function RoutingChip({
                     {catalog.efforts.map((effort) => {
                       const picked =
                         mode?.mode === 'manual' &&
-                        mode.model === model.id &&
+                        canonicalModelId(mode.model ?? '') === model.id &&
                         mode.effort === effort.level;
                       return (
                         <button

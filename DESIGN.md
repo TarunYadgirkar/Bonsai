@@ -25,7 +25,7 @@ A nursery bench under cool daylight. Neutrals are tinted toward the accent green
 | `--surface-sunk` | `#E1E6DE` | brief panel, badges, code |
 | `--ink` | `#15201A` | primary text (evergreen black) |
 | `--ink-muted` | `#4F5C54` | secondary text |
-| `--ink-faint` | `#5E6A62` | captions, 4.5:1 on surface |
+| `--ink-faint` | `#5A655E` | captions, 4.5:1 or better on every surface |
 | `--accent` | `#245C43` | cambium green: primary actions, active path, the kept segment |
 | `--accent-wash` | `#DBE7DF` | active node, user turns, merged insights |
 | `--danger` | `#9A4A24` | errors and the reset confirmation |
