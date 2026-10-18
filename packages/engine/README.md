@@ -126,7 +126,10 @@ logs one server-side warn and degrades to the extractive mock; nothing throws.
 To compile briefs with a distilled student instead, set `BONSAI_COMPILE_BASE_URL` (any
 OpenAI-compatible server, such as `http://localhost:11434/v1` for Ollama) and
 `BONSAI_COMPILE_MODEL`. Only compile calls go there; chat, classify and merge keep the provider
-chain, and a failed student call falls back to it. Both unset (the default) changes nothing.
+chain. The URL must be https, or plain http on a loopback host, because compile input is the
+conversation itself; the host is logged once. A failed call, or a reply that is not the compiler's
+`{"facts", "excludedNote"}` JSON, falls back to the provider chain. Student compiles are logged at
+$0, since a self-hosted model has no catalog rate. Both unset (the default) changes nothing.
 
 ## Learning router
 

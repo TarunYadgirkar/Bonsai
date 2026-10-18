@@ -82,7 +82,9 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
       tier,
       inputTokens: usedInput,
       outputTokens: usedOutput,
-      estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+      // A self-hosted student has no catalog rate; billing it as the routed Claude model would
+      // inflate spend and savings alike.
+      estCostUsd: student ? 0 : costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
       servedBy: live.servedBy,
       ...(live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}),

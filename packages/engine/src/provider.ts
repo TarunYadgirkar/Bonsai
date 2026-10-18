@@ -19,6 +19,7 @@
  * case. Whatever is left returns null and the caller falls back to the mock: a dead key, a
  * wrong model name, a spent quota and a timeout all degrade to a working demo (rule 8).
  */
+import { parseCompilerJson } from './compiler-output';
 import { logger } from './logger';
 import { CEILING_MODEL, MODELS, TIER_DEFAULTS, canonicalModelId } from './models';
 import type { Effort } from './types';
@@ -171,20 +172,49 @@ export async function providerComplete(params: ProviderParams): Promise<Provider
 /* ---------- opt-in compile student ---------- */
 
 const STUDENT_TIMEOUT_MS = 30_000;
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+
+/** The student endpoint, or null. Plain http is accepted only on loopback: compile input is the conversation. */
+function studentEndpoint(raw: string): URL | null {
+  try {
+    const url = new URL(raw.replace(/\/+$/, ''));
+    if (url.protocol === 'https:' || (url.protocol === 'http:' && LOOPBACK_HOSTS.has(url.hostname))) return url;
+  } catch {
+    // reported below
+  }
+  return null;
+}
+
+let studentAnnounced: string | null = null;
+
+/** One line per configured endpoint, so where conversation text goes is visible in the logs. */
+function announceStudent(message: string): void {
+  if (studentAnnounced === message) return;
+  studentAnnounced = message;
+  logger.warn(message);
+}
 
 /**
  * BONSAI_COMPILE_BASE_URL + BONSAI_COMPILE_MODEL route brief compilation, and nothing else, to
  * an OpenAI-compatible server (for example Ollama serving research/distill's SFT checkpoint).
- * Off unless both are set. Any failure returns null so the normal provider chain compiles.
- * Its spend is logged unpriced: the catalog has no honest rate for a self-hosted model.
+ * Off unless both are set. The URL must be https, or http on a loopback host. A failed call, or
+ * a reply that is not the compiler's {facts, excludedNote} JSON, returns null so the normal
+ * provider chain compiles instead. Its spend is logged at $0: the catalog has no honest rate
+ * for a self-hosted model.
  */
 export async function studentCompile(params: ProviderParams): Promise<ProviderResult | null> {
-  const base = process.env.BONSAI_COMPILE_BASE_URL?.replace(/\/+$/, '');
+  const raw = process.env.BONSAI_COMPILE_BASE_URL;
   const model = process.env.BONSAI_COMPILE_MODEL;
-  if (!base || !model) return null;
+  if (!raw || !model) return null;
+  const endpoint = studentEndpoint(raw);
+  if (!endpoint) {
+    announceStudent('[llm] BONSAI_COMPILE_BASE_URL must be https, or http on localhost — compile student off');
+    return null;
+  }
+  announceStudent(`[llm] compile student on: brief compilation sends conversation context to ${endpoint.host}`);
   const timeout = AbortSignal.timeout(STUDENT_TIMEOUT_MS);
   try {
-    const res = await fetch(`${base}/chat/completions`, {
+    const res = await fetch(`${endpoint.href.replace(/\/+$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ model, messages: params.messages, max_tokens: params.maxTokens, temperature: 0 }),
@@ -197,6 +227,9 @@ export async function studentCompile(params: ProviderParams): Promise<ProviderRe
     };
     const text = body.choices?.[0]?.message?.content ?? '';
     if (!text.trim()) throw new Error('student returned no content');
+    // A small distilled model can drift off the JSON contract; that answer would cost the brief
+    // its facts, so the provider chain gets the compile instead.
+    if (!parseCompilerJson(text)) throw new Error('student reply is not compiler JSON');
     return {
       text,
       inputTokens: body.usage?.prompt_tokens ?? 0,
@@ -348,8 +381,11 @@ export function anthropicBody(
 
   return {
     model: upstream,
-    // On adaptive-thinking models the cap covers thinking + text; the caller's answer-sized
-    // ceiling would truncate mid-thought, so the effort-keyed total wins when larger.
+    // The raise applies only where thinking is on. Every catalog Claude model runs adaptive
+    // thinking when `thinking` is omitted, and Opus 5.5 and Fable 5.1 cannot turn it off, so
+    // max_tokens must cover thinking + text: an answer-sized cap (600 for a compile) would end
+    // mid-thought with no text and drop the call to the mock. A non-thinking model (the Haiku
+    // 4.5 override) keeps the caller's cap as its ceiling.
     max_tokens: caps.effort
       ? Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort])
       : params.maxTokens,
@@ -436,7 +472,9 @@ export function geminiBody(
       .filter((m) => m.role !== 'system')
       .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
     generationConfig: {
-      // Thinking spends from the same output allowance, as on Anthropic's adaptive models.
+      // Thinking spends from the same output allowance, as on Anthropic's adaptive models, and
+      // no current Gemini rung can switch it off ('low' is the floor), so every call needs room
+      // for it on top of the answer.
       maxOutputTokens: Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort]),
       thinkingConfig: { thinkingLevel: GEMINI_THINKING[effort] },
     },

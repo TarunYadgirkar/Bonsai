@@ -50,6 +50,7 @@ export {
   type ProviderResult,
 } from './provider';
 export {
+  COMPILER_SYSTEM_PROMPT,
   anchorCarriedThrough,
   compileBrief,
   type CompileParams,

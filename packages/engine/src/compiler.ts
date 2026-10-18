@@ -8,6 +8,7 @@
  * resolved by an ancestor's brief stay resolved here because that brief is part of the
  * compile input (see context.ts — briefs compose recursively).
  */
+import { parseCompilerJson } from './compiler-output';
 import { complete as defaultComplete, type CompleteFn } from './llm';
 import { logger } from './logger';
 import { INTERNAL_TIER, MODEL_TIERS } from './models';
@@ -219,30 +220,10 @@ export function anchorCarriedThrough(anchor: string, facts: string[]): boolean {
 }
 
 function parseCompilerOutput(text: string, selection: string): CompilerOutput {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  if (start !== -1 && end > start) {
-    try {
-      const json = JSON.parse(text.slice(start, end + 1)) as Partial<CompilerOutput>;
-      // Filter to strings FIRST, then gate on the result: a facts array of non-strings passes a
-      // raw length check but filters to empty, yielding a factless brief that skips the fallback.
-      const facts = Array.isArray(json.facts)
-        ? json.facts.filter((f): f is string => typeof f === 'string')
-        : [];
-      if (facts.length) {
-        return {
-          facts,
-          excludedNote:
-            typeof json.excludedNote === 'string'
-              ? json.excludedNote
-              : 'Excluded: the rest of the parent conversation.',
-        };
-      }
-    } catch {
-      // fall through to the heuristic below
-    }
+  const json = parseCompilerJson(text);
+  if (json) {
+    return { facts: json.facts, excludedNote: json.excludedNote ?? 'Excluded: the rest of the parent conversation.' };
   }
-
   logger.warn('[compiler] unparseable output — using fallback facts');
   return {
     facts: [`Topic in focus: ${selection}.`],
