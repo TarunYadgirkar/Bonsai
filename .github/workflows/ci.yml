@@ -37,6 +37,8 @@ jobs:
       - run: npm run test
       # No keys in CI: evals run against the mock, gating plumbing + routing thresholds.
       - run: npm run eval
+      # 300 generated cases; gated on no regression against evals/xl/baseline.mock.json.
+      - run: npm run eval:xl
       - run: npm run build
       # Publish smoke: build the standalone dist and prove the ESM artifact loads with its exports.
       - name: engine dist build + ESM load smoke
