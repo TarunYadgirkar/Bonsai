@@ -662,6 +662,16 @@ export async function recordRoutingFeedback(
   profileMap().set(sessionId, next);
 }
 
+/**
+ * Drop the session's learned routing so the router starts again from the classifier and the
+ * community prior. The row goes too, which also withdraws it from the population prior.
+ * Throws when a configured database refuses, so the caller can report it.
+ */
+export async function forgetRoutingProfile(sessionId: string): Promise<void> {
+  profileMap().delete(sessionId);
+  if (dbEnabled()) await sql()`DELETE FROM routing_profiles WHERE id = ${sessionId}`;
+}
+
 /* ---------- population prior (community cold-start) ---------- */
 
 /** Fewer contributors than this and no prior is served. Sessions are free to mint (an unsigned

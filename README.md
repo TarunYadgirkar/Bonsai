@@ -82,7 +82,7 @@ later, it still carries the full history, and there's no way to bring what you l
 |---|---|
 | **MCP connector** (`app/api/mcp/`) | A claude.ai custom connector — self-serve at [/connect](https://bonsai-connector.vercel.app/connect). Claude compiles the brief in-conversation; the connector holds the tree and renders it inline as an interactive MCP Apps garden. |
 | **Claude Code plugin** (`plugin/`) | Branch = subagent with a compiled brief; merge = distilled report. Runs on your Claude Code subscription. |
-| **Web app** (`app/`, `components/`) | The hosted demo + engine testbed: streaming chat, ⌘K palette, export, per-branch economics. Mock-first: runs with zero keys. |
+| **Web app** (`app/`, `components/`) | The hosted demo + engine testbed: streaming chat, ⌘K palette, garden export and import, per-branch economics. Mock-first: runs with zero keys. |
 
 (A Chrome extension surface lives in `extension/` with full e2e coverage but is deliberately
 parked: a claude.ai extension can never run the loop unattended, and its remaining prefill role
@@ -100,7 +100,7 @@ Install the plugin:
 The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
 consume. It is not on npm yet; it is built to publish on its own (`cd packages/engine && pnpm
 publish` builds a typed `dist` via `prepublishOnly`). Tree model, path assembly, salience compiler,
-learning router, recall, honest pricing. 303 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
+learning router, recall, honest pricing. 334 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
 
 ## Run it
 

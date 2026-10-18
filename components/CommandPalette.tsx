@@ -21,6 +21,8 @@ export function CommandPalette({
   onNewChat,
   onOpenEconomics,
   onExport,
+  onImport,
+  onForgetRouting,
   activeIsBranch,
   onClose,
 }: {
@@ -30,6 +32,9 @@ export function CommandPalette({
   onOpenEconomics: () => void;
   /** Download the garden — or, when scope is 'branch', the active subtree. */
   onExport: (format: 'md' | 'json', scope: 'garden' | 'branch') => void;
+  /** Pick a Bonsai or Espalier JSON export and add its trees beside the current garden. */
+  onImport: () => void;
+  onForgetRouting: () => void;
   activeIsBranch: boolean;
   onClose: () => void;
 }) {
@@ -59,6 +64,18 @@ export function CommandPalette({
         hint: 'portable backup',
         run: () => onExport('json', 'garden'),
       },
+      {
+        id: 'import-json',
+        label: 'Import garden from JSON',
+        hint: 'adds trees, replaces nothing',
+        run: onImport,
+      },
+      {
+        id: 'forget-routing',
+        label: 'Forget routing history',
+        hint: 'keeps your garden',
+        run: onForgetRouting,
+      },
       ...(activeIsBranch
         ? [
             {
@@ -70,7 +87,7 @@ export function CommandPalette({
           ]
         : []),
     ];
-  }, [query, onNewChat, onOpenEconomics, onExport, activeIsBranch]);
+  }, [query, onNewChat, onOpenEconomics, onExport, onImport, onForgetRouting, activeIsBranch]);
 
   /** Flat keyboard order: actions first, then hits. */
   const rowCount = actions.length + hits.length;

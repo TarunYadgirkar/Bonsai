@@ -38,7 +38,7 @@ function toResponse(reply: Reply): Response {
 
 function stubFetch(replies: Reply[]) {
   const queue = [...replies];
-  const fn = vi.fn(async (_url: string, _init: RequestInit) => {
+  const fn = vi.fn<(url: string, init: RequestInit) => Promise<Response>>(async () => {
     const reply = queue.shift();
     if (!reply) throw new Error('unexpected extra fetch');
     if (reply.takesMs) vi.setSystemTime(Date.now() + reply.takesMs);

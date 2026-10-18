@@ -6,7 +6,7 @@
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 
-export type RateLimitBucket = 'inference' | 'mutation' | 'oauth' | 'seed' | 'session';
+export type RateLimitBucket = 'inference' | 'mutation' | 'oauth' | 'seed' | 'import' | 'session';
 
 /**
  * inference = routes that can hit a paid model; mutation = cheap state changes. The rest are
@@ -15,6 +15,7 @@ export type RateLimitBucket = 'inference' | 'mutation' | 'oauth' | 'seed' | 'ses
  *   oauth   = the unauthenticated DCR/token endpoints;
  *   seed    = writing the Berkeley demo into a garden (~70 rows per seed). Generous enough for a
  *             shared campus NAT where several first visits auto-seed in the same hour;
+ *   import  = adding an uploaded garden file (up to a few thousand rows per import);
  *   session = minting a new session on GET /api/state (one root row each).
  */
 const LIMITS: Record<RateLimitBucket, { max: number; windowMs: number }> = {
@@ -22,6 +23,7 @@ const LIMITS: Record<RateLimitBucket, { max: number; windowMs: number }> = {
   mutation: { max: 60, windowMs: MINUTE_MS },
   oauth: { max: 20, windowMs: MINUTE_MS },
   seed: { max: 10, windowMs: HOUR_MS },
+  import: { max: 10, windowMs: HOUR_MS },
   session: { max: 60, windowMs: HOUR_MS },
 };
 

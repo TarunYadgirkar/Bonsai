@@ -8,6 +8,7 @@ import type {
   ChatResponse,
   Conversation,
   EconomicsResponse,
+  ImportResponse,
   MergeResponse,
   ModeSelection,
   StateResponse,
@@ -721,6 +722,35 @@ export function Workspace() {
     }
   };
 
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const importGarden = async (file: File) => {
+    try {
+      const res = await fetch('/api/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: await file.text(),
+      });
+      if (!res.ok) throw await httpError(res, 'POST /api/import');
+      const data: ImportResponse = await res.json();
+      applyState(data);
+      const noun = data.imported === 1 ? 'conversation' : 'conversations';
+      setNotice(`Imported ${data.imported} ${noun}. Everything you had is still here.`);
+    } catch (err) {
+      setError(describe(err));
+    }
+  };
+
+  const forgetRouting = async () => {
+    try {
+      const res = await fetch('/api/routing-profile', { method: 'DELETE' });
+      if (!res.ok) throw await httpError(res, 'DELETE /api/routing-profile');
+      setNotice('Routing history forgotten. Bonsai picks models from its defaults again.');
+    } catch (err) {
+      setError(describe(err));
+    }
+  };
+
   // Stable identity: this reaches memoized message bubbles; a fresh closure per render would
   // defeat the memo and re-parse every assistant message's markdown on each keystroke.
   const selectMode = useCallback(
@@ -1001,10 +1031,27 @@ export function Workspace() {
             a.click();
             a.remove();
           }}
+          onImport={() => importInputRef.current?.click()}
+          onForgetRouting={() => void forgetRouting()}
           activeIsBranch={Boolean(active?.parentId)}
           onClose={() => setPaletteOpen(false)}
         />
       )}
+
+      {/* Outside the palette: the palette closes on activation, the picker must outlive it. */}
+      <input
+        ref={importInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        aria-hidden="true"
+        tabIndex={-1}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = '';
+          if (file) void importGarden(file);
+        }}
+      />
 
       {economicsOpen && (
         <EconomicsPanel
