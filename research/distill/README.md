@@ -2,7 +2,7 @@
 
 Can a 0.5B–1.5B model learn context-compilation behavior from a larger teacher?
 
-Extends [Bonsai](https://github.com/tarunyadgirkar)'s context compiler — which turns a long
+Extends [Bonsai](../../README.md)'s context compiler — which turns a long
 conversation into a minimal, referent-resolved brief at every fork — into a distillation
 experiment. Three conditions, one grader:
 
@@ -20,10 +20,41 @@ level 2), so `by_family` deltas are the headline result.
 
 ## Task contract
 
-Verbatim from `bonsai-copy-a/packages/engine/src/compiler.ts`: system prompt +
+Verbatim from [`packages/engine/src/compiler.ts`](../../packages/engine/src/compiler.ts)
+(`COMPILER_SYSTEM_PROMPT`; `test/distill-drift.test.ts` fails if the two copies diverge): system prompt +
 profile/selection/question/path-markdown user turn → JSON `{"facts": string[],
 "excludedNote": string}`. A trained student is a drop-in for the engine's `complete()`
 compile call.
+
+## Results so far
+
+300-case eval split, no downstream-QA judge on the SFT row:
+
+| Condition | Pass | Parse | Hallucination | depth2 | long_trunk | Compression | s/case |
+|---|---|---|---|---|---|---|---|
+| base (Qwen2.5-0.5B, untrained) | 54.3% | 80.3% | 0% | 13.3% | 10.0% | 45.8% | 0.66 |
+| sft (`runs/sft`, bf16) | 99.7% | 100% | 0% | 98.3% | 100% | 68.1% | 1.22 (MPS) |
+
+`results/base.json` and `results/sft.json` hold the per-case rows. The SFT checkpoint was
+trained on 2026-08-23 and first evaluated on 2026-10-18 (an earlier run died at case 100). GKD and the Claude teacher ceiling have not
+been run.
+
+Read these numbers with care:
+
+- The eval split is synthetic and in-distribution, and SFT saturates it. Claims about the
+  student need a harder, out-of-distribution set first.
+- This harness grades raw student output. The engine also pins the anchor fact and reconciles
+  inherited facts verbatim, so production would grade the same student more leniently.
+- Weights, `.venv/`, `data/` and the Claude-generated `teacher_train.jsonl` stay out of git.
+  The training targets came from claude-sonnet-5, so check Anthropic's terms before publishing
+  a checkpoint anywhere.
+
+## Inside the Bonsai repo
+
+This directory is not an npm workspace and nothing in the Next build imports it. The held-out
+eval split is mirrored at [`evals/xl/eval.jsonl`](../../evals/xl/eval.jsonl), where
+`npm run eval:xl` grades the engine's own compiler on it with a TypeScript port of
+`checks.py`. Regenerate `data/` with `scripts/gen_data.py`; it is deterministic (seed 7).
 
 ## Scenario families (datagen.py)
 

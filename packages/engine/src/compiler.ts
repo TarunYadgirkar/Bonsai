@@ -118,6 +118,13 @@ export async function compileBrief(
   };
 }
 
+/**
+ * research/distill trains students on this exact string, and a test pins its Python copy to it.
+ * Edit both together or the distilled student stops matching the task it was trained on.
+ */
+export const COMPILER_SYSTEM_PROMPT =
+  'You compile minimal context briefs. Given the context above a conversation fork and a branch topic, extract ONLY the facts needed to answer the branch question, ordered most load-bearing first: state the ONE fact the question most depends on first, then the rest in falling order of importance. Prefer facts a smaller model could not infer without them — the names, numbers, dates, and constraints that exist only in this conversation — over anything general knowledge supplies. Resolve every referent so each fact stands alone without the parent — never write "apps", "it", "that club" where a name belongs. Facts under "Inherited context" or "Learned from branches" headings are pre-distilled: carry the relevant ones through rather than re-deriving them. Respond with JSON only: {"facts": string[], "excludedNote": string}. facts: at most 8 short self-contained sentences. excludedNote: one sentence naming what you deliberately left out.';
+
 async function runCompiler(
   params: CompileParams,
   deps: EngineDeps,
@@ -133,8 +140,7 @@ async function runCompiler(
     messages: [
       {
         role: 'system',
-        content:
-          'You compile minimal context briefs. Given the context above a conversation fork and a branch topic, extract ONLY the facts needed to answer the branch question, ordered most load-bearing first: state the ONE fact the question most depends on first, then the rest in falling order of importance. Prefer facts a smaller model could not infer without them — the names, numbers, dates, and constraints that exist only in this conversation — over anything general knowledge supplies. Resolve every referent so each fact stands alone without the parent — never write "apps", "it", "that club" where a name belongs. Facts under "Inherited context" or "Learned from branches" headings are pre-distilled: carry the relevant ones through rather than re-deriving them. Respond with JSON only: {"facts": string[], "excludedNote": string}. facts: at most 8 short self-contained sentences. excludedNote: one sentence naming what you deliberately left out.',
+        content: COMPILER_SYSTEM_PROMPT,
       },
       {
         role: 'user',

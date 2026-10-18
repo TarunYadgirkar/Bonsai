@@ -122,7 +122,8 @@ to a working local path when its key is absent.
 | `packages/engine/` | `bonsai-engine` — the core. Zero runtime deps. |
 | `app/` · `components/` | Next.js demo + API routes over the engine. |
 | `plugin/` · `extension/` | The Claude Code plugin and the Chrome extension. |
-| `evals/` | BriefBench — the brief-fidelity benchmark, with the Save-As baseline arm. |
+| `evals/` | BriefBench — the brief-fidelity benchmark, with the Save-As baseline arm. `evals/xl/` scales it to 300 generated cases. |
+| `research/distill/` | Distilling the brief compiler into a 0.5B student (Python, not part of the app build). |
 | `PRODUCT.md` · `MOAT.md` · `DESIGN.md` | The idea, the defensibility, the design system. |
 | `AGENTS.md` · `CONTRIBUTING.md` | Rules for agents; how to contribute. |
 

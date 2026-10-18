@@ -16,7 +16,7 @@ prefer it if available at ~$0.8/hr.
 `data/*.jsonl` is gitignored, so tar — not git — is the transfer:
 
 ```bash
-cd ~/TarunsCode/bonsai-distill
+cd ~/TarunsCode/bonsai/research/distill
 bash runbook/push_to_pod.sh <ip> <port>       # tars repo (minus .venv/runs) + scp
 ```
 
@@ -44,8 +44,8 @@ GKD variant — base/sft/gkd is already the core comparison; gkd-op is the bonus
 ## 4. Pull results back to the Mac
 
 ```bash
-scp -P <port> -r root@<ip>:/workspace/bonsai-distill/results ~/TarunsCode/bonsai-distill/
-scp -P <port> -r root@<ip>:/workspace/bonsai-distill/runs ~/TarunsCode/bonsai-distill/   # checkpoints, ~4GB
+scp -P <port> -r root@<ip>:/workspace/bonsai-distill/results ~/TarunsCode/bonsai/research/distill/
+scp -P <port> -r root@<ip>:/workspace/bonsai-distill/runs ~/TarunsCode/bonsai/research/distill/   # checkpoints, ~4GB
 ```
 
 Then **stop the pod** — on-demand bills while running.
@@ -53,7 +53,7 @@ Then **stop the pod** — on-demand bills while running.
 ## 5. Teacher ceiling (local, no GPU)
 
 ```bash
-cd ~/TarunsCode/bonsai-distill
+cd ~/TarunsCode/bonsai/research/distill
 .venv/bin/python scripts/run_eval.py --teacher --name teacher --judge
 ```
 
