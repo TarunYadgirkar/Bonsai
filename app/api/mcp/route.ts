@@ -8,8 +8,8 @@
  */
 import { canonicalOrigin } from '@/lib/origin';
 import { createMcpHandler } from 'mcp-handler';
-import { keyForToken } from '@/lib/oauth';
-import { validateKey } from '@/lib/mcp-store';
+import { checkToken } from '@/lib/oauth';
+import { checkKey } from '@/lib/mcp-store';
 import { registerBonsaiTools } from './[key]/tools';
 
 export const maxDuration = 60;
@@ -37,8 +37,19 @@ async function handle(req: Request): Promise<Response> {
   const bearer = req.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim();
   if (!bearer) return unauthorized(origin);
 
-  let key: string | null = await keyForToken(bearer);
-  if (!key && (await validateKey(bearer))) key = bearer;
+  const token = await checkToken(bearer);
+  // A raw garden key is only tried when the bearer is not a live token; after an unavailable
+  // token lookup the store is down, and a second query would just wait out another timeout.
+  const raw = token.status === 'invalid' ? await checkKey(bearer) : null;
+  const key = token.status === 'valid' ? token.key : raw === 'valid' ? bearer : null;
+  if (!key && (token.status === 'unavailable' || raw === 'unavailable')) {
+    // No WWW-Authenticate here: that header sends claude.ai back through OAuth for a credential
+    // that may be fine. The store was down, so ask for a retry instead.
+    return Response.json(
+      { error: 'garden store unavailable, retry shortly' },
+      { status: 503, headers: { 'Retry-After': '5' } },
+    );
+  }
   if (!key) return unauthorized(origin);
 
   const handler = createMcpHandler((server) => registerBonsaiTools(server, key), {
