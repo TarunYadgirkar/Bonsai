@@ -1,0 +1,8 @@
+.env
+.venv/
+__pycache__/
+*.egg-info/
+data/*.jsonl
+data/*.json
+runs/
+.DS_Store
