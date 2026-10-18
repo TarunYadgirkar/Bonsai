@@ -31207,11 +31207,13 @@ var TIMEOUT_BY_EFFORT = {
 async function providerComplete(params) {
   const provider = providerName();
   if (provider === "mock") return null;
-  const upstream = upstreamModel(params.model);
   try {
-    const result = provider === "anthropic" ? await callAnthropic(upstream, params) : await callOpenAiCompatible(provider, upstream, params);
-    if (!result?.text.trim()) {
-      logger.warn(`[llm] ${provider} returned no content on ${upstream} \u2014 falling back to mock`);
+    const result = await resilientCall(
+      params,
+      (upstream, signal) => provider === "anthropic" ? callAnthropic(upstream, params, signal) : callOpenAiCompatible(provider, upstream, params, signal)
+    );
+    if (!result.text.trim()) {
+      logger.warn(`[llm] ${provider} returned no content on ${result.servedBy} \u2014 falling back to mock`);
       return null;
     }
     return result;
@@ -31219,6 +31221,100 @@ async function providerComplete(params) {
     if (err.name === "AbortError" && params.signal?.aborted) throw err;
     logger.warn(`[llm] ${provider} failed (${err.message}) \u2014 falling back to mock`);
     return null;
+  }
+}
+var ProviderHttpError = class extends Error {
+  constructor(status, retryAfterMs, message) {
+    super(message);
+    this.status = status;
+    this.retryAfterMs = retryAfterMs;
+  }
+};
+async function httpError(provider, res) {
+  const seconds = Number(res.headers.get("retry-after") ?? NaN);
+  return new ProviderHttpError(
+    res.status,
+    Number.isFinite(seconds) && seconds >= 0 ? seconds * 1e3 : null,
+    `${provider} ${res.status} ${(await res.text()).slice(0, 160)}`
+  );
+}
+var RETRY_DELAYS_MS = [1500, 4e3];
+var MAX_RETRY_WAIT_MS = 4e3;
+var MIN_ATTEMPT_MS = 5e3;
+var TRANSIENT_STATUSES = /* @__PURE__ */ new Set([500, 502, 503, 504, 529]);
+function nextStep(err, retriesSoFar) {
+  if (!(err instanceof ProviderHttpError)) return { kind: "give-up" };
+  const retriesLeft = retriesSoFar < RETRY_DELAYS_MS.length;
+  if (err.status === 404) return { kind: "step-down" };
+  if (err.status === 429) {
+    const shortWait = err.retryAfterMs !== null && err.retryAfterMs <= MAX_RETRY_WAIT_MS;
+    return shortWait && retriesLeft ? { kind: "retry", waitMs: err.retryAfterMs } : { kind: "step-down" };
+  }
+  if (TRANSIENT_STATUSES.has(err.status) && retriesLeft) {
+    return { kind: "retry", waitMs: RETRY_DELAYS_MS[retriesSoFar] };
+  }
+  return { kind: "give-up" };
+}
+var RUNG_ORDER = ["QUICK", "MID", "DEEP", "CEILING"];
+var MODEL_BY_RUNG = {
+  QUICK: TIER_DEFAULTS.quick.model,
+  MID: TIER_DEFAULTS.thoughtful.model,
+  DEEP: TIER_DEFAULTS.deep.model,
+  CEILING: CEILING_MODEL
+};
+function stepDownModel(bonsaiModelId) {
+  const from = upstreamModel(bonsaiModelId);
+  const canonical = canonicalModelId(bonsaiModelId);
+  const rung = Object.hasOwn(RUNG_BY_MODEL, canonical) ? RUNG_BY_MODEL[canonical] : "QUICK";
+  for (let i = RUNG_ORDER.indexOf(rung) - 1; i >= 0; i--) {
+    const candidate = MODEL_BY_RUNG[RUNG_ORDER[i]];
+    if (upstreamModel(candidate) !== from) return candidate;
+  }
+  return null;
+}
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true }
+    );
+  });
+}
+async function resilientCall(params, attempt) {
+  const deadline = Date.now() + TIMEOUT_BY_EFFORT[params.effort ?? "medium"];
+  const firstUpstream = upstreamModel(params.model);
+  let upstream = firstUpstream;
+  let steppedDown = false;
+  let retries = 0;
+  for (; ; ) {
+    const timeout = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+    try {
+      const result = await attempt(upstream, params.signal ? AbortSignal.any([params.signal, timeout]) : timeout);
+      return steppedDown ? { ...result, fellBackFrom: firstUpstream } : result;
+    } catch (err) {
+      const step2 = nextStep(err, retries);
+      const remaining = deadline - Date.now();
+      if (step2.kind === "retry" && remaining > step2.waitMs + MIN_ATTEMPT_MS) {
+        logger.warn(`[llm] ${err.message.split(" ", 2).join(" ")} on ${upstream} \u2014 retrying in ${step2.waitMs}ms`);
+        await sleep(step2.waitMs, params.signal);
+        retries += 1;
+        continue;
+      }
+      const lower = step2.kind === "step-down" && !steppedDown ? stepDownModel(params.model) : null;
+      if (lower && remaining > MIN_ATTEMPT_MS) {
+        upstream = upstreamModel(lower);
+        logger.warn(`[llm] ${firstUpstream} unavailable (${err.message.slice(0, 80)}) \u2014 stepping down to ${upstream}`);
+        steppedDown = true;
+        retries = 0;
+        continue;
+      }
+      throw err;
+    }
   }
 }
 function anthropicBody(upstream, params) {
@@ -31237,8 +31333,7 @@ function anthropicBody(upstream, params) {
     messages: turns.map((m) => ({ role: m.role, content: m.content }))
   };
 }
-async function callAnthropic(upstream, params) {
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
+async function callAnthropic(upstream, params, signal) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -31247,9 +31342,9 @@ async function callAnthropic(upstream, params) {
       "content-type": "application/json"
     },
     body: JSON.stringify(anthropicBody(upstream, params)),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+    signal
   });
-  if (!res.ok) throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
+  if (!res.ok) throw await httpError("anthropic", res);
   const body = await res.json();
   if (body.stop_reason === "refusal") throw new Error(`anthropic refusal on ${upstream}`);
   return {
@@ -31259,10 +31354,9 @@ async function callAnthropic(upstream, params) {
     servedBy: upstream
   };
 }
-async function callOpenAiCompatible(provider, upstream, params) {
+async function callOpenAiCompatible(provider, upstream, params, signal) {
   const base = provider === "openai" ? "https://api.openai.com/v1" : "https://api.x.ai/v1";
   const key = provider === "openai" ? process.env.OPENAI_API_KEY : process.env.XAI_API_KEY;
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
@@ -31271,9 +31365,9 @@ async function callOpenAiCompatible(provider, upstream, params) {
       messages: params.messages,
       max_completion_tokens: params.maxTokens
     }),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+    signal
   });
-  if (!res.ok) throw new Error(`${provider} ${res.status} ${(await res.text()).slice(0, 160)}`);
+  if (!res.ok) throw await httpError(provider, res);
   const body = await res.json();
   return {
     text: body.choices?.[0]?.message?.content ?? "",
@@ -31285,17 +31379,22 @@ async function callOpenAiCompatible(provider, upstream, params) {
 async function providerCompleteStream(params, onDelta) {
   const provider = providerName();
   if (provider === "mock") return null;
-  const upstream = upstreamModel(params.model);
   try {
     if (provider === "anthropic") {
-      const result2 = await callAnthropicStream(upstream, params, onDelta);
+      const result2 = await resilientCall(
+        params,
+        (upstream, signal) => callAnthropicStream(upstream, params, signal, onDelta)
+      );
       if (!result2.text.trim()) {
-        logger.warn(`[llm] anthropic stream returned no content on ${upstream} \u2014 mock fallback`);
+        logger.warn(`[llm] anthropic stream returned no content on ${result2.servedBy} \u2014 mock fallback`);
         return null;
       }
       return result2;
     }
-    const result = await callOpenAiCompatible(provider, upstream, params);
+    const result = await resilientCall(
+      params,
+      (upstream, signal) => callOpenAiCompatible(provider, upstream, params, signal)
+    );
     if (!result.text.trim()) return null;
     onDelta(result.text);
     return result;
@@ -31316,8 +31415,7 @@ function* sseFrames(buffer) {
     if (data) yield { event: event || "message", data };
   }
 }
-async function callAnthropicStream(upstream, params, onDelta) {
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
+async function callAnthropicStream(upstream, params, signal, onDelta) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -31326,11 +31424,10 @@ async function callAnthropicStream(upstream, params, onDelta) {
       "content-type": "application/json"
     },
     body: JSON.stringify({ ...anthropicBody(upstream, params), stream: true }),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+    signal
   });
-  if (!res.ok || !res.body) {
-    throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
-  }
+  if (!res.ok) throw await httpError("anthropic", res);
+  if (!res.body) throw new Error(`anthropic ${res.status} with no stream body`);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -31401,7 +31498,8 @@ async function complete(params) {
       outputTokens: usedOutput,
       estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
-      servedBy: live.servedBy
+      servedBy: live.servedBy,
+      ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
     };
   }
   return mockComplete(tier, model, messages, inputTokens, params.purpose);
@@ -31430,7 +31528,8 @@ async function completeStream(params, onDelta) {
       outputTokens: usedOutput,
       estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
-      servedBy: live.servedBy
+      servedBy: live.servedBy,
+      ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
     };
   }
   const result = mockComplete(tier, model, messages, inputTokens, params.purpose);

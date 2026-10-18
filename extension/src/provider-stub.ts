@@ -20,6 +20,7 @@ export interface ProviderResult {
   outputTokens: number;
   estCostUsd: number;
   servedBy?: string;
+  fellBackFrom?: string;
 }
 
 export interface ProviderParams {

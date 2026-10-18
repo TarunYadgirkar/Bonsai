@@ -171,7 +171,8 @@
         outputTokens: usedOutput,
         estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
         mock: false,
-        servedBy: live.servedBy
+        servedBy: live.servedBy,
+        ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
       };
     }
     return mockComplete(tier, model, messages, inputTokens, params.purpose);
@@ -200,7 +201,8 @@
         outputTokens: usedOutput,
         estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
         mock: false,
-        servedBy: live.servedBy
+        servedBy: live.servedBy,
+        ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
       };
     }
     const result = mockComplete(tier, model, messages, inputTokens, params.purpose);

@@ -45,6 +45,8 @@ export interface CompleteResult {
   mock: boolean;
   /** Upstream model that actually answered. Absent on the mock. */
   servedBy?: string;
+  /** Upstream that refused first (quota or 404) before servedBy answered. */
+  fellBackFrom?: string;
 }
 
 /**
@@ -87,6 +89,7 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
       estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
       servedBy: live.servedBy,
+      ...(live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}),
     };
   }
 
@@ -124,6 +127,7 @@ export async function completeStream(
       estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
       servedBy: live.servedBy,
+      ...(live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}),
     };
   }
 

@@ -11,6 +11,7 @@ import {
   complete as defaultComplete,
   completeStream as defaultCompleteStream,
   type CompleteFn,
+  type CompleteResult,
   type CompleteStreamFn,
 } from './llm';
 import { adjustForProfile, QUESTION_KINDS, type RoutingProfile } from './learning';
@@ -364,16 +365,26 @@ export async function completeWithEscalation(
     return result;
   };
 
-  const finish = (text: string, servedBy?: string): EscalationResult => ({
-    text,
-    routing: { ...routing, estCostUsd: totalCost, ...(servedBy ? { servedBy } : {}) },
+  const finish = (answer: CompleteResult): EscalationResult => ({
+    text: answer.text,
+    routing: {
+      ...routing,
+      estCostUsd: totalCost,
+      ...(answer.servedBy ? { servedBy: answer.servedBy } : {}),
+      ...(answer.fellBackFrom
+        ? {
+            fellBackFrom: answer.fellBackFrom,
+            reason: `${routing.reason} ${answer.fellBackFrom} was unavailable, so ${answer.servedBy} answered.`,
+          }
+        : {}),
+    },
     inputTokens: totalInput,
     outputTokens: totalOutput,
   });
 
   let result = await call(routing.model, routing.tier, routing.effort);
   if (!answerFailsSanityCheck(result.text, routing.complexity)) {
-    return finish(result.text, result.servedBy);
+    return finish(result);
   }
 
   // Context lever: same model, wider prompt.
@@ -381,16 +392,16 @@ export async function completeWithEscalation(
     params.onRestart?.('widened');
     result = await call(routing.model, routing.tier, routing.effort);
     if (!answerFailsSanityCheck(result.text, routing.complexity)) {
-      return finish(result.text, result.servedBy);
+      return finish(result);
     }
   }
 
   // Model lever — never over an explicit user pick, never past the ceiling.
-  if (routing.overridden) return finish(result.text, result.servedBy);
+  if (routing.overridden) return finish(result);
 
   const upgraded = NEXT_TIER[routing.tier];
   const atCeiling = routing.model === CEILING_MODEL;
-  if (!upgraded && atCeiling) return finish(result.text, result.servedBy);
+  if (!upgraded && atCeiling) return finish(result);
 
   const upgradedTier = upgraded ?? routing.tier;
   const upgradedModel = upgraded ? TIER_DEFAULTS[upgraded].model : CEILING_MODEL;
@@ -411,5 +422,5 @@ export async function completeWithEscalation(
   };
   params.onRestart?.('escalated');
   const second = await call(upgradedModel, upgradedTier, upgradedEffort);
-  return finish(second.text, second.servedBy);
+  return finish(second);
 }

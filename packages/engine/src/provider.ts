@@ -12,8 +12,11 @@
  * sampling params (400) and take reasoning effort via output_config.effort, while a legacy
  * Haiku 4.5 override is the reverse. Never hand-build a request body outside `anthropicBody`.
  *
- * Every failure returns null and the caller falls back to the mock. A dead key, a wrong model
- * name, a rate limit and a timeout all degrade to a working demo (rule 8).
+ * Transient upstream failures (5xx, 529 overloaded, a 429 with a short Retry-After) are retried
+ * with backoff; a quota 429 or a 404 steps down one model rung. Both spend from the same
+ * per-effort time budget a single call already had, so resilience never lengthens the worst
+ * case. Whatever is left returns null and the caller falls back to the mock: a dead key, a
+ * wrong model name, a spent quota and a timeout all degrade to a working demo (rule 8).
  */
 import { logger } from './logger';
 import { CEILING_MODEL, MODELS, TIER_DEFAULTS, canonicalModelId } from './models';
@@ -123,6 +126,8 @@ export interface ProviderResult {
   outputTokens: number;
   /** The upstream model that actually answered, for the UI's "served by" line. */
   servedBy: string;
+  /** The upstream that was asked first and refused (quota or 404) before servedBy answered. */
+  fellBackFrom?: string;
 }
 
 export interface ProviderParams {
@@ -138,14 +143,14 @@ export async function providerComplete(params: ProviderParams): Promise<Provider
   const provider = providerName();
   if (provider === 'mock') return null;
 
-  const upstream = upstreamModel(params.model);
   try {
-    const result =
+    const result = await resilientCall(params, (upstream, signal) =>
       provider === 'anthropic'
-        ? await callAnthropic(upstream, params)
-        : await callOpenAiCompatible(provider, upstream, params);
-    if (!result?.text.trim()) {
-      logger.warn(`[llm] ${provider} returned no content on ${upstream} — falling back to mock`);
+        ? callAnthropic(upstream, params, signal)
+        : callOpenAiCompatible(provider, upstream, params, signal),
+    );
+    if (!result.text.trim()) {
+      logger.warn(`[llm] ${provider} returned no content on ${result.servedBy} — falling back to mock`);
       return null;
     }
     return result;
@@ -155,6 +160,126 @@ export async function providerComplete(params: ProviderParams): Promise<Provider
     if ((err as Error).name === 'AbortError' && params.signal?.aborted) throw err;
     logger.warn(`[llm] ${provider} failed (${(err as Error).message}) — falling back to mock`);
     return null;
+  }
+}
+
+/* ---------- retry and step-down ---------- */
+
+/** A non-2xx upstream response, typed so the retry policy can read its status. */
+class ProviderHttpError extends Error {
+  constructor(
+    readonly status: number,
+    readonly retryAfterMs: number | null,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+async function httpError(provider: string, res: Response): Promise<ProviderHttpError> {
+  const seconds = Number(res.headers.get('retry-after') ?? NaN);
+  return new ProviderHttpError(
+    res.status,
+    Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null,
+    `${provider} ${res.status} ${(await res.text()).slice(0, 160)}`,
+  );
+}
+
+/** Waits before the first and second retry when the upstream gave no Retry-After. */
+const RETRY_DELAYS_MS = [1500, 4000];
+/** A Retry-After longer than this is a quota, not a blip: step down instead of waiting. */
+const MAX_RETRY_WAIT_MS = 4000;
+/** An attempt with less budget than this left cannot finish, so it is not started. */
+const MIN_ATTEMPT_MS = 5000;
+const TRANSIENT_STATUSES = new Set([500, 502, 503, 504, 529]);
+
+type NextStep = { kind: 'retry'; waitMs: number } | { kind: 'step-down' } | { kind: 'give-up' };
+
+function nextStep(err: unknown, retriesSoFar: number): NextStep {
+  if (!(err instanceof ProviderHttpError)) return { kind: 'give-up' };
+  const retriesLeft = retriesSoFar < RETRY_DELAYS_MS.length;
+  if (err.status === 404) return { kind: 'step-down' };
+  if (err.status === 429) {
+    const shortWait = err.retryAfterMs !== null && err.retryAfterMs <= MAX_RETRY_WAIT_MS;
+    return shortWait && retriesLeft ? { kind: 'retry', waitMs: err.retryAfterMs! } : { kind: 'step-down' };
+  }
+  if (TRANSIENT_STATUSES.has(err.status) && retriesLeft) {
+    return { kind: 'retry', waitMs: RETRY_DELAYS_MS[retriesSoFar] };
+  }
+  return { kind: 'give-up' };
+}
+
+const RUNG_ORDER: Rung[] = ['QUICK', 'MID', 'DEEP', 'CEILING'];
+const MODEL_BY_RUNG: Record<Rung, string> = {
+  QUICK: TIER_DEFAULTS.quick.model,
+  MID: TIER_DEFAULTS.thoughtful.model,
+  DEEP: TIER_DEFAULTS.deep.model,
+  CEILING: CEILING_MODEL,
+};
+
+/** The next cheaper catalog model whose upstream differs from this one's, or null at the floor. */
+function stepDownModel(bonsaiModelId: string): string | null {
+  const from = upstreamModel(bonsaiModelId);
+  const canonical = canonicalModelId(bonsaiModelId);
+  const rung = Object.hasOwn(RUNG_BY_MODEL, canonical) ? RUNG_BY_MODEL[canonical] : 'QUICK';
+  for (let i = RUNG_ORDER.indexOf(rung) - 1; i >= 0; i--) {
+    const candidate = MODEL_BY_RUNG[RUNG_ORDER[i]];
+    if (upstreamModel(candidate) !== from) return candidate;
+  }
+  return null;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+}
+
+type Attempt = (upstream: string, signal: AbortSignal) => Promise<ProviderResult>;
+
+/**
+ * Runs one logical call: retries transient failures on the same upstream, then steps down at
+ * most one rung on a quota or 404. Every attempt shares the deadline a single call had.
+ */
+async function resilientCall(params: ProviderParams, attempt: Attempt): Promise<ProviderResult> {
+  const deadline = Date.now() + TIMEOUT_BY_EFFORT[params.effort ?? 'medium'];
+  const firstUpstream = upstreamModel(params.model);
+  let upstream = firstUpstream;
+  let steppedDown = false;
+  let retries = 0;
+
+  for (;;) {
+    const timeout = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+    try {
+      const result = await attempt(upstream, params.signal ? AbortSignal.any([params.signal, timeout]) : timeout);
+      return steppedDown ? { ...result, fellBackFrom: firstUpstream } : result;
+    } catch (err) {
+      const step = nextStep(err, retries);
+      const remaining = deadline - Date.now();
+      if (step.kind === 'retry' && remaining > step.waitMs + MIN_ATTEMPT_MS) {
+        logger.warn(`[llm] ${(err as Error).message.split(' ', 2).join(' ')} on ${upstream} — retrying in ${step.waitMs}ms`);
+        await sleep(step.waitMs, params.signal);
+        retries += 1;
+        continue;
+      }
+      const lower = step.kind === 'step-down' && !steppedDown ? stepDownModel(params.model) : null;
+      if (lower && remaining > MIN_ATTEMPT_MS) {
+        upstream = upstreamModel(lower);
+        logger.warn(`[llm] ${firstUpstream} unavailable (${(err as Error).message.slice(0, 80)}) — stepping down to ${upstream}`);
+        steppedDown = true;
+        retries = 0;
+        continue;
+      }
+      throw err;
+    }
   }
 }
 
@@ -188,8 +313,11 @@ export function anthropicBody(
   };
 }
 
-async function callAnthropic(upstream: string, params: ProviderParams): Promise<ProviderResult> {
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? 'medium']);
+async function callAnthropic(
+  upstream: string,
+  params: ProviderParams,
+  signal: AbortSignal,
+): Promise<ProviderResult> {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -198,10 +326,10 @@ async function callAnthropic(upstream: string, params: ProviderParams): Promise<
       'content-type': 'application/json',
     },
     body: JSON.stringify(anthropicBody(upstream, params)),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout,
+    signal,
   });
 
-  if (!res.ok) throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
+  if (!res.ok) throw await httpError('anthropic', res);
 
   const body = (await res.json()) as {
     content?: { type: string; text?: string }[];
@@ -228,10 +356,10 @@ async function callOpenAiCompatible(
   provider: 'openai' | 'xai',
   upstream: string,
   params: ProviderParams,
+  signal: AbortSignal,
 ): Promise<ProviderResult> {
   const base = provider === 'openai' ? 'https://api.openai.com/v1' : 'https://api.x.ai/v1';
   const key = provider === 'openai' ? process.env.OPENAI_API_KEY : process.env.XAI_API_KEY;
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? 'medium']);
 
   const res = await fetch(`${base}/chat/completions`, {
     method: 'POST',
@@ -241,10 +369,10 @@ async function callOpenAiCompatible(
       messages: params.messages,
       max_completion_tokens: params.maxTokens,
     }),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout,
+    signal,
   });
 
-  if (!res.ok) throw new Error(`${provider} ${res.status} ${(await res.text()).slice(0, 160)}`);
+  if (!res.ok) throw await httpError(provider, res);
 
   const body = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
@@ -283,17 +411,21 @@ export async function providerCompleteStream(
   const provider = providerName();
   if (provider === 'mock') return null;
 
-  const upstream = upstreamModel(params.model);
   try {
     if (provider === 'anthropic') {
-      const result = await callAnthropicStream(upstream, params, onDelta);
+      // Only an HTTP-status failure is retried, and that throws before the first delta.
+      const result = await resilientCall(params, (upstream, signal) =>
+        callAnthropicStream(upstream, params, signal, onDelta),
+      );
       if (!result.text.trim()) {
-        logger.warn(`[llm] anthropic stream returned no content on ${upstream} — mock fallback`);
+        logger.warn(`[llm] anthropic stream returned no content on ${result.servedBy} — mock fallback`);
         return null;
       }
       return result;
     }
-    const result = await callOpenAiCompatible(provider, upstream, params);
+    const result = await resilientCall(params, (upstream, signal) =>
+      callOpenAiCompatible(provider, upstream, params, signal),
+    );
     if (!result.text.trim()) return null;
     onDelta(result.text);
     return result;
@@ -320,9 +452,9 @@ function* sseFrames(buffer: string): Generator<{ event: string; data: string }> 
 async function callAnthropicStream(
   upstream: string,
   params: ProviderParams,
+  signal: AbortSignal,
   onDelta: (chunk: string) => void,
 ): Promise<ProviderResult> {
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? 'medium']);
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -331,12 +463,11 @@ async function callAnthropicStream(
       'content-type': 'application/json',
     },
     body: JSON.stringify({ ...anthropicBody(upstream, params), stream: true }),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout,
+    signal,
   });
 
-  if (!res.ok || !res.body) {
-    throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
-  }
+  if (!res.ok) throw await httpError('anthropic', res);
+  if (!res.body) throw new Error(`anthropic ${res.status} with no stream body`);
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

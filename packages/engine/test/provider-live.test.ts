@@ -28,6 +28,7 @@ function fakeResponse(init: FakeResponse) {
   return {
     ok: init.ok,
     status: init.status ?? (init.ok ? 200 : 500),
+    headers: new Headers(),
     json: async () => init.json,
     text: async () => init.text ?? '',
   };
