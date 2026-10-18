@@ -100,7 +100,7 @@ Install the plugin:
 The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
 consume. It is not on npm yet; it is built to publish on its own (`cd packages/engine && pnpm
 publish` builds a typed `dist` via `prepublishOnly`). Tree model, path assembly, salience compiler,
-learning router, recall, honest pricing. 334 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
+learning router, recall, honest pricing. 355 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
 
 ## Run it
 
@@ -141,9 +141,11 @@ Bonsai also absorbed two later variants of the same fork/merge idea:
   one line to MongoDB long-term memory that later conversations recalled. Its recall became
   Bonsai's garden-wide recall (without the vector store) and its voice grammar became the typed
   tree commands.
-- **Espalier**: a Gemini-based variant with a per-call cost ledger. Bonsai's ledger already
-  covered it (list-rate and cache-warm baselines, per-purpose and per-model spend), so nothing was
-  ported.
+- **Espalier** (Sept 2026): a browser-only Gemini variant with a per-call cost ledger. Bonsai
+  already had an equivalent ledger, but four other pieces came across: the provider's retry with backoff
+  and its step down one model rung on a spent quota (shown as "stepped down" on the routing chip),
+  the Gemini provider, garden import (Espalier's JSON export imports too), and "Forget routing
+  history".
 
 MIT licensed. Built by [Tarun Yadgirkar](https://tarunyadgirkar.com), with
 [Justin Kan](https://kanjustin.com) on the original hackathon build.
