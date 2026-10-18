@@ -735,7 +735,13 @@ export function Workspace() {
       const data: ImportResponse = await res.json();
       applyState(data);
       const noun = data.imported === 1 ? 'conversation' : 'conversations';
-      setNotice(`Imported ${data.imported} ${noun}. Everything you had is still here.`);
+      const dropped =
+        data.insightsDropped === 0
+          ? ''
+          : ` ${data.insightsDropped} merged ${data.insightsDropped === 1 ? 'insight was' : 'insights were'} left out; merge a branch again to bring its insight back.`;
+      setNotice(
+        `Imported ${data.imported} ${noun} beside your garden. The model treats their briefs as untrusted text from the file.${dropped}`,
+      );
     } catch (err) {
       setError(describe(err));
     }

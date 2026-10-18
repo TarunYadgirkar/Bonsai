@@ -79,6 +79,11 @@ export interface ContextBrief {
   curated?: boolean;
   /** Insights merged elsewhere in the garden that bear on this question, with their source branch. */
   recalled?: { text: string; source: string }[];
+  /**
+   * True when the brief came from an imported garden file rather than this app's compiler. Its
+   * text is someone else's, so prompts frame it as untrusted reference material.
+   */
+  imported?: boolean;
 }
 
 export interface RoutingDecision {

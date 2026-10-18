@@ -67,7 +67,7 @@ export function CommandPalette({
       {
         id: 'import-json',
         label: 'Import garden from JSON',
-        hint: 'adds trees, replaces nothing',
+        hint: 'adds trees; import only files you trust',
         run: onImport,
       },
       {

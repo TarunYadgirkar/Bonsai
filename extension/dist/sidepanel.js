@@ -173,7 +173,9 @@
         tier,
         inputTokens: usedInput,
         outputTokens: usedOutput,
-        estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+        // A self-hosted student has no catalog rate; billing it as the routed Claude model would
+        // inflate spend and savings alike.
+        estCostUsd: student ? 0 : costForServedBy(live.servedBy, model, usedInput, usedOutput),
         mock: false,
         servedBy: live.servedBy,
         ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
@@ -444,6 +446,21 @@ That is what this branch's brief supports; anything beyond it would need more of
     return mockAnswer(tier, prompt);
   }
 
+  // ../packages/engine/src/compiler-output.ts
+  function parseCompilerJson(text) {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end <= start) return null;
+    try {
+      const json = JSON.parse(text.slice(start, end + 1));
+      const facts = Array.isArray(json.facts) ? json.facts.filter((f) => typeof f === "string") : [];
+      if (!facts.length) return null;
+      return { facts, ...typeof json.excludedNote === "string" ? { excludedNote: json.excludedNote } : {} };
+    } catch {
+      return null;
+    }
+  }
+
   // ../packages/engine/src/logger.ts
   var active = console;
   var logger = {
@@ -579,20 +596,9 @@ That is what this branch's brief supports; anything beyond it would need more of
     return entityTokens.every((t) => top.includes(t));
   }
   function parseCompilerOutput(text, selection) {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start !== -1 && end > start) {
-      try {
-        const json = JSON.parse(text.slice(start, end + 1));
-        const facts = Array.isArray(json.facts) ? json.facts.filter((f) => typeof f === "string") : [];
-        if (facts.length) {
-          return {
-            facts,
-            excludedNote: typeof json.excludedNote === "string" ? json.excludedNote : "Excluded: the rest of the parent conversation."
-          };
-        }
-      } catch {
-      }
+    const json = parseCompilerJson(text);
+    if (json) {
+      return { facts: json.facts, excludedNote: json.excludedNote ?? "Excluded: the rest of the parent conversation." };
     }
     logger.warn("[compiler] unparseable output \u2014 using fallback facts");
     return {

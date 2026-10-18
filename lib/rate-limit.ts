@@ -1,8 +1,10 @@
 /**
  * In-memory sliding-window rate limiter, keyed by session + bucket. Per-server-instance only:
- * on serverless each instance keeps its own counters, so this bounds abuse per instance —
- * real distributed limiting would need a shared store (Redis/Postgres).
+ * on serverless each instance keeps its own counters, so this bounds abuse per instance.
+ * checkSharedRateLimit counts in Postgres instead, for the buckets where that matters.
  */
+import { dbEnabled, sql } from './db';
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 
@@ -72,4 +74,34 @@ export function checkRateLimit(
   }
   hits.set(key, [...recent, now]);
   return { ok: true };
+}
+
+export type RateLimitResult = ReturnType<typeof checkRateLimit>;
+
+/**
+ * Fixed-window checkRateLimit counted in Postgres (migrations/008), so every serverless
+ * instance draws from one allowance. Without a database, or when the query fails, it falls back
+ * to the per-instance limiter: degraded, never unlimited.
+ */
+export async function checkSharedRateLimit(identity: string, bucket: RateLimitBucket): Promise<RateLimitResult> {
+  if (!dbEnabled()) return checkRateLimit(identity, bucket);
+  const { max, windowMs } = LIMITS[bucket];
+  const now = Date.now();
+  const windowStart = Math.floor(now / windowMs) * windowMs;
+  try {
+    const rows = await sql()`
+      INSERT INTO rate_limits (key, window_start, hits)
+      VALUES (${`${bucket}:${identity}`}, ${new Date(windowStart).toISOString()}, 1)
+      ON CONFLICT (key) DO UPDATE SET
+        hits = CASE WHEN rate_limits.window_start = EXCLUDED.window_start THEN rate_limits.hits + 1 ELSE 1 END,
+        window_start = EXCLUDED.window_start
+      RETURNING hits
+    `;
+    const hits = Number(rows[0]?.hits ?? 1);
+    if (hits <= max) return { ok: true };
+    return { ok: false, retryAfterSeconds: Math.ceil((windowStart + windowMs - now) / 1000) };
+  } catch (err) {
+    console.warn(`[rate-limit] shared counter unavailable (${(err as Error).message}) — per-instance limit`);
+    return checkRateLimit(identity, bucket);
+  }
 }

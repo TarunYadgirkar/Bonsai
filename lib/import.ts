@@ -3,12 +3,18 @@
  * file is untrusted, so it is schema-checked and size-capped, every id is replaced, and the
  * result is only ever ADDED to a session (imported roots become extra trees). Inference logs in
  * the file are ignored: the ledger only counts what this deployment actually ran.
+ *
+ * Someone else's file can carry text written to steer a model, so nothing in it is passed off as
+ * something this app distilled. Profiles are dropped (they describe whoever exported the file).
+ * Insights are dropped because recall carries insights into every other tree in the garden; a
+ * branch can be merged again to distill its insight here. Briefs are kept, marked `imported`, so
+ * the engine frames them as untrusted reference text instead of pre-distilled context.
  */
 import { MODELS, QUESTION_KINDS, canonicalModelId } from 'bonsai-engine';
 import { z } from 'zod';
-import type { Conversation, Insight, Message, QuestionKind } from './types';
+import type { Conversation, Message, QuestionKind } from './types';
 
-// Commit writes one row per query, so the row caps keep a full import well inside a minute.
+// Per file. commitImport writes a whole file in one transaction, so these bound its size.
 export const IMPORT_LIMITS = {
   bytes: 2_000_000,
   conversations: 100,
@@ -16,6 +22,9 @@ export const IMPORT_LIMITS = {
   messages: 1000,
   insights: 300,
 } as const;
+
+/** Imports stop once a garden would hold more than this. Chatting is not capped here. */
+export const GARDEN_LIMITS = { conversations: 500, messages: 5000 } as const;
 
 const id = z.string().min(1).max(120);
 const tier = z.enum(['quick', 'thoughtful', 'deep']);
@@ -103,7 +112,9 @@ export const GardenImportSchema = z.object({
 
 type ImportedConversation = z.infer<typeof conversation>;
 
-export type ImportResult = { ok: true; conversations: Conversation[] } | { ok: false; error: string };
+export type ImportResult =
+  | { ok: true; conversations: Conversation[]; insightsDropped: number }
+  | { ok: false; error: string };
 
 export function parseGardenImport(raw: unknown, mintId: (prefix: string) => string): ImportResult {
   const parsed = GardenImportSchema.safeParse(raw);
@@ -125,7 +136,7 @@ export function parseGardenImport(raw: unknown, mintId: (prefix: string) => stri
   }
   const ordered = parentsFirst(conversations);
   if (!ordered) return { ok: false, error: 'the branches form a loop' };
-  return { ok: true, conversations: remap(ordered, mintId) };
+  return { ok: true, conversations: remap(ordered, mintId), insightsDropped: insights };
 }
 
 /**
@@ -167,37 +178,41 @@ function catalogPin(pin: ImportedConversation['pinnedMode']): Conversation['pinn
   return known ? pin : null;
 }
 
+/** Per conversation: two conversations in one file may reuse a message id (Espalier re-imports do). */
+const messageKey = (conversationId: string, messageId: string) => `${conversationId}\u0000${messageId}`;
+
 function remap(ordered: ImportedConversation[], mintId: (prefix: string) => string): Conversation[] {
   const conversationIds = new Map(ordered.map((c) => [c.id, mintId('conv')]));
-  const messageIds = new Map<string, string>();
-  for (const c of ordered) for (const m of c.messages) messageIds.set(m.id, mintId('msg'));
+  // Every message gets its own id, even a repeat inside one conversation; the key only resolves
+  // brief anchors, and the first message with a given id is the one an anchor meant.
+  const minted = new Map(ordered.map((c) => [c.id, c.messages.map(() => mintId('msg'))]));
+  const anchors = new Map<string, string>();
+  for (const c of ordered) {
+    c.messages.forEach((m, i) => {
+      const key = messageKey(c.id, m.id);
+      if (!anchors.has(key)) anchors.set(key, minted.get(c.id)![i]);
+    });
+  }
 
   return ordered.map((c): Conversation => {
     const nextId = conversationIds.get(c.id)!;
+    const ids = minted.get(c.id)!;
     const messages = c.messages.map(
-      (m): Message => ({
-        id: messageIds.get(m.id)!,
+      (m, i): Message => ({
+        id: ids[i],
         role: m.role,
         content: m.content,
         ...(m.routing ? { routing: m.routing } : {}),
         ...(isoTime(m.createdAt) ? { createdAt: isoTime(m.createdAt) } : {}),
       }),
     );
-    const insights = c.insights.map(
-      (i): Insight => ({
-        id: mintId('ins'),
-        branchId: conversationIds.get(i.branchId) ?? nextId,
-        parentId: nextId,
-        text: i.text,
-        createdAt: isoTime(i.createdAt) ?? new Date().toISOString(),
-      }),
-    );
-    const anchor = c.brief?.anchorMessageId ? messageIds.get(c.brief.anchorMessageId) : undefined;
+    // A brief's anchor is a message in the PARENT conversation.
+    const anchor =
+      c.brief?.anchorMessageId && c.parentId ? anchors.get(messageKey(c.parentId, c.brief.anchorMessageId)) : undefined;
     return {
       id: nextId,
       title: c.title.trim() || 'Imported conversation',
       parentId: c.parentId ? (conversationIds.get(c.parentId) ?? null) : null,
-      ...(c.profile ? { profile: c.profile } : {}),
       messages,
       ...(c.brief
         ? {
@@ -206,10 +221,11 @@ function remap(ordered: ImportedConversation[], mintId: (prefix: string) => stri
               id: mintId('brief'),
               branchId: nextId,
               anchorMessageId: anchor,
+              imported: true,
             },
           }
         : {}),
-      insights,
+      insights: [],
       pinnedTier: c.pinnedTier,
       pinnedMode: catalogPin(c.pinnedMode),
       archived: c.archived,

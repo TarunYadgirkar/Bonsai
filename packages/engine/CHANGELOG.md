@@ -15,7 +15,12 @@ All notable changes to `bonsai-engine` are documented here. The format follows
 - **Gemini provider** (`GEMINI_API_KEY`, lowest precedence) over REST `generateContent`, with
   `BONSAI_MODEL_GEMINI_<RUNG>` overrides and Gemini rates verified 2026-10-18.
 - **Compile student hook**: `BONSAI_COMPILE_BASE_URL` + `BONSAI_COMPILE_MODEL` send compile calls
-  only to an OpenAI-compatible server. Off by default.
+  only to an OpenAI-compatible server. Off by default. The URL must be https (plain http only on
+  loopback), a reply that is not the compiler's JSON falls back to the provider chain, and
+  student compiles are logged at $0.
+- `ContextBrief.imported`: a brief carried in from a garden file. `assemblePath` and
+  `renderChatContext` frame it as untrusted reference text under its own heading and do not pin
+  its facts verbatim into the next brief.
 - `COMPILER_SYSTEM_PROMPT` is exported so the distillation project can pin its copy to it.
 
 ## [0.1.0] - 2026-08-11

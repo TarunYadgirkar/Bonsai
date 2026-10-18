@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { exportJson } from '../lib/export';
-import { IMPORT_LIMITS, parseGardenImport } from '../lib/import';
+import { GARDEN_LIMITS, IMPORT_LIMITS, parseGardenImport } from '../lib/import';
 import type { Conversation, ImportResponse, StateResponse } from '../lib/types';
 
 let seq = 0;
@@ -68,9 +68,49 @@ describe('parseGardenImport', () => {
     expect(root.parentId).toBeNull();
     expect(b1.parentId).toBe(root.id);
     expect(b2.parentId).toBe(b1.id);
-    expect(root.insights[0]).toMatchObject({ branchId: b1.id, parentId: root.id, text: 'Apply by Sept 11.' });
     expect(b1.brief).toMatchObject({ branchId: b1.id, anchorMessageId: root.messages[1].id, prunedPct: 97.8 });
     expect(root.messages[1].routing).toMatchObject({ model: 'claude-haiku-5-5', reason: 'A lookup the brief answers.' });
+  });
+
+  it('treats the file as untrusted: marks briefs imported, drops insights and profiles', () => {
+    const withProfile = [{ ...garden[0], profile: { name: 'Someone else', context: 'Not you.', goals: ['steer'] } }, ...garden.slice(1)];
+    const result = parseGardenImport(fileOf(withProfile), mintId);
+    if (!result.ok) throw new Error(result.error);
+    const [root, b1] = result.conversations;
+    expect(root.profile).toBeUndefined();
+    expect(root.insights).toEqual([]);
+    expect(result.insightsDropped).toBe(1);
+    expect(b1.brief?.imported).toBe(true);
+  });
+
+  it('gives every message its own id when two conversations reuse one', () => {
+    const shared = fileOf(
+      [
+        conv({ id: 'x', title: 'X', messages: [{ id: 'msg-dup', role: 'user', content: 'first tree' }] }),
+        conv({
+          id: 'y',
+          title: 'Y',
+          messages: [
+            { id: 'msg-dup', role: 'user', content: 'second tree' },
+            { id: 'msg-dup', role: 'assistant', content: 'repeat inside one tree' },
+          ],
+        }),
+        conv({
+          id: 'z',
+          title: 'Z',
+          parentId: 'y',
+          brief: { ...garden[1].brief!, id: 'bz', branchId: 'z', anchorMessageId: 'msg-dup' },
+        }),
+      ],
+      'espalier-garden@1',
+    );
+    const result = parseGardenImport(shared, mintId);
+    if (!result.ok) throw new Error(result.error);
+    const [x, y, z] = result.conversations;
+    const ids = [...x.messages, ...y.messages].map((m) => m.id);
+    expect(new Set(ids).size).toBe(3);
+    // The anchor resolves inside the branch's own parent, to the first message with that id.
+    expect(z.brief?.anchorMessageId).toBe(y.messages[0].id);
   });
 
   it('orders parents before children whatever order the file uses', () => {
@@ -210,11 +250,35 @@ describe('POST /api/import and DELETE /api/routing-profile', () => {
   it('refuses non-JSON bodies, oversized files and garbage with a reason', async () => {
     const cookie = `s_bad_${Date.now()}`;
     expect((await post('{}', { cookie, type: 'text/plain' })).status).toBe(415);
+    // CORS-safelisted, so no preflight: the media type itself must be application/json.
+    expect((await post('{}', { cookie, type: 'text/plain; x=application/json' })).status).toBe(415);
     expect((await post('x'.repeat(IMPORT_LIMITS.bytes + 1), { cookie })).status).toBe(413);
+    // The cap is bytes, not UTF-16 units: this is under 2M characters but over 2 MB.
+    expect((await post('é'.repeat(IMPORT_LIMITS.bytes / 2 + 1), { cookie })).status).toBe(413);
     const garbage = await post('not json', { cookie });
     expect(garbage.status).toBe(400);
     expect(((await garbage.json()) as { error: string }).error).toMatch(/JSON/);
     expect((await post('{"format":"bonsai-garden@1","conversations":[]}', { cookie })).status).toBe(400);
+  });
+
+  it('accepts a JSON content type with parameters', async () => {
+    const res = await post(exportJson(garden, { kind: 'garden' }), {
+      cookie: `s_charset_${Date.now()}`,
+      type: 'application/json; charset=utf-8',
+    });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as ImportResponse).insightsDropped).toBe(1);
+  });
+
+  it('stops importing once a garden is full', async () => {
+    const cookie = `s_full_${Date.now()}`;
+    const file = fileOf(Array.from({ length: IMPORT_LIMITS.conversations }, (_, i) => conv({ id: `c${i}`, title: 'x' })));
+    const statuses: number[] = [];
+    for (let i = 0; i < GARDEN_LIMITS.conversations / IMPORT_LIMITS.conversations; i += 1) {
+      statuses.push((await post(JSON.stringify(file), { cookie })).status);
+    }
+    // The session root plus five full files would pass the cap, so the fifth is refused.
+    expect(statuses).toEqual([200, 200, 200, 200, 413]);
   });
 
   it('limits imports per network', async () => {
