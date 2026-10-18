@@ -6,7 +6,7 @@
  *   2. The mock, with realistic token math, so the app is walkable with zero keys.
  */
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, costForServedBy, effortSpec } from './models';
-import { providerComplete, providerCompleteStream } from './provider';
+import { providerComplete, providerCompleteStream, studentCompile } from './provider';
 import { estimateTokens } from './tokens';
 import type { Effort, InferencePurpose, QuestionKind, Tier } from './types';
 
@@ -68,15 +68,11 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
   const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
   const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
 
-  // A live key wins over everything: real completion, real token counts off the API's own usage.
-  const live = await providerComplete({
-    model,
-    messages,
-    maxTokens,
-    effort,
-    temperature: params.temperature,
-    signal: params.signal,
-  });
+  const request = { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal };
+  // An opted-in student serves compile calls only; when it fails, the usual chain answers.
+  const student = params.purpose === 'compile' ? await studentCompile(request) : null;
+  // A live key wins over the mock: real completion, real token counts off the API's own usage.
+  const live = student ?? (await providerComplete(request));
   if (live) {
     const usedInput = live.inputTokens || inputTokens;
     const usedOutput = live.outputTokens || estimateTokens(live.text);

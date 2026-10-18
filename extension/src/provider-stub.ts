@@ -52,6 +52,10 @@ export function providerSummary(): { provider: ProviderName; models: Record<stri
   return { provider: 'mock', models: {} };
 }
 
+export async function studentCompile(): Promise<ProviderResult | null> {
+  return null;
+}
+
 export async function providerCompleteStream(
   _params: ProviderParams,
   _onDelta: (chunk: string) => void,

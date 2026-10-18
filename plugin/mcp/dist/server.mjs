@@ -31234,6 +31234,35 @@ async function providerComplete(params) {
     return null;
   }
 }
+var STUDENT_TIMEOUT_MS = 3e4;
+async function studentCompile(params) {
+  const base = process.env.BONSAI_COMPILE_BASE_URL?.replace(/\/+$/, "");
+  const model = process.env.BONSAI_COMPILE_MODEL;
+  if (!base || !model) return null;
+  const timeout = AbortSignal.timeout(STUDENT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${base}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model, messages: params.messages, max_tokens: params.maxTokens, temperature: 0 }),
+      signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+    });
+    if (!res.ok) throw new Error(`student ${res.status} ${(await res.text()).slice(0, 160)}`);
+    const body = await res.json();
+    const text = body.choices?.[0]?.message?.content ?? "";
+    if (!text.trim()) throw new Error("student returned no content");
+    return {
+      text,
+      inputTokens: body.usage?.prompt_tokens ?? 0,
+      outputTokens: body.usage?.completion_tokens ?? 0,
+      servedBy: model
+    };
+  } catch (err) {
+    if (err.name === "AbortError" && params.signal?.aborted) throw err;
+    logger.warn(`[llm] compile student failed (${err.message}) \u2014 using the provider chain`);
+    return null;
+  }
+}
 var ProviderHttpError = class extends Error {
   constructor(status, retryAfterMs, message) {
     super(message);
@@ -31537,14 +31566,9 @@ async function complete(params) {
   const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
   const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
   const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
-  const live = await providerComplete({
-    model,
-    messages,
-    maxTokens,
-    effort,
-    temperature: params.temperature,
-    signal: params.signal
-  });
+  const request = { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal };
+  const student = params.purpose === "compile" ? await studentCompile(request) : null;
+  const live = student ?? await providerComplete(request);
   if (live) {
     const usedInput = live.inputTokens || inputTokens;
     const usedOutput = live.outputTokens || estimateTokens(live.text);

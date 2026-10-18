@@ -168,6 +168,48 @@ export async function providerComplete(params: ProviderParams): Promise<Provider
   }
 }
 
+/* ---------- opt-in compile student ---------- */
+
+const STUDENT_TIMEOUT_MS = 30_000;
+
+/**
+ * BONSAI_COMPILE_BASE_URL + BONSAI_COMPILE_MODEL route brief compilation, and nothing else, to
+ * an OpenAI-compatible server (for example Ollama serving research/distill's SFT checkpoint).
+ * Off unless both are set. Any failure returns null so the normal provider chain compiles.
+ * Its spend is logged unpriced: the catalog has no honest rate for a self-hosted model.
+ */
+export async function studentCompile(params: ProviderParams): Promise<ProviderResult | null> {
+  const base = process.env.BONSAI_COMPILE_BASE_URL?.replace(/\/+$/, '');
+  const model = process.env.BONSAI_COMPILE_MODEL;
+  if (!base || !model) return null;
+  const timeout = AbortSignal.timeout(STUDENT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${base}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ model, messages: params.messages, max_tokens: params.maxTokens, temperature: 0 }),
+      signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout,
+    });
+    if (!res.ok) throw new Error(`student ${res.status} ${(await res.text()).slice(0, 160)}`);
+    const body = (await res.json()) as {
+      choices?: { message?: { content?: string } }[];
+      usage?: { prompt_tokens?: number; completion_tokens?: number };
+    };
+    const text = body.choices?.[0]?.message?.content ?? '';
+    if (!text.trim()) throw new Error('student returned no content');
+    return {
+      text,
+      inputTokens: body.usage?.prompt_tokens ?? 0,
+      outputTokens: body.usage?.completion_tokens ?? 0,
+      servedBy: model,
+    };
+  } catch (err) {
+    if ((err as Error).name === 'AbortError' && params.signal?.aborted) throw err;
+    logger.warn(`[llm] compile student failed (${(err as Error).message}) — using the provider chain`);
+    return null;
+  }
+}
+
 /* ---------- retry and step-down ---------- */
 
 /** A non-2xx upstream response, typed so the retry policy can read its status. */

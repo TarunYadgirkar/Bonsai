@@ -49,6 +49,13 @@ Read these numbers with care:
   The training targets came from claude-sonnet-5, so check Anthropic's terms before publishing
   a checkpoint anywhere.
 
+## Serving the student
+
+The engine sends compile calls, and only those, to an OpenAI-compatible server when
+`BONSAI_COMPILE_BASE_URL` and `BONSAI_COMPILE_MODEL` are set, for example Ollama serving
+`runs/sft` at `http://localhost:11434/v1`. It is off by default and falls back to the normal
+provider chain on any failure. Weights never go in git.
+
 ## Inside the Bonsai repo
 
 This directory is not an npm workspace and nothing in the Next build imports it. The held-out

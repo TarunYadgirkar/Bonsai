@@ -147,6 +147,9 @@
   async function providerComplete(_params) {
     return null;
   }
+  async function studentCompile() {
+    return null;
+  }
   async function providerCompleteStream(_params, _onDelta) {
     return null;
   }
@@ -158,14 +161,9 @@
     const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
     const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
     const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
-    const live = await providerComplete({
-      model,
-      messages,
-      maxTokens,
-      effort,
-      temperature: params.temperature,
-      signal: params.signal
-    });
+    const request = { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal };
+    const student = params.purpose === "compile" ? await studentCompile(request) : null;
+    const live = student ?? await providerComplete(request);
     if (live) {
       const usedInput = live.inputTokens || inputTokens;
       const usedOutput = live.outputTokens || estimateTokens(live.text);

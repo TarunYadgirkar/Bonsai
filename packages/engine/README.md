@@ -123,6 +123,11 @@ precedence when more than one is set). Gemini goes over plain `fetch` to the RES
 fix should be an env var. Every live failure — dead key, wrong model id, rate limit, timeout —
 logs one server-side warn and degrades to the extractive mock; nothing throws.
 
+To compile briefs with a distilled student instead, set `BONSAI_COMPILE_BASE_URL` (any
+OpenAI-compatible server, such as `http://localhost:11434/v1` for Ollama) and
+`BONSAI_COMPILE_MODEL`. Only compile calls go there; chat, classify and merge keep the provider
+chain, and a failed student call falls back to it. Both unset (the default) changes nothing.
+
 ## Learning router
 
 Feedback is real behavior, not an AI judge. On each user action, fold an event into the profile
