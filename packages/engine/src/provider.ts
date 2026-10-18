@@ -7,6 +7,7 @@
  *                          model that actually answered: catalog ids ARE the upstream ids.
  *   OPENAI_API_KEY      → api.openai.com/v1/chat/completions
  *   XAI_API_KEY         → api.x.ai/v1/chat/completions
+ *   GEMINI_API_KEY      → generativelanguage.googleapis.com generateContent (REST, no SDK)
  *
  * Request shape is driven by a per-model capability record — current Claude models reject
  * sampling params (400) and take reasoning effort via output_config.effort, while a legacy
@@ -22,12 +23,13 @@ import { logger } from './logger';
 import { CEILING_MODEL, MODELS, TIER_DEFAULTS, canonicalModelId } from './models';
 import type { Effort } from './types';
 
-export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'mock';
+export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'gemini' | 'mock';
 
 export function providerName(): ProviderName {
   if (process.env.ANTHROPIC_API_KEY) return 'anthropic';
   if (process.env.OPENAI_API_KEY) return 'openai';
   if (process.env.XAI_API_KEY) return 'xai';
+  if (process.env.GEMINI_API_KEY) return 'gemini';
   return 'mock';
 }
 
@@ -80,6 +82,13 @@ const DEFAULT_UPSTREAM: Record<string, Record<Rung, string>> = {
     MID: 'grok-4.3',
     DEEP: 'grok-4.5',
     CEILING: 'grok-4.5',
+  },
+  // Ids from ai.google.dev/gemini-api/docs/pricing, 2026-10-18. Not yet run live.
+  gemini: {
+    QUICK: 'gemini-3.5-flash-lite',
+    MID: 'gemini-3.8-flash',
+    DEEP: 'gemini-3.1-pro-preview',
+    CEILING: 'gemini-4-argon',
   },
 };
 
@@ -144,11 +153,7 @@ export async function providerComplete(params: ProviderParams): Promise<Provider
   if (provider === 'mock') return null;
 
   try {
-    const result = await resilientCall(params, (upstream, signal) =>
-      provider === 'anthropic'
-        ? callAnthropic(upstream, params, signal)
-        : callOpenAiCompatible(provider, upstream, params, signal),
-    );
+    const result = await resilientCall(params, (upstream, signal) => callBuffered(provider, upstream, params, signal));
     if (!result.text.trim()) {
       logger.warn(`[llm] ${provider} returned no content on ${result.servedBy} — falling back to mock`);
       return null;
@@ -350,6 +355,85 @@ async function callAnthropic(
   };
 }
 
+function callBuffered(
+  provider: Exclude<ProviderName, 'mock'>,
+  upstream: string,
+  params: ProviderParams,
+  signal: AbortSignal,
+): Promise<ProviderResult> {
+  if (provider === 'anthropic') return callAnthropic(upstream, params, signal);
+  if (provider === 'gemini') return callGemini(upstream, params, signal);
+  return callOpenAiCompatible(provider, upstream, params, signal);
+}
+
+/* ---------- gemini ---------- */
+
+/** Every current Gemini model thinks; 'low' is the floor all four rungs accept. */
+const GEMINI_THINKING: Record<Effort, 'low' | 'medium' | 'high'> = {
+  low: 'low',
+  medium: 'medium',
+  high: 'high',
+  max: 'high',
+};
+
+/** Finish reasons where the answer was withheld or cut by a filter, not completed. */
+const GEMINI_BLOCKED = new Set(['SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'LANGUAGE']);
+
+/** Exported for tests: like anthropicBody, the request body is the param-policy contract. */
+export function geminiBody(
+  params: Pick<ProviderParams, 'messages' | 'maxTokens' | 'effort'>,
+): Record<string, unknown> {
+  const effort = params.effort ?? 'medium';
+  const system = params.messages
+    .filter((m) => m.role === 'system')
+    .map((m) => m.content)
+    .join('\n\n');
+  return {
+    ...(system ? { systemInstruction: { parts: [{ text: system }] } } : {}),
+    contents: params.messages
+      .filter((m) => m.role !== 'system')
+      .map((m) => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
+    generationConfig: {
+      // Thinking spends from the same output allowance, as on Anthropic's adaptive models.
+      maxOutputTokens: Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort]),
+      thinkingConfig: { thinkingLevel: GEMINI_THINKING[effort] },
+    },
+  };
+}
+
+async function callGemini(upstream: string, params: ProviderParams, signal: AbortSignal): Promise<ProviderResult> {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(upstream)}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY!, 'content-type': 'application/json' },
+      body: JSON.stringify(geminiBody(params)),
+      signal,
+    },
+  );
+  if (!res.ok) throw await httpError('gemini', res);
+
+  const body = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string; thought?: boolean }[] }; finishReason?: string }[];
+    usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number };
+  };
+  const candidate = body.candidates?.[0];
+  if (candidate?.finishReason && GEMINI_BLOCKED.has(candidate.finishReason)) {
+    throw new Error(`gemini ${candidate.finishReason.toLowerCase()} on ${upstream}`);
+  }
+  const usage = body.usageMetadata;
+  return {
+    text: (candidate?.content?.parts ?? [])
+      .filter((p) => !p.thought)
+      .map((p) => p.text ?? '')
+      .join(''),
+    inputTokens: usage?.promptTokenCount ?? 0,
+    // Gemini bills thinking at the output rate, so it counts as output here too.
+    outputTokens: (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0),
+    servedBy: upstream,
+  };
+}
+
 /* ---------- openai / xai ---------- */
 
 async function callOpenAiCompatible(
@@ -400,7 +484,7 @@ export function providerSummary(): { provider: ProviderName; models: Record<stri
  * Streaming sibling of providerComplete. Text chunks reach `onDelta` as they arrive; the
  * resolved result carries the same totals the non-streaming path would have returned.
  *
- * Anthropic streams natively (SSE). OpenAI/xAI fall back to the buffered call and emit the
+ * Anthropic streams natively (SSE). OpenAI/xAI/Gemini fall back to the buffered call and emit the
  * whole answer as one delta — honest, just not incremental. Mock returns null here too; the
  * llm layer chunks the mock itself so zero-key demos still show the stream.
  */
@@ -423,9 +507,7 @@ export async function providerCompleteStream(
       }
       return result;
     }
-    const result = await resilientCall(params, (upstream, signal) =>
-      callOpenAiCompatible(provider, upstream, params, signal),
-    );
+    const result = await resilientCall(params, (upstream, signal) => callBuffered(provider, upstream, params, signal));
     if (!result.text.trim()) return null;
     onDelta(result.text);
     return result;

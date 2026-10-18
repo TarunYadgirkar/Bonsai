@@ -112,7 +112,7 @@ npm run eval       # the referent-resolution benchmark (mock mode; live-graded w
 ```
 
 Set `DATABASE_URL` (Neon) for durable storage — schema in `migrations/`. Set one of
-`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` for live inference; every dependency degrades
+`ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` / `GEMINI_API_KEY` for live inference; every dependency degrades
 to a working local path when its key is absent.
 
 ## Repo map

@@ -9,7 +9,7 @@ import { setEngineLogger } from '../src/logger';
  * the surrounding success/degradation paths. `anthropicBody` policy lives in provider.test.ts.
  */
 
-const KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'XAI_API_KEY'] as const;
+const KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'XAI_API_KEY', 'GEMINI_API_KEY'] as const;
 const savedEnv: Record<string, string | undefined> = {};
 
 const MESSAGES = [

@@ -21,6 +21,9 @@ await esbuild.build({
   banner: {
     js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);",
   },
+  // Gemini CLI users commonly export GEMINI_API_KEY. Without this, installing the plugin would
+  // start sending its routing classifier calls to their Gemini account unasked.
+  define: { 'process.env.GEMINI_API_KEY': 'undefined' },
   outfile: 'dist/server.mjs',
   logLevel: 'info',
 });

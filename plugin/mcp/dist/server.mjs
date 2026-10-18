@@ -31112,7 +31112,13 @@ var UPSTREAM_RATES = {
   "gpt-5.4": { input: 2.5, output: 15 },
   "gpt-5.5": { input: 5, output: 30 },
   "grok-4.3": { input: 1.25, output: 2.5 },
-  "grok-4.5": { input: 2, output: 6 }
+  "grok-4.5": { input: 2, output: 6 },
+  // Gemini paid tier, prompts up to 200K tokens, verified 2026-10-18. Google has announced
+  // increases from 2026-12-01 (4 Argon) and 2027-01-01 (most others).
+  "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
+  "gemini-3.8-flash": { input: 0.75, output: 3.75 },
+  "gemini-3.1-pro-preview": { input: 2, output: 12 },
+  "gemini-4-argon": { input: 2, output: 10 }
 };
 function costForServedBy(servedBy, bonsaiModelId, inputTokens, outputTokens) {
   const rate = !servedBy ? void 0 : Object.hasOwn(UPSTREAM_RATES, servedBy) ? UPSTREAM_RATES[servedBy] : claudeRateFor(servedBy);
@@ -31157,6 +31163,7 @@ function providerName() {
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
   if (process.env.OPENAI_API_KEY) return "openai";
   if (process.env.XAI_API_KEY) return "xai";
+  if (void 0) return "gemini";
   return "mock";
 }
 function upstreamModel(bonsaiModelId) {
@@ -31186,6 +31193,13 @@ var DEFAULT_UPSTREAM = {
     MID: "grok-4.3",
     DEEP: "grok-4.5",
     CEILING: "grok-4.5"
+  },
+  // Ids from ai.google.dev/gemini-api/docs/pricing, 2026-10-18. Not yet run live.
+  gemini: {
+    QUICK: "gemini-3.5-flash-lite",
+    MID: "gemini-3.8-flash",
+    DEEP: "gemini-3.1-pro-preview",
+    CEILING: "gemini-4-argon"
   }
 };
 function anthropicCaps(upstream) {
@@ -31208,10 +31222,7 @@ async function providerComplete(params) {
   const provider = providerName();
   if (provider === "mock") return null;
   try {
-    const result = await resilientCall(
-      params,
-      (upstream, signal) => provider === "anthropic" ? callAnthropic(upstream, params, signal) : callOpenAiCompatible(provider, upstream, params, signal)
-    );
+    const result = await resilientCall(params, (upstream, signal) => callBuffered(provider, upstream, params, signal));
     if (!result.text.trim()) {
       logger.warn(`[llm] ${provider} returned no content on ${result.servedBy} \u2014 falling back to mock`);
       return null;
@@ -31354,6 +31365,56 @@ async function callAnthropic(upstream, params, signal) {
     servedBy: upstream
   };
 }
+function callBuffered(provider, upstream, params, signal) {
+  if (provider === "anthropic") return callAnthropic(upstream, params, signal);
+  if (provider === "gemini") return callGemini(upstream, params, signal);
+  return callOpenAiCompatible(provider, upstream, params, signal);
+}
+var GEMINI_THINKING = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  max: "high"
+};
+var GEMINI_BLOCKED = /* @__PURE__ */ new Set(["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE"]);
+function geminiBody(params) {
+  const effort = params.effort ?? "medium";
+  const system = params.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  return {
+    ...system ? { systemInstruction: { parts: [{ text: system }] } } : {},
+    contents: params.messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+    generationConfig: {
+      // Thinking spends from the same output allowance, as on Anthropic's adaptive models.
+      maxOutputTokens: Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort]),
+      thinkingConfig: { thinkingLevel: GEMINI_THINKING[effort] }
+    }
+  };
+}
+async function callGemini(upstream, params, signal) {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(upstream)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "x-goog-api-key": void 0, "content-type": "application/json" },
+      body: JSON.stringify(geminiBody(params)),
+      signal
+    }
+  );
+  if (!res.ok) throw await httpError("gemini", res);
+  const body = await res.json();
+  const candidate = body.candidates?.[0];
+  if (candidate?.finishReason && GEMINI_BLOCKED.has(candidate.finishReason)) {
+    throw new Error(`gemini ${candidate.finishReason.toLowerCase()} on ${upstream}`);
+  }
+  const usage = body.usageMetadata;
+  return {
+    text: (candidate?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join(""),
+    inputTokens: usage?.promptTokenCount ?? 0,
+    // Gemini bills thinking at the output rate, so it counts as output here too.
+    outputTokens: (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0),
+    servedBy: upstream
+  };
+}
 async function callOpenAiCompatible(provider, upstream, params, signal) {
   const base = provider === "openai" ? "https://api.openai.com/v1" : "https://api.x.ai/v1";
   const key = provider === "openai" ? process.env.OPENAI_API_KEY : process.env.XAI_API_KEY;
@@ -31391,10 +31452,7 @@ async function providerCompleteStream(params, onDelta) {
       }
       return result2;
     }
-    const result = await resilientCall(
-      params,
-      (upstream, signal) => callOpenAiCompatible(provider, upstream, params, signal)
-    );
+    const result = await resilientCall(params, (upstream, signal) => callBuffered(provider, upstream, params, signal));
     if (!result.text.trim()) return null;
     onDelta(result.text);
     return result;

@@ -104,7 +104,13 @@
     "gpt-5.4": { input: 2.5, output: 15 },
     "gpt-5.5": { input: 5, output: 30 },
     "grok-4.3": { input: 1.25, output: 2.5 },
-    "grok-4.5": { input: 2, output: 6 }
+    "grok-4.5": { input: 2, output: 6 },
+    // Gemini paid tier, prompts up to 200K tokens, verified 2026-10-18. Google has announced
+    // increases from 2026-12-01 (4 Argon) and 2027-01-01 (most others).
+    "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
+    "gemini-3.8-flash": { input: 0.75, output: 3.75 },
+    "gemini-3.1-pro-preview": { input: 2, output: 12 },
+    "gemini-4-argon": { input: 2, output: 10 }
   };
   function costForServedBy(servedBy, bonsaiModelId, inputTokens, outputTokens) {
     const rate = !servedBy ? void 0 : Object.hasOwn(UPSTREAM_RATES, servedBy) ? UPSTREAM_RATES[servedBy] : claudeRateFor(servedBy);

@@ -114,8 +114,10 @@ const { text, routing: finalRouting } = await completeWithEscalation(
 
 ### Live providers
 
-`complete` goes live when exactly one of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` is
-set — the key selects the provider (`src/provider.ts`; Anthropic wins if more than one is set).
+`complete` goes live when exactly one of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` /
+`GEMINI_API_KEY` is set — the key selects the provider (`src/provider.ts`; that order is the
+precedence when more than one is set). Gemini goes over plain `fetch` to the REST
+`generateContent` endpoint, so the engine keeps zero runtime dependencies.
 `BONSAI_MODEL_<PROVIDER>_<QUICK|MID|DEEP|CEILING>` overrides the upstream model id per rung
 (e.g. `BONSAI_MODEL_ANTHROPIC_DEEP=claude-opus-5-5`) — model names rot faster than deploys, and the
 fix should be an env var. Every live failure — dead key, wrong model id, rate limit, timeout —

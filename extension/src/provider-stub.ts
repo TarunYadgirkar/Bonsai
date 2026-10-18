@@ -7,7 +7,7 @@
  * Wired in extension/build.mjs via an esbuild onResolve plugin that redirects the engine's
  * './provider' import here. Keep the export surface in sync with packages/engine/src/provider.ts.
  */
-export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'mock';
+export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'gemini' | 'mock';
 
 export interface ProviderMessage {
   role: 'system' | 'user' | 'assistant';

@@ -4,7 +4,7 @@ import { setEngineLogger } from '../src/logger';
 import { completeWithEscalation } from '../src/router';
 import { fakeComplete, llmResult } from './helpers';
 
-const KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'XAI_API_KEY'] as const;
+const KEYS = ['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'XAI_API_KEY', 'GEMINI_API_KEY'] as const;
 const savedEnv: Record<string, string | undefined> = {};
 const MESSAGES = [{ role: 'user' as const, content: 'When do applications close?' }];
 

@@ -2,7 +2,7 @@
  * Inference. One model parameter, many models — the substrate the router needs.
  *
  * Two layers, first one available wins:
- *   1. A live provider (lib/provider.ts) when ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY is set.
+ *   1. A live provider (provider.ts) when ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY / GEMINI_API_KEY is set.
  *   2. The mock, with realistic token math, so the app is walkable with zero keys.
  */
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, costForServedBy, effortSpec } from './models';
