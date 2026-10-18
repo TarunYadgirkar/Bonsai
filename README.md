@@ -18,7 +18,7 @@ your private connector link, then say *"fork this side question with Bonsai"* in
 
 ![The loop: type a side question, check the compiled brief, grow the branch, merge one line back to the trunk](assets/generated/bonsai-loop.gif)
 
-**[Live demo](https://bonsai-connector.vercel.app)** · **[Interactive garden](https://claude.ai/code/artifact/b1b44d60-59a7-4237-8b56-26ae5c1b06ce)** · [The design system](DESIGN.md) · [The moat](MOAT.md)
+**[Live demo](https://bonsai-connector.vercel.app)** · **[Interactive garden](https://claude.ai/code/artifact/b1b44d60-59a7-4237-8b56-26ae5c1b06ce)** · [Demo video](https://drive.google.com/file/d/1cUWmVnQ8vwNZ_wN_6JNBgyLTdx3Y0GXm/view) · [Slides](https://docs.google.com/presentation/d/1leRaXZPIAoSNKj8u8l7JRyqa0cg7NxFSwthIOuYOzGc/edit) · [The design system](DESIGN.md) · [The moat](MOAT.md)
 
 ---
 
@@ -46,6 +46,15 @@ Bonsai is the loop those products don't have:
    through the connector, other claude.ai chats) when they bear on its question, attributed to the
    branch they came from. There is no vector store; recall is IDF-weighted overlap over insights
    Bonsai already keeps.
+
+## Why not just…
+
+**A Project?** A Project pastes the same fixed context in front of every chat. It doesn't change
+per question, doesn't resolve what "it" refers to, doesn't pick the model, and doesn't learn from
+what you kept.
+
+**Edit an old message?** An edit rewinds; it doesn't branch. The fork is unnamed and unreachable
+later, it still carries the full history, and there's no way to bring what you learned back.
 
 ## The technically interesting bits
 
@@ -91,7 +100,7 @@ Install the plugin:
 The durable value is `bonsai-engine` — a dependency-free TypeScript package the four surfaces all
 consume. It is not on npm yet; it is built to publish on its own (`cd packages/engine && pnpm
 publish` builds a typed `dist` via `prepublishOnly`). Tree model, path assembly, salience compiler,
-learning router, recall, honest pricing. 283 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
+learning router, recall, honest pricing. 303 unit tests; BriefBench — the brief-fidelity benchmark (`evals/`) — runs in CI with a full-history baseline arm.
 
 ## Run it
 
@@ -119,7 +128,12 @@ to a working local path when its key is absent.
 
 ## History
 
-Bonsai absorbed two earlier variants of the same fork/merge idea:
+Bonsai started as a one-day build by Tarun Yadgirkar and Justin Kan at the Snowflake × Beta Fund
+Agent & Token Economy Hackathon (Aug 7, 2026). This repo grew out of that build. The sponsor
+integrations (Snowflake Cortex inference, EverMind memory, an Upstash snapshot) were later dropped
+for Neon and the dependency-free engine; the submission as judged is frozen in a private archive.
+
+Bonsai also absorbed two later variants of the same fork/merge idea:
 
 - **Mahogany** (MongoDB.local Build Fest, Aug 2026; [demo video](https://youtu.be/N793iZgPPkI)):
   a voice agent whose conversations were trees. "Hold on, side question" forked, "merge that" wrote
@@ -130,4 +144,5 @@ Bonsai absorbed two earlier variants of the same fork/merge idea:
   covered it (list-rate and cache-warm baselines, per-purpose and per-model spend), so nothing was
   ported.
 
-MIT licensed. Built by [Tarun Yadgirkar](https://tarunyadgirkar.com).
+MIT licensed. Built by [Tarun Yadgirkar](https://tarunyadgirkar.com), with
+[Justin Kan](https://kanjustin.com) on the original hackathon build.

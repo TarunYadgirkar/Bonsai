@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Committed build bundles: CI diffs them against a fresh build instead.
+    "plugin/mcp/dist/**",
+    "extension/dist/**",
+    "packages/engine/dist/**",
   ]),
 ]);
 
