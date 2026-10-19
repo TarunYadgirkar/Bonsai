@@ -550,6 +550,90 @@ export async function commit(ws: WorkingSet): Promise<CommitOutcome> {
   }
 }
 
+/** Multi-row inserts for a set of brand-new conversations, as one transaction's statements. */
+function importStatements(q: ReturnType<typeof sql>, sessionId: string, conversations: Conversation[]) {
+  const conversationRows = conversations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    parent_id: c.parentId,
+    profile: c.profile ?? null,
+    brief: c.brief ?? null,
+    pinned_tier: c.pinnedTier,
+    pinned_mode: c.pinnedMode ?? null,
+    archived: c.archived,
+  }));
+  const messageRows = conversations.flatMap((c) =>
+    c.messages.map((m, seq) => ({
+      id: m.id,
+      conversation_id: c.id,
+      seq,
+      role: m.role,
+      content: m.content,
+      routing: m.routing ?? null,
+      created_at: m.createdAt ?? null,
+    })),
+  );
+  const insightRows = conversations.flatMap((c) =>
+    c.insights.map((i) => ({ id: i.id, branch_id: i.branchId, parent_id: i.parentId, text: i.text })),
+  );
+  return [
+    q`
+      INSERT INTO conversations (id, session_id, title, parent_id, profile, brief, pinned_tier, pinned_mode, archived, is_root)
+      SELECT r.id, ${sessionId}, r.title, r.parent_id, r.profile, r.brief, r.pinned_tier, r.pinned_mode, r.archived, false
+      FROM jsonb_to_recordset(${JSON.stringify(conversationRows)}::jsonb) AS r(
+        id text, title text, parent_id text, profile jsonb, brief jsonb, pinned_tier text, pinned_mode jsonb, archived boolean
+      )
+    `,
+    ...(messageRows.length
+      ? [
+          q`
+            INSERT INTO messages (id, conversation_id, seq, role, content, routing, created_at)
+            SELECT r.id, r.conversation_id, r.seq, r.role, r.content, r.routing, COALESCE(r.created_at, now())
+            FROM jsonb_to_recordset(${JSON.stringify(messageRows)}::jsonb) AS r(
+              id text, conversation_id text, seq integer, role text, content text, routing jsonb, created_at timestamptz
+            )
+          `,
+        ]
+      : []),
+    ...(insightRows.length
+      ? [
+          q`
+            INSERT INTO insights (id, branch_id, parent_id, text)
+            SELECT r.id, r.branch_id, r.parent_id, r.text
+            FROM jsonb_to_recordset(${JSON.stringify(insightRows)}::jsonb) AS r(
+              id text, branch_id text, parent_id text, text text
+            )
+          `,
+        ]
+      : []),
+  ];
+}
+
+/**
+ * Add freshly minted conversations (an import) in ONE transaction: a handful of multi-row
+ * inserts in a single Neon HTTP request instead of a round trip per row. A failure leaves none
+ * of it behind, so a retry cannot leave half a garden plus a duplicate. No ON CONFLICT: every id
+ * is new, and a collision must fail the import rather than drop a row while reporting success.
+ */
+export async function commitImport(ws: WorkingSet, conversations: Conversation[]): Promise<CommitOutcome> {
+  if (dbEnabled()) {
+    if (ws.source !== 'db') return 'failed';
+    try {
+      const q = sql();
+      await q.transaction(importStatements(q, ws.sessionId, conversations));
+    } catch (err) {
+      console.warn(`[store] import failed (${(err as Error).message}) — nothing written`);
+      return 'failed';
+    }
+  }
+  for (const c of conversations) {
+    ws.byId.set(c.id, c);
+    ws.persistedMessages.set(c.id, new Set(c.messages.map((m) => m.id)));
+    for (const i of c.insights) ws.persistedInsights.add(i.id);
+  }
+  return dbEnabled() ? 'persisted' : 'memory';
+}
+
 async function replaceSession(sessionId: string, state: SessionState): Promise<StateResponse> {
   if (dbEnabled()) {
     await clearSessionInDb(sessionId);
@@ -660,6 +744,16 @@ export async function recordRoutingFeedback(
     }
   }
   profileMap().set(sessionId, next);
+}
+
+/**
+ * Drop the session's learned routing so the router starts again from the classifier and the
+ * community prior. The row goes too, which also withdraws it from the population prior.
+ * Throws when a configured database refuses, so the caller can report it.
+ */
+export async function forgetRoutingProfile(sessionId: string): Promise<void> {
+  profileMap().delete(sessionId);
+  if (dbEnabled()) await sql()`DELETE FROM routing_profiles WHERE id = ${sessionId}`;
 }
 
 /* ---------- population prior (community cold-start) ---------- */

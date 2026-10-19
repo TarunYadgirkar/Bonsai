@@ -5,7 +5,7 @@
  * Origin is deliberately not strict-validated — claude.ai's initialize breaks on it.
  */
 import { createMcpHandler } from 'mcp-handler';
-import { validateKey } from '@/lib/mcp-store';
+import { checkKey } from '@/lib/mcp-store';
 import { registerBonsaiTools } from './tools';
 
 export const maxDuration = 60;
@@ -34,8 +34,16 @@ async function handle(req: Request, ctx: { params: Promise<{ key: string }> }): 
   // same credential. Accept whichever presents a VALID key, path first — so a bogus bearer can't
   // mask a valid URL, and a valid bearer can't silently rewrite which garden the request targets.
   let key: string | null = null;
-  if (await validateKey(pathKey)) key = pathKey;
-  else if (bearer && (await validateKey(bearer))) key = bearer;
+  const pathCheck = await checkKey(pathKey);
+  if (pathCheck === 'valid') key = pathKey;
+  else if (bearer && (await checkKey(bearer)) === 'valid') key = bearer;
+  if (!key && pathCheck === 'unavailable') {
+    // The key could not be checked. A 401 here would tell the client its key is wrong.
+    return Response.json(
+      { error: 'garden store unavailable, retry shortly' },
+      { status: 503, headers: { 'Retry-After': '5' } },
+    );
+  }
   if (!key) {
     // Plain 401, NO WWW-Authenticate: this is an authless connector whose key rides in the URL.
     // A WWW-Authenticate: Bearer header makes claude.ai treat the server as OAuth-protected and

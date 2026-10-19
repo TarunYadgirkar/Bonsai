@@ -104,7 +104,13 @@
     "gpt-5.4": { input: 2.5, output: 15 },
     "gpt-5.5": { input: 5, output: 30 },
     "grok-4.3": { input: 1.25, output: 2.5 },
-    "grok-4.5": { input: 2, output: 6 }
+    "grok-4.5": { input: 2, output: 6 },
+    // Gemini paid tier, prompts up to 200K tokens, verified 2026-10-18. Google has announced
+    // increases from 2026-12-01 (4 Argon) and 2027-01-01 (most others).
+    "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
+    "gemini-3.8-flash": { input: 0.75, output: 3.75 },
+    "gemini-3.1-pro-preview": { input: 2, output: 12 },
+    "gemini-4-argon": { input: 2, output: 10 }
   };
   function costForServedBy(servedBy, bonsaiModelId, inputTokens, outputTokens) {
     const rate = !servedBy ? void 0 : Object.hasOwn(UPSTREAM_RATES, servedBy) ? UPSTREAM_RATES[servedBy] : claudeRateFor(servedBy);
@@ -141,6 +147,9 @@
   async function providerComplete(_params) {
     return null;
   }
+  async function studentCompile() {
+    return null;
+  }
   async function providerCompleteStream(_params, _onDelta) {
     return null;
   }
@@ -152,14 +161,9 @@
     const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
     const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
     const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
-    const live = await providerComplete({
-      model,
-      messages,
-      maxTokens,
-      effort,
-      temperature: params.temperature,
-      signal: params.signal
-    });
+    const request = { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal };
+    const student = params.purpose === "compile" ? await studentCompile(request) : null;
+    const live = student ?? await providerComplete(request);
     if (live) {
       const usedInput = live.inputTokens || inputTokens;
       const usedOutput = live.outputTokens || estimateTokens(live.text);
@@ -169,9 +173,12 @@
         tier,
         inputTokens: usedInput,
         outputTokens: usedOutput,
-        estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+        // A self-hosted student has no catalog rate; billing it as the routed Claude model would
+        // inflate spend and savings alike.
+        estCostUsd: student ? 0 : costForServedBy(live.servedBy, model, usedInput, usedOutput),
         mock: false,
-        servedBy: live.servedBy
+        servedBy: live.servedBy,
+        ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
       };
     }
     return mockComplete(tier, model, messages, inputTokens, params.purpose);
@@ -200,7 +207,8 @@
         outputTokens: usedOutput,
         estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
         mock: false,
-        servedBy: live.servedBy
+        servedBy: live.servedBy,
+        ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
       };
     }
     const result = mockComplete(tier, model, messages, inputTokens, params.purpose);
@@ -438,6 +446,21 @@ That is what this branch's brief supports; anything beyond it would need more of
     return mockAnswer(tier, prompt);
   }
 
+  // ../packages/engine/src/compiler-output.ts
+  function parseCompilerJson(text) {
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+    if (start === -1 || end <= start) return null;
+    try {
+      const json = JSON.parse(text.slice(start, end + 1));
+      const facts = Array.isArray(json.facts) ? json.facts.filter((f) => typeof f === "string") : [];
+      if (!facts.length) return null;
+      return { facts, ...typeof json.excludedNote === "string" ? { excludedNote: json.excludedNote } : {} };
+    } catch {
+      return null;
+    }
+  }
+
   // ../packages/engine/src/logger.ts
   var active = console;
   var logger = {
@@ -509,6 +532,7 @@ That is what this branch's brief supports; anything beyond it would need more of
       usage
     };
   }
+  var COMPILER_SYSTEM_PROMPT = 'You compile minimal context briefs. Given the context above a conversation fork and a branch topic, extract ONLY the facts needed to answer the branch question, ordered most load-bearing first: state the ONE fact the question most depends on first, then the rest in falling order of importance. Prefer facts a smaller model could not infer without them \u2014 the names, numbers, dates, and constraints that exist only in this conversation \u2014 over anything general knowledge supplies. Resolve every referent so each fact stands alone without the parent \u2014 never write "apps", "it", "that club" where a name belongs. Facts under "Inherited context" or "Learned from branches" headings are pre-distilled: carry the relevant ones through rather than re-deriving them. Respond with JSON only: {"facts": string[], "excludedNote": string}. facts: at most 8 short self-contained sentences. excludedNote: one sentence naming what you deliberately left out.';
   async function runCompiler(params, deps) {
     const profileLine = params.profile ? `${params.profile.name} \u2014 ${params.profile.context} Goals: ${params.profile.goals.join("; ")}.` : "unknown";
     const result = await deps.complete({
@@ -518,7 +542,7 @@ That is what this branch's brief supports; anything beyond it would need more of
       messages: [
         {
           role: "system",
-          content: 'You compile minimal context briefs. Given the context above a conversation fork and a branch topic, extract ONLY the facts needed to answer the branch question, ordered most load-bearing first: state the ONE fact the question most depends on first, then the rest in falling order of importance. Prefer facts a smaller model could not infer without them \u2014 the names, numbers, dates, and constraints that exist only in this conversation \u2014 over anything general knowledge supplies. Resolve every referent so each fact stands alone without the parent \u2014 never write "apps", "it", "that club" where a name belongs. Facts under "Inherited context" or "Learned from branches" headings are pre-distilled: carry the relevant ones through rather than re-deriving them. Respond with JSON only: {"facts": string[], "excludedNote": string}. facts: at most 8 short self-contained sentences. excludedNote: one sentence naming what you deliberately left out.'
+          content: COMPILER_SYSTEM_PROMPT
         },
         {
           role: "user",
@@ -572,20 +596,9 @@ That is what this branch's brief supports; anything beyond it would need more of
     return entityTokens.every((t) => top.includes(t));
   }
   function parseCompilerOutput(text, selection) {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start !== -1 && end > start) {
-      try {
-        const json = JSON.parse(text.slice(start, end + 1));
-        const facts = Array.isArray(json.facts) ? json.facts.filter((f) => typeof f === "string") : [];
-        if (facts.length) {
-          return {
-            facts,
-            excludedNote: typeof json.excludedNote === "string" ? json.excludedNote : "Excluded: the rest of the parent conversation."
-          };
-        }
-      } catch {
-      }
+    const json = parseCompilerJson(text);
+    if (json) {
+      return { facts: json.facts, excludedNote: json.excludedNote ?? "Excluded: the rest of the parent conversation." };
     }
     logger.warn("[compiler] unparseable output \u2014 using fallback facts");
     return {

@@ -114,12 +114,22 @@ const { text, routing: finalRouting } = await completeWithEscalation(
 
 ### Live providers
 
-`complete` goes live when exactly one of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` is
-set — the key selects the provider (`src/provider.ts`; Anthropic wins if more than one is set).
+`complete` goes live when exactly one of `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` /
+`GEMINI_API_KEY` is set — the key selects the provider (`src/provider.ts`; that order is the
+precedence when more than one is set). Gemini goes over plain `fetch` to the REST
+`generateContent` endpoint, so the engine keeps zero runtime dependencies.
 `BONSAI_MODEL_<PROVIDER>_<QUICK|MID|DEEP|CEILING>` overrides the upstream model id per rung
 (e.g. `BONSAI_MODEL_ANTHROPIC_DEEP=claude-opus-5-5`) — model names rot faster than deploys, and the
 fix should be an env var. Every live failure — dead key, wrong model id, rate limit, timeout —
 logs one server-side warn and degrades to the extractive mock; nothing throws.
+
+To compile briefs with a distilled student instead, set `BONSAI_COMPILE_BASE_URL` (any
+OpenAI-compatible server, such as `http://localhost:11434/v1` for Ollama) and
+`BONSAI_COMPILE_MODEL`. Only compile calls go there; chat, classify and merge keep the provider
+chain. The URL must be https, or plain http on a loopback host, because compile input is the
+conversation itself; the host is logged once. A failed call, or a reply that is not the compiler's
+`{"facts", "excludedNote"}` JSON, falls back to the provider chain. Student compiles are logged at
+$0, since a self-hosted model has no catalog rate. Both unset (the default) changes nothing.
 
 ## Learning router
 

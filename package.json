@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "eval": "tsx evals/run.ts"
+    "eval": "tsx evals/run.ts",
+    "eval:xl": "tsx evals/xl/run.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/ext-apps": "^1.7.5",

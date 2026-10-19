@@ -31112,7 +31112,13 @@ var UPSTREAM_RATES = {
   "gpt-5.4": { input: 2.5, output: 15 },
   "gpt-5.5": { input: 5, output: 30 },
   "grok-4.3": { input: 1.25, output: 2.5 },
-  "grok-4.5": { input: 2, output: 6 }
+  "grok-4.5": { input: 2, output: 6 },
+  // Gemini paid tier, prompts up to 200K tokens, verified 2026-10-18. Google has announced
+  // increases from 2026-12-01 (4 Argon) and 2027-01-01 (most others).
+  "gemini-3.5-flash-lite": { input: 0.3, output: 2.5 },
+  "gemini-3.8-flash": { input: 0.75, output: 3.75 },
+  "gemini-3.1-pro-preview": { input: 2, output: 12 },
+  "gemini-4-argon": { input: 2, output: 10 }
 };
 function costForServedBy(servedBy, bonsaiModelId, inputTokens, outputTokens) {
   const rate = !servedBy ? void 0 : Object.hasOwn(UPSTREAM_RATES, servedBy) ? UPSTREAM_RATES[servedBy] : claudeRateFor(servedBy);
@@ -31145,6 +31151,21 @@ var TIER_LABEL = {
   deep: routingLabel(TIER_DEFAULTS.deep.model, TIER_DEFAULTS.deep.effort)
 };
 
+// ../../packages/engine/src/compiler-output.ts
+function parseCompilerJson(text) {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return null;
+  try {
+    const json2 = JSON.parse(text.slice(start, end + 1));
+    const facts = Array.isArray(json2.facts) ? json2.facts.filter((f) => typeof f === "string") : [];
+    if (!facts.length) return null;
+    return { facts, ...typeof json2.excludedNote === "string" ? { excludedNote: json2.excludedNote } : {} };
+  } catch {
+    return null;
+  }
+}
+
 // ../../packages/engine/src/logger.ts
 var active = console;
 var logger = {
@@ -31157,6 +31178,7 @@ function providerName() {
   if (process.env.ANTHROPIC_API_KEY) return "anthropic";
   if (process.env.OPENAI_API_KEY) return "openai";
   if (process.env.XAI_API_KEY) return "xai";
+  if (void 0) return "gemini";
   return "mock";
 }
 function upstreamModel(bonsaiModelId) {
@@ -31186,6 +31208,13 @@ var DEFAULT_UPSTREAM = {
     MID: "grok-4.3",
     DEEP: "grok-4.5",
     CEILING: "grok-4.5"
+  },
+  // Ids from ai.google.dev/gemini-api/docs/pricing, 2026-10-18. Not yet run live.
+  gemini: {
+    QUICK: "gemini-3.5-flash-lite",
+    MID: "gemini-3.8-flash",
+    DEEP: "gemini-3.1-pro-preview",
+    CEILING: "gemini-4-argon"
   }
 };
 function anthropicCaps(upstream) {
@@ -31207,11 +31236,10 @@ var TIMEOUT_BY_EFFORT = {
 async function providerComplete(params) {
   const provider = providerName();
   if (provider === "mock") return null;
-  const upstream = upstreamModel(params.model);
   try {
-    const result = provider === "anthropic" ? await callAnthropic(upstream, params) : await callOpenAiCompatible(provider, upstream, params);
-    if (!result?.text.trim()) {
-      logger.warn(`[llm] ${provider} returned no content on ${upstream} \u2014 falling back to mock`);
+    const result = await resilientCall(params, (upstream, signal) => callBuffered(provider, upstream, params, signal));
+    if (!result.text.trim()) {
+      logger.warn(`[llm] ${provider} returned no content on ${result.servedBy} \u2014 falling back to mock`);
       return null;
     }
     return result;
@@ -31221,6 +31249,151 @@ async function providerComplete(params) {
     return null;
   }
 }
+var STUDENT_TIMEOUT_MS = 3e4;
+var LOOPBACK_HOSTS = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "[::1]"]);
+function studentEndpoint(raw) {
+  try {
+    const url2 = new URL(raw.replace(/\/+$/, ""));
+    if (url2.protocol === "https:" || url2.protocol === "http:" && LOOPBACK_HOSTS.has(url2.hostname)) return url2;
+  } catch {
+  }
+  return null;
+}
+var studentAnnounced = null;
+function announceStudent(message) {
+  if (studentAnnounced === message) return;
+  studentAnnounced = message;
+  logger.warn(message);
+}
+async function studentCompile(params) {
+  const raw = process.env.BONSAI_COMPILE_BASE_URL;
+  const model = process.env.BONSAI_COMPILE_MODEL;
+  if (!raw || !model) return null;
+  const endpoint = studentEndpoint(raw);
+  if (!endpoint) {
+    announceStudent("[llm] BONSAI_COMPILE_BASE_URL must be https, or http on localhost \u2014 compile student off");
+    return null;
+  }
+  announceStudent(`[llm] compile student on: brief compilation sends conversation context to ${endpoint.host}`);
+  const timeout = AbortSignal.timeout(STUDENT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${endpoint.href.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model, messages: params.messages, max_tokens: params.maxTokens, temperature: 0 }),
+      signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+    });
+    if (!res.ok) throw new Error(`student ${res.status} ${(await res.text()).slice(0, 160)}`);
+    const body = await res.json();
+    const text = body.choices?.[0]?.message?.content ?? "";
+    if (!text.trim()) throw new Error("student returned no content");
+    if (!parseCompilerJson(text)) throw new Error("student reply is not compiler JSON");
+    return {
+      text,
+      inputTokens: body.usage?.prompt_tokens ?? 0,
+      outputTokens: body.usage?.completion_tokens ?? 0,
+      servedBy: model
+    };
+  } catch (err) {
+    if (err.name === "AbortError" && params.signal?.aborted) throw err;
+    logger.warn(`[llm] compile student failed (${err.message}) \u2014 using the provider chain`);
+    return null;
+  }
+}
+var ProviderHttpError = class extends Error {
+  constructor(status, retryAfterMs, message) {
+    super(message);
+    this.status = status;
+    this.retryAfterMs = retryAfterMs;
+  }
+};
+async function httpError(provider, res) {
+  const seconds = Number(res.headers.get("retry-after") ?? NaN);
+  return new ProviderHttpError(
+    res.status,
+    Number.isFinite(seconds) && seconds >= 0 ? seconds * 1e3 : null,
+    `${provider} ${res.status} ${(await res.text()).slice(0, 160)}`
+  );
+}
+var RETRY_DELAYS_MS = [1500, 4e3];
+var MAX_RETRY_WAIT_MS = 4e3;
+var MIN_ATTEMPT_MS = 5e3;
+var TRANSIENT_STATUSES = /* @__PURE__ */ new Set([500, 502, 503, 504, 529]);
+function nextStep(err, retriesSoFar) {
+  if (!(err instanceof ProviderHttpError)) return { kind: "give-up" };
+  const retriesLeft = retriesSoFar < RETRY_DELAYS_MS.length;
+  if (err.status === 404) return { kind: "step-down" };
+  if (err.status === 429) {
+    const shortWait = err.retryAfterMs !== null && err.retryAfterMs <= MAX_RETRY_WAIT_MS;
+    return shortWait && retriesLeft ? { kind: "retry", waitMs: err.retryAfterMs } : { kind: "step-down" };
+  }
+  if (TRANSIENT_STATUSES.has(err.status) && retriesLeft) {
+    return { kind: "retry", waitMs: RETRY_DELAYS_MS[retriesSoFar] };
+  }
+  return { kind: "give-up" };
+}
+var RUNG_ORDER = ["QUICK", "MID", "DEEP", "CEILING"];
+var MODEL_BY_RUNG = {
+  QUICK: TIER_DEFAULTS.quick.model,
+  MID: TIER_DEFAULTS.thoughtful.model,
+  DEEP: TIER_DEFAULTS.deep.model,
+  CEILING: CEILING_MODEL
+};
+function stepDownModel(bonsaiModelId) {
+  const from = upstreamModel(bonsaiModelId);
+  const canonical = canonicalModelId(bonsaiModelId);
+  const rung = Object.hasOwn(RUNG_BY_MODEL, canonical) ? RUNG_BY_MODEL[canonical] : "QUICK";
+  for (let i = RUNG_ORDER.indexOf(rung) - 1; i >= 0; i--) {
+    const candidate = MODEL_BY_RUNG[RUNG_ORDER[i]];
+    if (upstreamModel(candidate) !== from) return candidate;
+  }
+  return null;
+}
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true }
+    );
+  });
+}
+async function resilientCall(params, attempt) {
+  const deadline = Date.now() + TIMEOUT_BY_EFFORT[params.effort ?? "medium"];
+  const firstUpstream = upstreamModel(params.model);
+  let upstream = firstUpstream;
+  let steppedDown = false;
+  let retries = 0;
+  for (; ; ) {
+    const timeout = AbortSignal.timeout(Math.max(1, deadline - Date.now()));
+    try {
+      const result = await attempt(upstream, params.signal ? AbortSignal.any([params.signal, timeout]) : timeout);
+      return steppedDown ? { ...result, fellBackFrom: firstUpstream } : result;
+    } catch (err) {
+      const step2 = nextStep(err, retries);
+      const remaining = deadline - Date.now();
+      if (step2.kind === "retry" && remaining > step2.waitMs + MIN_ATTEMPT_MS) {
+        logger.warn(`[llm] ${err.message.split(" ", 2).join(" ")} on ${upstream} \u2014 retrying in ${step2.waitMs}ms`);
+        await sleep(step2.waitMs, params.signal);
+        retries += 1;
+        continue;
+      }
+      const lower = step2.kind === "step-down" && !steppedDown ? stepDownModel(params.model) : null;
+      if (lower && remaining > MIN_ATTEMPT_MS) {
+        upstream = upstreamModel(lower);
+        logger.warn(`[llm] ${firstUpstream} unavailable (${err.message.slice(0, 80)}) \u2014 stepping down to ${upstream}`);
+        steppedDown = true;
+        retries = 0;
+        continue;
+      }
+      throw err;
+    }
+  }
+}
 function anthropicBody(upstream, params) {
   const caps = anthropicCaps(upstream);
   const system = params.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
@@ -31228,8 +31401,11 @@ function anthropicBody(upstream, params) {
   const effort = params.effort ?? "medium";
   return {
     model: upstream,
-    // On adaptive-thinking models the cap covers thinking + text; the caller's answer-sized
-    // ceiling would truncate mid-thought, so the effort-keyed total wins when larger.
+    // The raise applies only where thinking is on. Every catalog Claude model runs adaptive
+    // thinking when `thinking` is omitted, and Opus 5.5 and Fable 5.1 cannot turn it off, so
+    // max_tokens must cover thinking + text: an answer-sized cap (600 for a compile) would end
+    // mid-thought with no text and drop the call to the mock. A non-thinking model (the Haiku
+    // 4.5 override) keeps the caller's cap as its ceiling.
     max_tokens: caps.effort ? Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort]) : params.maxTokens,
     ...caps.sampling ? { temperature: params.temperature ?? 0.2 } : {},
     ...caps.effort ? { output_config: { effort } } : {},
@@ -31237,8 +31413,7 @@ function anthropicBody(upstream, params) {
     messages: turns.map((m) => ({ role: m.role, content: m.content }))
   };
 }
-async function callAnthropic(upstream, params) {
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
+async function callAnthropic(upstream, params, signal) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -31247,9 +31422,9 @@ async function callAnthropic(upstream, params) {
       "content-type": "application/json"
     },
     body: JSON.stringify(anthropicBody(upstream, params)),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+    signal
   });
-  if (!res.ok) throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
+  if (!res.ok) throw await httpError("anthropic", res);
   const body = await res.json();
   if (body.stop_reason === "refusal") throw new Error(`anthropic refusal on ${upstream}`);
   return {
@@ -31259,10 +31434,61 @@ async function callAnthropic(upstream, params) {
     servedBy: upstream
   };
 }
-async function callOpenAiCompatible(provider, upstream, params) {
+function callBuffered(provider, upstream, params, signal) {
+  if (provider === "anthropic") return callAnthropic(upstream, params, signal);
+  if (provider === "gemini") return callGemini(upstream, params, signal);
+  return callOpenAiCompatible(provider, upstream, params, signal);
+}
+var GEMINI_THINKING = {
+  low: "low",
+  medium: "medium",
+  high: "high",
+  max: "high"
+};
+var GEMINI_BLOCKED = /* @__PURE__ */ new Set(["SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "LANGUAGE"]);
+function geminiBody(params) {
+  const effort = params.effort ?? "medium";
+  const system = params.messages.filter((m) => m.role === "system").map((m) => m.content).join("\n\n");
+  return {
+    ...system ? { systemInstruction: { parts: [{ text: system }] } } : {},
+    contents: params.messages.filter((m) => m.role !== "system").map((m) => ({ role: m.role === "assistant" ? "model" : "user", parts: [{ text: m.content }] })),
+    generationConfig: {
+      // Thinking spends from the same output allowance, as on Anthropic's adaptive models, and
+      // no current Gemini rung can switch it off ('low' is the floor), so every call needs room
+      // for it on top of the answer.
+      maxOutputTokens: Math.max(params.maxTokens, TOTAL_CAP_BY_EFFORT[effort]),
+      thinkingConfig: { thinkingLevel: GEMINI_THINKING[effort] }
+    }
+  };
+}
+async function callGemini(upstream, params, signal) {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(upstream)}:generateContent`,
+    {
+      method: "POST",
+      headers: { "x-goog-api-key": void 0, "content-type": "application/json" },
+      body: JSON.stringify(geminiBody(params)),
+      signal
+    }
+  );
+  if (!res.ok) throw await httpError("gemini", res);
+  const body = await res.json();
+  const candidate = body.candidates?.[0];
+  if (candidate?.finishReason && GEMINI_BLOCKED.has(candidate.finishReason)) {
+    throw new Error(`gemini ${candidate.finishReason.toLowerCase()} on ${upstream}`);
+  }
+  const usage = body.usageMetadata;
+  return {
+    text: (candidate?.content?.parts ?? []).filter((p) => !p.thought).map((p) => p.text ?? "").join(""),
+    inputTokens: usage?.promptTokenCount ?? 0,
+    // Gemini bills thinking at the output rate, so it counts as output here too.
+    outputTokens: (usage?.candidatesTokenCount ?? 0) + (usage?.thoughtsTokenCount ?? 0),
+    servedBy: upstream
+  };
+}
+async function callOpenAiCompatible(provider, upstream, params, signal) {
   const base = provider === "openai" ? "https://api.openai.com/v1" : "https://api.x.ai/v1";
   const key = provider === "openai" ? process.env.OPENAI_API_KEY : process.env.XAI_API_KEY;
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
   const res = await fetch(`${base}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "content-type": "application/json" },
@@ -31271,9 +31497,9 @@ async function callOpenAiCompatible(provider, upstream, params) {
       messages: params.messages,
       max_completion_tokens: params.maxTokens
     }),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+    signal
   });
-  if (!res.ok) throw new Error(`${provider} ${res.status} ${(await res.text()).slice(0, 160)}`);
+  if (!res.ok) throw await httpError(provider, res);
   const body = await res.json();
   return {
     text: body.choices?.[0]?.message?.content ?? "",
@@ -31285,17 +31511,19 @@ async function callOpenAiCompatible(provider, upstream, params) {
 async function providerCompleteStream(params, onDelta) {
   const provider = providerName();
   if (provider === "mock") return null;
-  const upstream = upstreamModel(params.model);
   try {
     if (provider === "anthropic") {
-      const result2 = await callAnthropicStream(upstream, params, onDelta);
+      const result2 = await resilientCall(
+        params,
+        (upstream, signal) => callAnthropicStream(upstream, params, signal, onDelta)
+      );
       if (!result2.text.trim()) {
-        logger.warn(`[llm] anthropic stream returned no content on ${upstream} \u2014 mock fallback`);
+        logger.warn(`[llm] anthropic stream returned no content on ${result2.servedBy} \u2014 mock fallback`);
         return null;
       }
       return result2;
     }
-    const result = await callOpenAiCompatible(provider, upstream, params);
+    const result = await resilientCall(params, (upstream, signal) => callBuffered(provider, upstream, params, signal));
     if (!result.text.trim()) return null;
     onDelta(result.text);
     return result;
@@ -31316,8 +31544,7 @@ function* sseFrames(buffer) {
     if (data) yield { event: event || "message", data };
   }
 }
-async function callAnthropicStream(upstream, params, onDelta) {
-  const timeout = AbortSignal.timeout(TIMEOUT_BY_EFFORT[params.effort ?? "medium"]);
+async function callAnthropicStream(upstream, params, signal, onDelta) {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -31326,11 +31553,10 @@ async function callAnthropicStream(upstream, params, onDelta) {
       "content-type": "application/json"
     },
     body: JSON.stringify({ ...anthropicBody(upstream, params), stream: true }),
-    signal: params.signal ? AbortSignal.any([params.signal, timeout]) : timeout
+    signal
   });
-  if (!res.ok || !res.body) {
-    throw new Error(`anthropic ${res.status} ${(await res.text()).slice(0, 160)}`);
-  }
+  if (!res.ok) throw await httpError("anthropic", res);
+  if (!res.body) throw new Error(`anthropic ${res.status} with no stream body`);
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
@@ -31382,14 +31608,9 @@ async function complete(params) {
   const effort = params.effort ?? TIER_DEFAULTS[tier].effort;
   const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
   const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
-  const live = await providerComplete({
-    model,
-    messages,
-    maxTokens,
-    effort,
-    temperature: params.temperature,
-    signal: params.signal
-  });
+  const request = { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal };
+  const student = params.purpose === "compile" ? await studentCompile(request) : null;
+  const live = student ?? await providerComplete(request);
   if (live) {
     const usedInput = live.inputTokens || inputTokens;
     const usedOutput = live.outputTokens || estimateTokens(live.text);
@@ -31399,9 +31620,12 @@ async function complete(params) {
       tier,
       inputTokens: usedInput,
       outputTokens: usedOutput,
-      estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+      // A self-hosted student has no catalog rate; billing it as the routed Claude model would
+      // inflate spend and savings alike.
+      estCostUsd: student ? 0 : costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
-      servedBy: live.servedBy
+      servedBy: live.servedBy,
+      ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
     };
   }
   return mockComplete(tier, model, messages, inputTokens, params.purpose);
@@ -31430,7 +31654,8 @@ async function completeStream(params, onDelta) {
       outputTokens: usedOutput,
       estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
-      servedBy: live.servedBy
+      servedBy: live.servedBy,
+      ...live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}
     };
   }
   const result = mockComplete(tier, model, messages, inputTokens, params.purpose);

@@ -15,7 +15,7 @@ async function main(): Promise<void> {
   const summary = providerSummary();
   console.log(`provider: ${summary.provider}`);
   if (summary.provider === 'mock') {
-    console.log('No ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY set — the app runs on the mock.');
+    console.log('No ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY / GEMINI_API_KEY set — the app runs on the mock.');
     return;
   }
   console.log('model map:', summary.models, '\n');

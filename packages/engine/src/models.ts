@@ -184,8 +184,9 @@ export function costForModel(modelId: string, inputTokens: number, outputTokens:
 export const PRICES_AS_OF = '2026-10-10';
 
 /**
- * Rates for non-Anthropic upstreams (provider.ts DEFAULT_UPSTREAM), USD per MTok, verified
- * 2026-08-10 (not re-verified since; Anthropic rates were, 2026-10-10). When `servedBy` names one of these, spend must be priced at ITS rate — pricing a
+ * Rates for non-Anthropic upstreams (provider.ts DEFAULT_UPSTREAM), USD per MTok. OpenAI and
+ * xAI verified 2026-08-10 (not re-verified since; Anthropic rates were, 2026-10-10); Gemini
+ * verified 2026-10-18. When `servedBy` names one of these, spend must be priced at ITS rate — pricing a
  * gpt answer at Claude rates is fiction.
  */
 const UPSTREAM_RATES: Record<string, { input: number; output: number }> = {
@@ -194,6 +195,12 @@ const UPSTREAM_RATES: Record<string, { input: number; output: number }> = {
   'gpt-5.5': { input: 5, output: 30 },
   'grok-4.3': { input: 1.25, output: 2.5 },
   'grok-4.5': { input: 2, output: 6 },
+  // Gemini paid tier, prompts up to 200K tokens, verified 2026-10-18. Google has announced
+  // increases from 2026-12-01 (4 Argon) and 2027-01-01 (most others).
+  'gemini-3.5-flash-lite': { input: 0.3, output: 2.5 },
+  'gemini-3.8-flash': { input: 0.75, output: 3.75 },
+  'gemini-3.1-pro-preview': { input: 2, output: 12 },
+  'gemini-4-argon': { input: 2, output: 10 },
 };
 
 /**

@@ -122,23 +122,30 @@ export async function issueKeyForSession(sessionId: string): Promise<string> {
   return key;
 }
 
-export async function validateKey(key: string): Promise<boolean> {
-  if (!key) return false;
+/** 'unavailable' means the database could not answer, which is not the same as a wrong key. */
+export type KeyCheck = 'valid' | 'invalid' | 'unavailable';
+
+export async function checkKey(key: string): Promise<KeyCheck> {
+  if (!key) return 'invalid';
   if (dbEnabled()) {
     // Production auth must be a real row AND must fail CLOSED. The literal dev key is never valid
     // when a database is configured (even if a stale seed row exists), and a DB error rejects
     // rather than silently falling back to accepting the publicly-known dev key.
-    if (key === DEV_KEY) return false;
+    if (key === DEV_KEY) return 'invalid';
     try {
       const rows = await sql()`SELECT 1 FROM mcp_users WHERE key = ${key}`;
-      return rows.length > 0;
+      return rows.length > 0 ? 'valid' : 'invalid';
     } catch (err) {
       console.warn(`[mcp-store] validateKey failed (${(err as Error).message}) — rejecting`);
-      return false;
+      return 'unavailable';
     }
   }
   // Keyless local dev: the dev key is the only accepted key.
-  return key === DEV_KEY;
+  return key === DEV_KEY ? 'valid' : 'invalid';
+}
+
+export async function validateKey(key: string): Promise<boolean> {
+  return (await checkKey(key)) === 'valid';
 }
 
 function rootNode(userKey: string): McpNode {

@@ -33,6 +33,29 @@ ANTHROPIC_API_KEY=… npm run eval   # live mode: the same assertions grade real
 Nonzero exit on any failure. The harness is ~700 lines of plain TypeScript
 (`evals/run.ts`, `evals/cases.ts`) — read it before trusting it; that's the intent.
 
+## BriefBench-XL
+
+`npm run eval:xl` runs 300 generated cases (`evals/xl/eval.jsonl`) through the real engine:
+60 each of depth-1 referents, ambiguous antecedents, salience, long trunks and depth-2 chains.
+Each depth-2 case compiles its first brief, holds the branch conversation, then forks again,
+so the second brief only passes if composition carried the entity through.
+
+| Check | What fails it |
+|---|---|
+| Referents | A required entity is missing from the final brief. |
+| Hallucination | The brief names an entity from another conversation, or a number the source never stated. |
+| Prune | A level pruned less than its case's floor (`min_pruned_pct`). |
+
+The cases come from `research/distill` (`scripts/gen_data.py`, seed 7, the held-out eval split:
+entity vocabulary and surface templates both differ from the training split). The grader is a
+port of that project's `checks.py`, so a distilled student and the engine are graded alike.
+
+CI compares each run with `evals/xl/baseline.mock.json` and fails on a lower pass or referent
+rate, or a higher hallucination rate, overall or in any family. With a key the same cases grade
+the live compiler; `npm run eval:xl -- --write-baseline` records a baseline for that provider.
+The mock scores 100% here, so in mock mode this is a regression gate for the extractive path
+and post-processing, not evidence of model quality. There is no downstream-QA judge yet.
+
 ## Honest caveats
 
 - **Mock mode is a plumbing gate, not a model eval.** The extractive mock proves path assembly,

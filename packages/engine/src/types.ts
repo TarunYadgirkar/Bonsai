@@ -79,6 +79,11 @@ export interface ContextBrief {
   curated?: boolean;
   /** Insights merged elsewhere in the garden that bear on this question, with their source branch. */
   recalled?: { text: string; source: string }[];
+  /**
+   * True when the brief came from an imported garden file rather than this app's compiler. Its
+   * text is someone else's, so prompts frame it as untrusted reference material.
+   */
+  imported?: boolean;
 }
 
 export interface RoutingDecision {
@@ -95,6 +100,11 @@ export interface RoutingDecision {
    * The chip keeps Bonsai's vocabulary; this is what stops it claiming a model that didn't run.
    */
   servedBy?: string;
+  /**
+   * Upstream asked first that refused (spent quota or unknown model) before `servedBy` answered
+   * one rung down. Absent when the first model answered.
+   */
+  fellBackFrom?: string;
   /** Human phrasing of reasoning effort, e.g. "low effort, single pass". */
   effortNote: string;
   contextTokens: number;

@@ -7,7 +7,7 @@
  * Wired in extension/build.mjs via an esbuild onResolve plugin that redirects the engine's
  * './provider' import here. Keep the export surface in sync with packages/engine/src/provider.ts.
  */
-export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'mock';
+export type ProviderName = 'anthropic' | 'openai' | 'xai' | 'gemini' | 'mock';
 
 export interface ProviderMessage {
   role: 'system' | 'user' | 'assistant';
@@ -20,6 +20,7 @@ export interface ProviderResult {
   outputTokens: number;
   estCostUsd: number;
   servedBy?: string;
+  fellBackFrom?: string;
 }
 
 export interface ProviderParams {
@@ -49,6 +50,10 @@ export function anthropicBody(): Record<string, unknown> {
 
 export function providerSummary(): { provider: ProviderName; models: Record<string, string> } {
   return { provider: 'mock', models: {} };
+}
+
+export async function studentCompile(): Promise<ProviderResult | null> {
+  return null;
 }
 
 export async function providerCompleteStream(

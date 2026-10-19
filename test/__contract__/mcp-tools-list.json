@@ -1,0 +1,473 @@
+[
+  {
+    "name": "bonsai_abandon",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "branchId"
+      ]
+    }
+  },
+  {
+    "name": "bonsai_fork",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "parentId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "brief": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 24000
+        },
+        "facts": {
+          "maxItems": 12,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "excludedNote": {
+          "type": "string",
+          "maxLength": 1000
+        },
+        "model": {
+          "type": "string",
+          "enum": [
+            "haiku",
+            "sonnet",
+            "opus",
+            "fable"
+          ]
+        },
+        "effort": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "max"
+          ]
+        },
+        "availableTokensEstimate": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "question",
+        "brief"
+      ]
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string"
+        },
+        "routing": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "effort": {
+              "type": "string"
+            },
+            "tier": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "effort",
+            "tier"
+          ],
+          "additionalProperties": false
+        },
+        "economics": {
+          "type": "object",
+          "properties": {
+            "briefTokens": {
+              "type": "number"
+            },
+            "availableTokens": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "prunedPct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "briefTokens",
+            "availableTokens",
+            "prunedPct"
+          ],
+          "additionalProperties": false
+        },
+        "anchorPinned": {
+          "type": "boolean"
+        },
+        "recalled": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "score": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "text",
+              "source",
+              "score"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "suggestedRouting": {
+          "type": "object",
+          "properties": {
+            "model": {
+              "type": "string"
+            },
+            "effort": {
+              "type": "string"
+            },
+            "tier": {
+              "type": "string"
+            },
+            "populationInformed": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "model",
+            "effort",
+            "tier",
+            "populationInformed"
+          ],
+          "additionalProperties": false
+        },
+        "pasteBlock": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "branchId",
+        "routing",
+        "economics",
+        "anchorPinned",
+        "recalled",
+        "pasteBlock"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "bonsai_merge",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {
+        "branchId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "insight": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 600
+        }
+      },
+      "required": [
+        "branchId",
+        "insight"
+      ]
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "branchId": {
+          "type": "string"
+        },
+        "insight": {
+          "type": "string"
+        },
+        "totals": {
+          "type": "object",
+          "properties": {
+            "branches": {
+              "type": "number"
+            },
+            "open": {
+              "type": "number"
+            },
+            "merged": {
+              "type": "number"
+            },
+            "abandoned": {
+              "type": "number"
+            },
+            "availableTokens": {
+              "type": "number"
+            },
+            "briefTokens": {
+              "type": "number"
+            },
+            "prunedPct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "branches",
+            "open",
+            "merged",
+            "abandoned",
+            "availableTokens",
+            "briefTokens",
+            "prunedPct"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "branchId",
+        "insight",
+        "totals"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "bonsai_tree",
+    "inputSchema": {
+      "type": "object",
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "properties": {}
+    },
+    "outputSchema": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "parentId": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "title": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "merged",
+                  "abandoned"
+                ]
+              },
+              "model": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "effort": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "tier": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "availableTokens": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "briefTokens": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "prunedPct": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "insight": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "parentId",
+              "title",
+              "status",
+              "model",
+              "effort",
+              "tier",
+              "availableTokens",
+              "briefTokens",
+              "prunedPct",
+              "insight"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "totals": {
+          "type": "object",
+          "properties": {
+            "branches": {
+              "type": "number"
+            },
+            "open": {
+              "type": "number"
+            },
+            "merged": {
+              "type": "number"
+            },
+            "abandoned": {
+              "type": "number"
+            },
+            "availableTokens": {
+              "type": "number"
+            },
+            "briefTokens": {
+              "type": "number"
+            },
+            "prunedPct": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "branches",
+            "open",
+            "merged",
+            "abandoned",
+            "availableTokens",
+            "briefTokens",
+            "prunedPct"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "nodes",
+        "totals"
+      ],
+      "additionalProperties": false
+    }
+  }
+]

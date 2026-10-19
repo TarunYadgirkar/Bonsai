@@ -2,11 +2,11 @@
  * Inference. One model parameter, many models — the substrate the router needs.
  *
  * Two layers, first one available wins:
- *   1. A live provider (lib/provider.ts) when ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY is set.
+ *   1. A live provider (provider.ts) when ANTHROPIC_API_KEY / OPENAI_API_KEY / XAI_API_KEY / GEMINI_API_KEY is set.
  *   2. The mock, with realistic token math, so the app is walkable with zero keys.
  */
 import { MODEL_TIERS, TIER_DEFAULTS, costForModel, costForServedBy, effortSpec } from './models';
-import { providerComplete, providerCompleteStream } from './provider';
+import { providerComplete, providerCompleteStream, studentCompile } from './provider';
 import { estimateTokens } from './tokens';
 import type { Effort, InferencePurpose, QuestionKind, Tier } from './types';
 
@@ -45,6 +45,8 @@ export interface CompleteResult {
   mock: boolean;
   /** Upstream model that actually answered. Absent on the mock. */
   servedBy?: string;
+  /** Upstream that refused first (quota or 404) before servedBy answered. */
+  fellBackFrom?: string;
 }
 
 /**
@@ -66,15 +68,11 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
   const maxTokens = params.maxTokens ?? effortSpec(effort).maxTokens;
   const inputTokens = messages.reduce((sum, m) => sum + estimateTokens(m.content) + 4, 0);
 
-  // A live key wins over everything: real completion, real token counts off the API's own usage.
-  const live = await providerComplete({
-    model,
-    messages,
-    maxTokens,
-    effort,
-    temperature: params.temperature,
-    signal: params.signal,
-  });
+  const request = { model, messages, maxTokens, effort, temperature: params.temperature, signal: params.signal };
+  // An opted-in student serves compile calls only; when it fails, the usual chain answers.
+  const student = params.purpose === 'compile' ? await studentCompile(request) : null;
+  // A live key wins over the mock: real completion, real token counts off the API's own usage.
+  const live = student ?? (await providerComplete(request));
   if (live) {
     const usedInput = live.inputTokens || inputTokens;
     const usedOutput = live.outputTokens || estimateTokens(live.text);
@@ -84,9 +82,12 @@ export async function complete(params: CompleteParams): Promise<CompleteResult> 
       tier,
       inputTokens: usedInput,
       outputTokens: usedOutput,
-      estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
+      // A self-hosted student has no catalog rate; billing it as the routed Claude model would
+      // inflate spend and savings alike.
+      estCostUsd: student ? 0 : costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
       servedBy: live.servedBy,
+      ...(live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}),
     };
   }
 
@@ -124,6 +125,7 @@ export async function completeStream(
       estCostUsd: costForServedBy(live.servedBy, model, usedInput, usedOutput),
       mock: false,
       servedBy: live.servedBy,
+      ...(live.fellBackFrom ? { fellBackFrom: live.fellBackFrom } : {}),
     };
   }
 

@@ -83,6 +83,9 @@ export function RoutingChip({
         {routing.overridden && (
           <span className="text-[11px] text-bark">pinned</span>
         )}
+        {routing.fellBackFrom && (
+          <span className="text-[11px] text-ember">stepped down</span>
+        )}
         {/* servedBy is set only by a live provider — its absence means the extractive mock
             answered, and that must be visible on the message, not buried in a hover card. */}
         {!routing.servedBy && (

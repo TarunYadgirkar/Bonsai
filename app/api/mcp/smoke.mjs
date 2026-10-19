@@ -98,7 +98,7 @@ async function main() {
   check('bonsai_fork not isError', !fork.json?.result?.isError);
   check('bonsai_fork returns branchId', Boolean(branchId), branchId ?? 'none');
   check('bonsai_fork routing line', forkText.includes('Routing: haiku · low'));
-  check('bonsai_fork economics', /12,000 → \d+ tokens · [\d.]+% pruned/.test(forkText));
+  check('bonsai_fork economics', /\d+ sent · 11,\d{3} avoided · [\d.]+% pruned/.test(forkText));
   check('bonsai_fork paste block', forkText.includes('Paste everything between the rules'));
 
   const tree = await rpc('tools/call', { name: 'bonsai_tree', arguments: {} });

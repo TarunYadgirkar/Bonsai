@@ -4,6 +4,25 @@ All notable changes to `bonsai-engine` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Provider resilience**: 5xx, 529 and short-`Retry-After` 429 responses are retried with
+  backoff; a quota 429 or a 404 steps down one model rung before the mock. Every attempt shares
+  the per-effort time budget a single call had. `RoutingDecision.fellBackFrom` and
+  `CompleteResult.fellBackFrom` name the upstream that refused.
+- **Gemini provider** (`GEMINI_API_KEY`, lowest precedence) over REST `generateContent`, with
+  `BONSAI_MODEL_GEMINI_<RUNG>` overrides and Gemini rates verified 2026-10-18.
+- **Compile student hook**: `BONSAI_COMPILE_BASE_URL` + `BONSAI_COMPILE_MODEL` send compile calls
+  only to an OpenAI-compatible server. Off by default. The URL must be https (plain http only on
+  loopback), a reply that is not the compiler's JSON falls back to the provider chain, and
+  student compiles are logged at $0.
+- `ContextBrief.imported`: a brief carried in from a garden file. `assemblePath` and
+  `renderChatContext` frame it as untrusted reference text under its own heading and do not pin
+  its facts verbatim into the next brief.
+- `COMPILER_SYSTEM_PROMPT` is exported so the distillation project can pin its copy to it.
+
 ## [0.1.0] - 2026-08-11
 
 Initial release of the Bonsai conversation engine — a dependency-free, TypeScript core that treats

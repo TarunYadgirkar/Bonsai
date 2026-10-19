@@ -157,13 +157,17 @@ export async function exchangeCode(params: {
   return token;
 }
 
+/** 'unavailable' means the database could not answer, which is not the same as a bad token. */
+export type TokenCheck = { status: 'valid'; key: string } | { status: 'invalid' } | { status: 'unavailable' };
+
 /**
  * Bearer token → garden key. Expired tokens are rejected; a live token slides its TTL forward on
- * use so active connections persist but abandoned ones age out. Null on anything unknown; DB
- * errors reject (fail closed).
+ * use so active connections persist but abandoned ones age out. A DB error never accepts the
+ * token, but it reports 'unavailable' so the endpoint can answer 503 instead of a 401 that would
+ * send the client back through OAuth.
  */
-export async function keyForToken(token: string): Promise<string | null> {
-  if (!token.startsWith('bt_')) return null;
+export async function checkToken(token: string): Promise<TokenCheck> {
+  if (!token.startsWith('bt_')) return { status: 'invalid' };
   const key = hash(token);
   if (dbEnabled()) {
     try {
@@ -173,20 +177,25 @@ export async function keyForToken(token: string): Promise<string | null> {
         WHERE token = ${key} AND expires_at > now()
         RETURNING user_key
       `;
-      return rows.length ? (rows[0].user_key as string) : null;
+      return rows.length ? { status: 'valid', key: rows[0].user_key as string } : { status: 'invalid' };
     } catch (err) {
       console.warn(`[oauth] token lookup failed (${(err as Error).message}) — rejecting`);
-      return null;
+      return { status: 'unavailable' };
     }
   }
   const mem = memTokens.get(key);
-  if (!mem) return null;
+  if (!mem) return { status: 'invalid' };
   if (mem.expiresAt < Date.now()) {
     memTokens.delete(key);
-    return null;
+    return { status: 'invalid' };
   }
   mem.expiresAt = Date.now() + TOKEN_TTL_MS;
-  return mem.userKey;
+  return { status: 'valid', key: mem.userKey };
+}
+
+export async function keyForToken(token: string): Promise<string | null> {
+  const check = await checkToken(token);
+  return check.status === 'valid' ? check.key : null;
 }
 
 /** Revoke every OAuth token bound to a garden key — the honest severance the consent page offers. */

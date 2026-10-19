@@ -1,0 +1,45 @@
+{
+  "n": 300,
+  "passRate": 1,
+  "referentRate": 1,
+  "hallucinationRate": 0,
+  "pruneRate": 1,
+  "compression": 0.4466,
+  "byFamily": {
+    "ambiguous": {
+      "n": 60,
+      "passRate": 1,
+      "referentRate": 1,
+      "hallucinationRate": 0,
+      "pruneRate": 1
+    },
+    "depth1_referent": {
+      "n": 60,
+      "passRate": 1,
+      "referentRate": 1,
+      "hallucinationRate": 0,
+      "pruneRate": 1
+    },
+    "depth2": {
+      "n": 60,
+      "passRate": 1,
+      "referentRate": 1,
+      "hallucinationRate": 0,
+      "pruneRate": 1
+    },
+    "long_trunk": {
+      "n": 60,
+      "passRate": 1,
+      "referentRate": 1,
+      "hallucinationRate": 0,
+      "pruneRate": 1
+    },
+    "salience": {
+      "n": 60,
+      "passRate": 1,
+      "referentRate": 1,
+      "hallucinationRate": 0,
+      "pruneRate": 1
+    }
+  }
+}

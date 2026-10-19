@@ -137,6 +137,14 @@ export interface NewConversationResponse {
   conversation: Conversation;
 }
 
+/** POST /api/import — the garden after the file's trees were added beside what was there. */
+export interface ImportResponse extends StateResponse {
+  /** Conversations added (roots and branches). */
+  imported: number;
+  /** Merged insights in the file that were left out (recall would carry them into other trees). */
+  insightsDropped: number;
+}
+
 /** POST /api/message — regenerate an answer or edit-and-rerun a user turn. */
 export interface MessageActionRequest {
   branchId: string;
